@@ -1,26 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* 🎨 Brand Palette */
+  --color-primary: #1A73E8;   /* Deep Royal Blue */
+  --color-secondary: #A7C7E7; /* Soft Sky Blue */
+  --color-success: #00C48C;   /* Emerald Green */
+  --color-warning: #FFC107;   /* Amber Yellow */
+  --color-error: #F05454;     /* Soft Red */
+  --color-neutral: #F8FAFC;   /* Off-white */
+  --color-sidebar: #0F172A;   /* Deep Navy */
+  --color-white: #FFFFFF;     /* Pure White */
+
+  /* 🧠 Text Colors */
+  --text-primary: var(--color-sidebar);
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+
+  /* 🌫️ Shadows & Borders */
+  --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --border-color: #E2E8F0;
+
+  /* ⚡ Transitions */
+  --transition-fast: 150ms ease;
+  --transition-medium: 300ms ease;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* 🌙 Dark Mode (optional) */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-primary: #1A73E8;   /* Deep Royal Blue */
+  --color-secondary: #A7C7E7; /* Soft Sky Blue */
+  --color-success: #00C48C;   /* Emerald Green */
+  --color-warning: #FFC107;   /* Amber Yellow */
+  --color-error: #F05454;     /* Soft Red */
+  --color-neutral: #F8FAFC;   /* Off-white */
+  --color-sidebar: #0F172A;   /* Deep Navy */
+  --color-white: #FFFFFF;
   }
 }
 
+/* 🌍 Global Base Styles */
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background-color: var(--color-neutral);
+  color: var(--text-primary);
   font-family: Arial, Helvetica, sans-serif;
+  transition: background-color var(--transition-medium), color var(--transition-medium);
 }
