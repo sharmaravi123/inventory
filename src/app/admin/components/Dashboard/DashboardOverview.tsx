@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo } from "react";
 import {
   Package,
   Warehouse,
@@ -13,15 +13,92 @@ import {
   IndianRupee,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useDispatch, useSelector } from "react-redux";
+import type { AppDispatch, RootState } from "@/store/store";
+import { fetchWarehouses } from "@/store/warehouseSlice";
+import { fetchInventory } from "@/store/inventorySlice";
+import { fetchProducts } from "@/store/productSlice";
 
-const DashboardOverview: React.FC = () => {
+export default function DashboardOverview() {
+  const dispatch = useDispatch<AppDispatch>();
+
+  const { products } = useSelector((state: RootState) => state.product);
+  const { list: warehouses } = useSelector((state: RootState) => state.warehouse);
+  const { items: inventory } = useSelector((state: RootState) => state.inventory);
+
+  useEffect(() => {
+    dispatch(fetchProducts());
+    dispatch(fetchWarehouses());
+    dispatch(fetchInventory());
+  }, [dispatch]);
+
+  const totalProducts = products?.length || 0;
+  const totalWarehouses = warehouses?.length || 0;
+
+  // 🧮 Correct low-stock + out-of-stock calculation
+  const { lowStock, outOfStock } = useMemo(() => {
+    if (!inventory?.length) return { lowStock: 0, outOfStock: 0 };
+
+    let low = 0;
+    let out = 0;
+
+    for (const item of inventory) {
+      const totalItems = item.boxes * item.itemsPerBox + item.looseItems;
+      const lowStockTotal =
+        (item.lowStockBoxes ?? 0) * item.itemsPerBox + (item.lowStockItems ?? 0);
+
+      if (totalItems === 0) out++;
+      else if (totalItems > 0 && totalItems <= lowStockTotal) low++;
+    }
+
+    return { lowStock: low, outOfStock: out };
+  }, [inventory]);
+
+  const totalStockAlerts = lowStock + outOfStock;
+
   const stats = [
-    { title: "Total Products", value: "1,245", icon: <Package size={18} />, info: "+5% last month", infoColor: "text-green-600" },
-    { title: "Warehouses", value: "12", icon: <Warehouse size={18} />, info: "New location added", infoColor: "text-gray-500" },
-    { title: "Vehicles", value: "38", icon: <Truck size={18} />, info: "+2 vehicles", infoColor: "text-green-600" },
-    { title: "Total Orders", value: "5,678", icon: <ShoppingCart size={18} />, info: "+12% this week", infoColor: "text-green-600" },
-    { title: "Outstanding Dues", value: "15,200", icon: <IndianRupee size={18} />, info: "+8% this month", infoColor: "text-red-600" },
-    { title: "Stock Alerts", value: "23", icon: <AlertTriangle size={18} />, info: "+3 critical items", infoColor: "text-red-600" },
+    {
+      title: "Total Products",
+      value: totalProducts.toString(),
+      icon: <Package size={18} />,
+      info: "+5% last month",
+      infoColor: "text-green-600",
+    },
+    {
+      title: "Warehouses",
+      value: totalWarehouses.toString(),
+      icon: <Warehouse size={18} />,
+      info: "New location added",
+      infoColor: "text-gray-500",
+    },
+    {
+      title: "Stock Alerts",
+      value: totalStockAlerts.toString(),
+      icon: <AlertTriangle size={18} />,
+      info: `${lowStock} low • ${outOfStock} out`,
+      infoColor: totalStockAlerts > 0 ? "text-red-600" : "text-green-600",
+    },
+    {
+      title: "Vehicles",
+      value: "38",
+      icon: <Truck size={18} />,
+      info: "+2 vehicles",
+      infoColor: "text-green-600",
+    },
+    {
+      title: "Total Orders",
+      value: "5,678",
+      icon: <ShoppingCart size={18} />,
+      info: "+12% this week",
+      infoColor: "text-green-600",
+    },
+    {
+      title: "Outstanding Dues",
+      value: "15,200",
+      icon: <IndianRupee size={18} />,
+      info: "+8% this month",
+      infoColor: "text-red-600",
+    },
   ];
 
   const quickActions = [
@@ -33,7 +110,7 @@ const DashboardOverview: React.FC = () => {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      {/* Stat Cards */}
+      {/* Stats */}
       <div className="lg:col-span-9 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {stats.map((item, i) => (
           <motion.div
@@ -49,7 +126,9 @@ const DashboardOverview: React.FC = () => {
               </span>
             </div>
             <div className="mt-2">
-              <h3 className="text-2xl font-bold text-[var(--text-primary)]">{item.value}</h3>
+              <h3 className="text-2xl font-bold text-[var(--text-primary)]">
+                {item.value}
+              </h3>
               <p className={`text-xs mt-1 ${item.infoColor}`}>{item.info}</p>
             </div>
           </motion.div>
@@ -85,6 +164,4 @@ const DashboardOverview: React.FC = () => {
       </motion.div>
     </div>
   );
-};
-
-export default DashboardOverview;
+}
