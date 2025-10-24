@@ -1,44 +1,36 @@
 "use client";
 
 import React from "react";
+import { Warehouse } from "@/store/warehouseSlice";
+import { motion } from "framer-motion";
 
-type Props = {
-  warehouses: string[];
-  active: string;
-  onChange: (id: string) => void;
-};
+interface Props {
+  warehouses: Warehouse[];
+  activeWarehouse: string;
+  setActiveWarehouse: (id: string) => void;
+}
 
-export default function WarehouseSelector({ warehouses, active, onChange }: Props) {
+export const WarehouseSelector: React.FC<Props> = ({
+  warehouses,
+  activeWarehouse,
+  setActiveWarehouse,
+}) => {
   return (
-    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <label className="text-sm text-gray-600 font-medium">Warehouse</label>
-        <div className="flex items-center gap-2">
-          {warehouses.map((w) => (
-            <button
-              key={w}
-              onClick={() => onChange(w)}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition
-                ${active === w ? "bg-[var(--color-primary)] text-white" : "bg-[var(--color-white)] text-gray-700 border table-border"}
-              `}
-            >
-              {w}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          placeholder="Search products by name, SKU, or category..."
-          className="px-4 py-2 rounded-md border table-border bg-[var(--color-white)] w-full md:w-96 focus:outline-none"
-        />
-        <button className="px-4 py-2 rounded-md bg-white border table-border">Filter</button>
-        <button className="px-4 py-2 rounded-md bg-[var(--color-primary)] text-white">
-          + Receive Stock
-        </button>
-      </div>
+    <div className="flex flex-wrap gap-3">
+      {warehouses.map((w) => (
+        <motion.button
+          key={w.id}
+          onClick={() => setActiveWarehouse(String(w.id))}
+          className={`px-4 py-2 rounded-lg border transition-all ${
+            activeWarehouse === String(w.id)
+              ? "bg-[var(--color-primary)] text-white border-black"
+              : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+          }`}
+          whileTap={{ scale: 0.95 }}
+        >
+          {w.name}
+        </motion.button>
+      ))}
     </div>
   );
-}
+};
