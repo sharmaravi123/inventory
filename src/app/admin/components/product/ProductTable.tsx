@@ -17,6 +17,7 @@ interface Product {
   purchasePrice?: number;
   sellingPrice?: number;
   description?: string;
+  taxRate?: number;
   [key: string]: unknown;
 }
 
@@ -52,6 +53,7 @@ export default function ProductTable(): React.ReactElement {
       purchasePrice: product.purchasePrice,
       sellingPrice: product.sellingPrice,
       description: product.description,
+      taxRate: product.taxRate as number | undefined,
     };
     setEditData(mapped);
     setShowForm(true);
@@ -89,6 +91,7 @@ export default function ProductTable(): React.ReactElement {
                   <th className="p-4  min-w-[100px] text-left">Category</th>
                   <th className="p-4  min-w-[100px] text-left">Purchase</th>
                   <th className="p-4  min-w-[100px] text-left">Selling</th>
+                  <th className="p-4  min-w-[80px] text-left">Tax Rate</th>
                   <th className="p-4  min-w-[120px] text-right">Actions</th>
                 </tr>
               </thead>

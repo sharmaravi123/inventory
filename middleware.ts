@@ -19,6 +19,7 @@ const PUBLIC_PATHS = [
   "/robots.txt",
 ];
 
+// updated
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + "/"));
 }

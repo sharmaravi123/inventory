@@ -9,6 +9,9 @@ export interface IProduct extends Document {
   description?: string;
   createdByAdminId?: string;
   createdByWarehouseId?: string;
+  taxRate?: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const ProductSchema = new Schema<IProduct>(
@@ -21,6 +24,7 @@ const ProductSchema = new Schema<IProduct>(
     description: { type: String },
     createdByAdminId: { type: String },
     createdByWarehouseId: { type: String },
+    taxRate: { type: Number, required: true, default: 0 },
   },
   { timestamps: true }
 );

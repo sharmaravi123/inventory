@@ -20,6 +20,7 @@ interface Product {
   purchasePrice?: number;
   sellingPrice?: number;
   description?: string;
+  taxRate?: number;
   [key: string]: unknown;
 }
 
@@ -48,6 +49,8 @@ export default function TableRow({ product, onEdit }: TableRowProps): React.Reac
       <td className="p-4">{categoryName}</td>
       <td className="p-4">{purchaseDisplay}</td>
       <td className="p-4">{sellingDisplay}</td>
+      <td className="p-4">{typeof product.taxRate === "number" ? product.taxRate.toFixed(2) : "—"}</td>
+      
       <td className="p-4 text-right space-x-2">
         <button
           onClick={() => onEdit(product)}
