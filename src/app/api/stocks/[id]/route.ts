@@ -44,6 +44,7 @@ export async function PUT(req: NextRequest, context: RouteCtx<{ id: string }>) {
     const newItemsPerBox = itemsPerBox !== undefined ? Math.max(1, normalizeNumbers(itemsPerBox, stock.itemsPerBox)) : stock.itemsPerBox;
     let newBoxes = boxes !== undefined ? normalizeNumbers(boxes, stock.boxes) : stock.boxes;
     let newLoose = looseItems !== undefined ? Math.max(0, normalizeNumbers(looseItems, stock.looseItems)) : stock.looseItems;
+    const tax = body.tax;
 
     // normalize loose -> boxes if overflow
     if (newItemsPerBox > 0 && newLoose >= newItemsPerBox) {
@@ -60,6 +61,7 @@ export async function PUT(req: NextRequest, context: RouteCtx<{ id: string }>) {
     stock.totalItems = totalItems;
     stock.lowStockItems = lowStockItems !== undefined ? normalizeNumbers(lowStockItems, 0) : stock.lowStockItems;
     stock.lowStockBoxes = lowStockBoxes !== undefined ? normalizeNumbers(lowStockBoxes, 0) : stock.lowStockBoxes;
+    stock.tax = tax !== undefined ? normalizeNumbers(tax, 0) : stock.tax;
 
     await stock.save();
     return NextResponse.json(stock, { status: 200 });

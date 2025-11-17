@@ -8,6 +8,11 @@ import SearchAndFilters from "./SearchAndFilters";
 import ProductForm, { ProductEditData } from "./ProductForm";
 import type { ProductType } from "@/store/productSlice"; // <- use the redux type
 
+// A category value coming from product may be:
+// - a string id,
+// - a number id,
+// - an object with {_id, id, name}
+// - null/undefined
 type MaybeCategory =
   | string
   | number
@@ -19,6 +24,7 @@ type MaybeCategory =
 function idToString(id: unknown): string {
   if (id == null) return "";
   if (typeof id === "string" || typeof id === "number") return String(id);
+  // object case: try common fields
   if (typeof id === "object") {
     const obj = id as { _id?: unknown; id?: unknown };
     const candidate = obj._id ?? obj.id ?? "";
@@ -41,10 +47,12 @@ export default function ProductTable(): React.ReactElement {
 
   // helper to extract category id string from product (consistent comparison)
   function extractProductCategoryId(p: ProductType): string {
+    // p.categoryId may be string/object/number
     if (p.categoryId != null) {
       return idToString(p.categoryId as unknown);
     }
 
+    // p.category may be object or primitive
     const cat = (p as unknown as { category?: MaybeCategory }).category;
     if (cat != null) return idToString(cat);
 
@@ -59,7 +67,11 @@ export default function ProductTable(): React.ReactElement {
 
     const pCatId = extractProductCategoryId(p);
 
+    // Debug: uncomment to inspect comparisons in console
+    // console.log("compare:", { productId: p.id, pCatId, selectedCategoryId: categoryId });
+
     const matchesCategory = !categoryId || pCatId === categoryId;
+
     return matchesSearch && matchesCategory;
   });
 
@@ -68,7 +80,7 @@ export default function ProductTable(): React.ReactElement {
     const mapped: ProductEditData = {
       id: product.id,
       name: product.name,
-      category: (product.category ?? product.categoryId) as ProductEditData["category"],
+      category: (product.category ?? product.categoryId) as unknown as ProductEditData["category"],
       purchasePrice: product.purchasePrice,
       sellingPrice: product.sellingPrice,
       description: product.description,
@@ -119,7 +131,7 @@ export default function ProductTable(): React.ReactElement {
               </thead>
               <tbody>
                 {filteredProducts.map((p) => (
-                  <TableRow key={String(p.id)} product={p} onEdit={handleEdit} />
+                  <TableRow key={String(p.id)} product={p as unknown as any} onEdit={handleEdit as any} />
                 ))}
               </tbody>
             </table>

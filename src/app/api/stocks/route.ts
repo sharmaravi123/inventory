@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
     let looseItems = Math.max(0, normalizeNumbers(body.looseItems, 0));
     const lowStockItems = body.lowStockItems === undefined ? null : normalizeNumbers(body.lowStockItems, 0);
     const lowStockBoxes = body.lowStockBoxes === undefined ? null : normalizeNumbers(body.lowStockBoxes, 0);
+    const tax = normalizeNumbers(body.tax, 0);
 
     // Convert looseItems into boxes if they overflow itemsPerBox
     if (itemsPerBox > 0 && looseItems >= itemsPerBox) {
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
       totalItems,
       lowStockItems,
       lowStockBoxes,
+      tax,
     };
 
     const created = await Stock.create(toCreate);

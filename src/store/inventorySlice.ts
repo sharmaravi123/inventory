@@ -18,8 +18,11 @@ export interface InventoryItem {
   totalItems: number;
   lowStockBoxes?: number | null;
   lowStockItems?: number | null;
+  tax: number;
   createdAt?: string;
+
   updatedAt?: string;
+
 }
 
 

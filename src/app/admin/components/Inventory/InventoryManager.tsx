@@ -45,6 +45,7 @@ interface InventoryForm {
   looseItems: number;
   lowStockBoxes?: number;
   lowStockItems?: number;
+  tax: number;
 }
 
 /**
@@ -103,6 +104,7 @@ export default function InventoryManager(): JSX.Element {
     looseItems: 0,
     lowStockBoxes: 0,
     lowStockItems: 0,
+    tax: 0,
   });
 
   useEffect(() => {
@@ -168,6 +170,7 @@ export default function InventoryManager(): JSX.Element {
       looseItems: 0,
       lowStockBoxes: 0,
       lowStockItems: 0,
+      tax: 0,
     });
     setModalOpen(true);
   };
@@ -184,6 +187,7 @@ export default function InventoryManager(): JSX.Element {
       looseItems: inv.looseItems,
       lowStockBoxes: inv.lowStockBoxes ?? 0,
       lowStockItems: inv.lowStockItems ?? 0,
+      tax: inv.tax ?? 0,
     });
     setModalOpen(true);
   };
@@ -217,6 +221,7 @@ export default function InventoryManager(): JSX.Element {
       looseItems: normalized.looseItems,
       lowStockBoxes: form.lowStockBoxes ?? 0,
       lowStockItems: form.lowStockItems ?? 0,
+      tax: form.tax,
     };
 
     const updatePayload = {
@@ -225,6 +230,7 @@ export default function InventoryManager(): JSX.Element {
       looseItems: normalized.looseItems,
       lowStockBoxes: form.lowStockBoxes ?? 0,
       lowStockItems: form.lowStockItems ?? 0,
+      tax: form.tax,
     };
 
     try {
@@ -318,6 +324,7 @@ export default function InventoryManager(): JSX.Element {
                       <th className="py-3 px-3 text-center whitespace-nowrap">Boxes</th>
                       <th className="py-3 px-3 text-center whitespace-nowrap">Items/Box</th>
                       <th className="py-3 px-3 text-center whitespace-nowrap">Loose</th>
+                      <th className="py-3 px-3 text-center whitespace-nowrap">Tax</th>
                       <th className="py-3 px-3 text-center whitespace-nowrap">Total</th>
                       <th className="py-3 px-3 text-center whitespace-nowrap">Status</th>
                       <th className="py-3 px-3 text-center whitespace-nowrap">Actions</th>
@@ -338,6 +345,7 @@ export default function InventoryManager(): JSX.Element {
                           <td className="py-3 px-3 text-center whitespace-nowrap">{inv.boxes}</td>
                           <td className="py-3 px-3 text-center whitespace-nowrap">{inv.itemsPerBox}</td>
                           <td className="py-3 px-3 text-center whitespace-nowrap">{inv.looseItems}</td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">{inv.tax}</td>
                           <td className="py-3 px-3 text-center whitespace-nowrap">{total}</td>
                           <td className="py-3 px-3 text-center whitespace-nowrap">
                             <span className="px-2 py-1 rounded text-white text-xs md:text-sm" style={{ backgroundColor: getStatusColor(inv) }}>
@@ -468,6 +476,10 @@ export default function InventoryManager(): JSX.Element {
                   <div>
                     <label className="text-sm text-gray-600">Loose Items</label>
                     <input type="number" min={0} value={form.looseItems} onChange={(e) => setForm({ ...form, looseItems: Math.max(0, Number(e.target.value)) })} className="w-full border rounded px-3 py-2" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-600">Tax</label>
+                    <input type="number" min={0} value={form.tax} onChange={(e) => setForm({ ...form, tax: Math.max(0, Number(e.target.value)) })} className="w-full border rounded px-3 py-2" />
                   </div>
 
                   <div>

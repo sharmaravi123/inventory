@@ -10,6 +10,7 @@ export interface IStock extends Document {
   totalItems: number;
   lowStockItems?: number | null;
   lowStockBoxes?: number | null;
+  tax: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,6 +23,7 @@ const StockSchema = new Schema<IStock>(
     itemsPerBox: { type: Number, required: true, default: 1 },
     looseItems: { type: Number, required: true, default: 0 },
     totalItems: { type: Number, required: true, default: 0 },
+    tax: { type: Number, required: true, default: 0 },
     lowStockItems: { type: Number, default: null },
     lowStockBoxes: { type: Number, default: null },
   },
