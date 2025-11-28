@@ -6,19 +6,38 @@ import ProductTable from "@/app/admin/components/product/ProductTable";
 
 export default async function ProductsPage() {
   try {
-    const token = (await cookies()).get("token")?.value ?? null;
-
-    // server-side permission check (will throw/redirect based on your helper)
-    await ensureHasAccess(token, { perm: "product" });
-
-    const user = await getUserFromTokenOrDb(token ?? undefined);
-    if (!user) {
-      return (
-        <div className="p-6">
-          <h1 className="text-xl font-semibold">Not authenticated</h1>
-        </div>
-      );
-    }
+    const cookieStore = await cookies();
+        const token = cookieStore.get("token")?.value ?? null;
+    
+        // Ab yeh redirect nahi karega, sirf { user, authorized } dega
+        const { user, authorized } = await ensureHasAccess(token, {
+          path: "/warehouse/product",
+        });
+    
+        // 1) Not logged in
+        if (!user) {
+          return (
+            <div className="p-6">
+              <h1 className="text-xl font-semibold">Billing</h1>
+              <p className="text-sm text-gray-600">Not authenticated.</p>
+            </div>
+          );
+        }
+    
+        // 2) Logged in but no permission
+        if (!authorized) {
+          return (
+            <div className="p-6">
+              <h1 className="text-xl font-semibold">Access denied / Error</h1>
+              <p className="text-sm text-gray-600">
+                You do not have permission to access Billing for warehouses, or there was a server error.
+              </p>
+            </div>
+          );
+        }
+    
+        // 3) Authorized: same logic as pehle
+        const isAdmin = user.role === "admin";
 
     // access ok -> render client UI (client will fetch data)
     return <ProductTable   />;

@@ -1,56 +1,88 @@
 "use client";
 
-import React from "react";
-
-const orders = [
-  { id: "ORD001", customer: "Ravi Patel", status: "Delivered", amount: "250.00" },
-  { id: "ORD002", customer: "Sneha Sharma", status: "Shipped", amount: "120.00" },
-  { id: "ORD003", customer: "Amit Kumar", status: "Pending", amount: "300.00" },
-  { id: "ORD004", customer: "Nisha Mehta", status: "Delivered", amount: "500.00" },
-];
+import React, { useMemo } from "react";
+import { useListBillsQuery } from "@/store/billingApi";
 
 const statusColors: Record<string, string> = {
-  Delivered: "bg-[var(--color-success)] text-white",
-  Shipped: "bg-gray-100 text-gray-700",
-  Pending: "bg-[var(--color-warning)] text-black",
+  Paid: "bg-[var(--color-success)] text-white",
+  "Partially Paid": "bg-[var(--color-warning)] text-black",
+  Pending: "bg-gray-100 text-gray-700",
 };
 
 export default function RecentOrders() {
+  const { data, isLoading } = useListBillsQuery({ search: "" });
+  const bills = data?.bills ?? [];
+
+  // Latest 5 sorted by created or billDate
+  const recentOrders = useMemo(() => {
+    return bills
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.billDate).getTime() - new Date(a.billDate).getTime()
+      )
+      .slice(0, 5)
+      .map((bill) => {
+        const paid = bill.amountCollected;
+        const balance = bill.balanceAmount;
+
+        let label: string;
+        if (balance <= 0) label = "Paid";
+        else if (bill.status === "PARTIALLY_PAID") label = "Partially Paid";
+        else label = "Pending";
+
+        return {
+          invoice: bill.invoiceNumber,
+          customer: bill.customerInfo.name,
+          status: label,
+          amount: bill.grandTotal.toFixed(2),
+        };
+      });
+  }, [bills]);
+
   return (
     <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-6 w-full max-w-md">
       <h2 className="text-xl font-semibold text-gray-900">Recent Orders</h2>
       <p className="text-sm text-gray-500 mb-4">
-        Latest orders received and their status.
+        Latest customer orders and payments.
       </p>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm text-gray-700">
-          <thead>
-            <tr className="border-b text-gray-500">
-              <th className="py-2 text-left">Order ID</th>
-              <th className="py-2 text-left">Customer</th>
-              <th className="py-2 text-left">Status</th>
-              <th className="py-2 text-left">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((o, idx) => (
-              <tr key={idx} className="border-b last:border-0">
-                <td className="py-2">{o.id}</td>
-                <td className="py-2">{o.customer}</td>
-                <td className="py-2">
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[o.status]}`}
-                  >
-                    {o.status}
-                  </span>
-                </td>
-                <td className="py-2">{o.amount}</td>
+      {isLoading ? (
+        <p className="text-sm text-gray-500">Loading...</p>
+      ) : recentOrders.length === 0 ? (
+        <p className="text-sm text-gray-500">No recent orders found.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm text-gray-700">
+            <thead>
+              <tr className="border-b text-gray-500">
+                <th className="py-2 text-left">Invoice</th>
+                <th className="py-2 text-left">Customer</th>
+                <th className="py-2 text-left">Payment</th>
+                <th className="py-2 text-left">Amount</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {recentOrders.map((o) => (
+                <tr key={o.invoice} className="border-b last:border-0">
+                  <td className="py-2">{o.invoice}</td>
+                  <td className="py-2">{o.customer}</td>
+                  <td className="py-2">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        statusColors[o.status]
+                      }`}
+                    >
+                      {o.status}
+                    </span>
+                  </td>
+                  <td className="py-2">₹{o.amount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="text-xs text-gray-400 mt-4 text-center">
         Made with 💙 Akash Namkeen

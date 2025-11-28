@@ -37,14 +37,15 @@ export default function AdminPage() {
 
       {/* Row 2 — Low Stock + Recent Orders */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <InventoryDistribution />
 
       </div>
 
       {/* Row 3 — Top Products by Sales */}
       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <RecentOrders />
-        <LowStockAlerts />
+        {/* <LowStockAlerts /> */}
+        <InventoryDistribution />
+
 
       </div>
     </motion.div>

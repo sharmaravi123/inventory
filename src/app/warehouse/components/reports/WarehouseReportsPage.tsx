@@ -1,4 +1,4 @@
-// src/app/admin/reports/page.tsx
+// src/app/warehouse/components/reports/WarehouseReportsPage.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -8,7 +8,6 @@ import {
   BarChart3,
   Calendar,
   Package,
-  Warehouse,
   Truck,
   Users,
   AlertTriangle,
@@ -22,6 +21,14 @@ import { fetchInventory } from "@/store/inventorySlice";
 import { fetchProducts } from "@/store/productSlice";
 import { fetchDrivers } from "@/store/driverSlice";
 import { useListBillsQuery, Bill } from "@/store/billingApi";
+
+type WarehouseReportsPageProps = {
+  /**
+   * If undefined => admin-like (no restriction).
+   * If array => only those warehouseIds ka data show hoga.
+   */
+  allowedWarehouseIds?: string[];
+};
 
 function isWithinDateRange(dateStr: string, from: string, to: string): boolean {
   const d = new Date(dateStr);
@@ -42,7 +49,21 @@ function isWithinDateRange(dateStr: string, from: string, to: string): boolean {
   return true;
 }
 
-export default function ReportsPage() {
+function extractId(ref: unknown): string | undefined {
+  if (ref == null) return undefined;
+  if (typeof ref === "string" || typeof ref === "number") return String(ref);
+  if (typeof ref === "object") {
+    const obj = ref as Record<string, unknown>;
+    const candidate = obj._id ?? obj.id;
+    if (candidate == null || candidate === "") return undefined;
+    return String(candidate);
+  }
+  return undefined;
+}
+
+export default function WarehouseReportsPage({
+  allowedWarehouseIds,
+}: WarehouseReportsPageProps) {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
 
@@ -52,9 +73,8 @@ export default function ReportsPage() {
   const { items: drivers } = useSelector((s: RootState) => s.driver);
 
   const { data: billsData, isLoading: billsLoading, refetch } =
-    useListBillsQuery({
-      search: "",
-    });
+    useListBillsQuery({ search: "" });
+
   const bills: Bill[] = billsData?.bills ?? [];
 
   const [fromDate, setFromDate] = useState("");
@@ -67,11 +87,55 @@ export default function ReportsPage() {
     dispatch(fetchDrivers());
   }, [dispatch]);
 
-  // ----- FILTERED BILLS BY DATE -----
+  const limitByWarehouse = !!allowedWarehouseIds && allowedWarehouseIds.length > 0;
+
+  // bills limited to assigned warehouses
+  const warehouseBills = useMemo(() => {
+    if (!limitByWarehouse) return bills;
+
+    return bills.filter((bill) =>
+      bill.items.some((line) => {
+        const rawLine = line as unknown as {
+          warehouseId?: string;
+          warehouse?: unknown;
+        };
+        const wid = rawLine.warehouseId ?? extractId(rawLine.warehouse);
+        if (!wid) return false;
+        return allowedWarehouseIds.includes(String(wid));
+      })
+    );
+  }, [bills, allowedWarehouseIds, limitByWarehouse]);
+
+  // date filter on top of warehouse filter
   const filteredBills = useMemo(() => {
-    if (!fromDate && !toDate) return bills;
-    return bills.filter((b) => isWithinDateRange(b.billDate, fromDate, toDate));
-  }, [bills, fromDate, toDate]);
+    if (!fromDate && !toDate) return warehouseBills;
+    return warehouseBills.filter((b) =>
+      isWithinDateRange(b.billDate, fromDate, toDate)
+    );
+  }, [warehouseBills, fromDate, toDate]);
+
+  // inventory limited to allowed warehouses
+  const warehouseInventory = useMemo(() => {
+    if (!limitByWarehouse) return inventory;
+    return inventory.filter((item) => {
+      const wid =
+        extractId(
+          (item as unknown as { warehouseId?: unknown; warehouse?: unknown })
+            .warehouseId ??
+            (item as unknown as { warehouse?: unknown }).warehouse
+        ) ?? "";
+      return allowedWarehouseIds.includes(wid);
+    });
+  }, [inventory, allowedWarehouseIds, limitByWarehouse]);
+
+  // warehouses count for this user
+  const warehouseCount = useMemo(() => {
+    if (!limitByWarehouse) return warehouses.length;
+    return warehouses.filter((w) => {
+      const wid = String((w as { _id?: unknown; id?: unknown })._id ?? (w as { id?: unknown }).id ?? "");
+      return wid !== "" && allowedWarehouseIds.includes(wid);
+    }).length;
+  }, [warehouses, allowedWarehouseIds, limitByWarehouse]);
 
   // ----- TOP LEVEL ORDER + PAYMENT METRICS -----
   const orderStats = useMemo(() => {
@@ -121,9 +185,9 @@ export default function ReportsPage() {
     };
   }, [filteredBills]);
 
-  // ----- INVENTORY ALERTS (only counts, sample section removed) -----
+  // ----- INVENTORY ALERTS (counts) -----
   const inventoryAlerts = useMemo(() => {
-    if (!inventory.length) {
+    if (!warehouseInventory.length) {
       return {
         lowStockCount: 0,
         outOfStockCount: 0,
@@ -133,7 +197,7 @@ export default function ReportsPage() {
     let lowStockCount = 0;
     let outOfStockCount = 0;
 
-    inventory.forEach((item) => {
+    warehouseInventory.forEach((item) => {
       const totalItems =
         item.boxes * item.itemsPerBox + item.looseItems;
 
@@ -149,21 +213,25 @@ export default function ReportsPage() {
     });
 
     return { lowStockCount, outOfStockCount };
-  }, [inventory]);
+  }, [warehouseInventory]);
 
-  // ----- DRIVER PERFORMANCE -----
+  // ----- DRIVER PERFORMANCE (only warehouse bills) -----
   const driverSummary = useMemo(() => {
-    const summary: {
+    type DriverSummaryRow = {
       driverId: string;
       name: string;
       orders: number;
       delivered: number;
       collected: number;
       outstanding: number;
-    }[] = [];
+    };
 
-    drivers.forEach((d) => {
-      const driverBills = filteredBills.filter((b) => b.driver === d._id);
+    const summary: DriverSummaryRow[] = [];
+
+    drivers.forEach((driver) => {
+      const driverBills = filteredBills.filter(
+        (b) => b.driver === driver._id
+      );
 
       if (driverBills.length === 0) return;
 
@@ -172,16 +240,16 @@ export default function ReportsPage() {
       let collected = 0;
       let outstanding = 0;
 
-      driverBills.forEach((b) => {
+      driverBills.forEach((bill) => {
         orders += 1;
-        collected += b.amountCollected;
-        outstanding += b.balanceAmount;
-        if (b.status === "DELIVERED") delivered += 1;
+        collected += bill.amountCollected;
+        outstanding += bill.balanceAmount;
+        if (bill.status === "DELIVERED") delivered += 1;
       });
 
       summary.push({
-        driverId: d._id,
-        name: d.name,
+        driverId: driver._id,
+        name: driver.name,
         orders,
         delivered,
         collected,
@@ -193,34 +261,33 @@ export default function ReportsPage() {
     return summary.slice(0, 5);
   }, [drivers, filteredBills]);
 
-  // ----- TOP CUSTOMERS (top 5) -----
+  // ----- TOP CUSTOMERS (warehouse bills only) -----
   const topCustomers = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        name: string;
-        phone: string;
-        total: number;
-        orders: number;
-        outstanding: number;
-      }
-    >();
+    type CustomerAgg = {
+      name: string;
+      phone: string;
+      total: number;
+      orders: number;
+      outstanding: number;
+    };
 
-    filteredBills.forEach((b) => {
-      const key = b.customerInfo.phone || b.customerInfo.name;
+    const map = new Map<string, CustomerAgg>();
+
+    filteredBills.forEach((bill) => {
+      const key = bill.customerInfo.phone || bill.customerInfo.name;
       const existing = map.get(key);
       if (!existing) {
         map.set(key, {
-          name: b.customerInfo.name,
-          phone: b.customerInfo.phone,
-          total: b.grandTotal,
+          name: bill.customerInfo.name,
+          phone: bill.customerInfo.phone,
+          total: bill.grandTotal,
           orders: 1,
-          outstanding: b.balanceAmount,
+          outstanding: bill.balanceAmount,
         });
       } else {
-        existing.total += b.grandTotal;
+        existing.total += bill.grandTotal;
         existing.orders += 1;
-        existing.outstanding += b.balanceAmount;
+        existing.outstanding += bill.balanceAmount;
       }
     });
 
@@ -233,7 +300,6 @@ export default function ReportsPage() {
     `₹${value.toFixed(2)}`;
 
   const handleRefresh = (): void => {
-    // Refresh + date reset as you asked
     setFromDate("");
     setToDate("");
     refetch();
@@ -245,10 +311,10 @@ export default function ReportsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[color:var(--color-sidebar)]">
-            Reports & Analytics
+            Warehouse Reports
           </h1>
           <p className="text-xs text-slate-500">
-            Consolidated overview of orders, payments, drivers, and inventory.
+            Orders, payments, drivers and inventory – for your assigned warehouse(s).
           </p>
         </div>
 
@@ -285,11 +351,11 @@ export default function ReportsPage() {
       {/* TOP SUMMARY CARDS */}
       <div className="grid gap-3 md:grid-cols-4">
         {/* ORDERS */}
-        <div className="rounded-xl bg-[color:var(--color-white)] p-3 shadow-sm border border-slate-200 flex flex-col justify-between">
+        <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-[color:var(--color-white)] p-3 shadow-sm">
           <div>
-            <p className="text-[11px] text-slate-500 flex items-center gap-1">
+            <p className="flex items-center gap-1 text-[11px] text-slate-500">
               <ShoppingCart className="h-3 w-3 text-[color:var(--color-primary)]" />
-              Orders (filtered)
+              Warehouse orders (filtered)
             </p>
             <p className="mt-1 text-2xl font-semibold text-[color:var(--color-sidebar)]">
               {orderStats.totalOrders}
@@ -302,18 +368,18 @@ export default function ReportsPage() {
           <div className="mt-2 flex justify-end">
             <button
               type="button"
-              onClick={() => router.push("/admin/orders")}
+              onClick={() => router.push("/warehouse/billing")}
               className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-2 py-0.5 text-[11px] hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
             >
-              View all orders
+              View all bills
               <ArrowRight className="h-3 w-3" />
             </button>
           </div>
         </div>
 
         {/* REVENUE */}
-        <div className="rounded-xl bg-[color:var(--color-white)] p-3 shadow-sm border border-slate-200">
-          <p className="text-[11px] text-slate-500 flex items-center gap-1">
+        <div className="rounded-xl border border-slate-200 bg-[color:var(--color-white)] p-3 shadow-sm">
+          <p className="flex items-center gap-1 text-[11px] text-slate-500">
             <BarChart3 className="h-3 w-3 text-[color:var(--color-primary)]" />
             Revenue
           </p>
@@ -321,13 +387,13 @@ export default function ReportsPage() {
             {formatCurrency(orderStats.totalRevenue)}
           </p>
           <p className="mt-1 text-[11px] text-slate-500">
-            Avg order: {formatCurrency(orderStats.avgOrderValue)}
+            Avg bill: {formatCurrency(orderStats.avgOrderValue)}
           </p>
         </div>
 
         {/* COLLECTED */}
-        <div className="rounded-xl bg-[color:var(--color-white)] p-3 shadow-sm border border-slate-200">
-          <p className="text-[11px] text-slate-500 flex items-center gap-1">
+        <div className="rounded-xl border border-slate-200 bg-[color:var(--color-white)] p-3 shadow-sm">
+          <p className="flex items-center gap-1 text-[11px] text-slate-500">
             <IndianRupee className="h-3 w-3 text-[color:var(--color-success)]" />
             Collected
           </p>
@@ -342,8 +408,8 @@ export default function ReportsPage() {
         </div>
 
         {/* OUTSTANDING */}
-        <div className="rounded-xl bg-[color:var(--color-white)] p-3 shadow-sm border border-slate-200">
-          <p className="text-[11px] text-slate-500 flex items-center gap-1">
+        <div className="rounded-xl border border-slate-200 bg-[color:var(--color-white)] p-3 shadow-sm">
+          <p className="flex items-center gap-1 text-[11px] text-slate-500">
             <IndianRupee className="h-3 w-3 text-[color:var(--color-error)]" />
             Outstanding dues
           </p>
@@ -351,7 +417,7 @@ export default function ReportsPage() {
             {formatCurrency(orderStats.totalOutstanding)}
           </p>
           <p className="mt-1 text-[11px] text-slate-500">
-            Pending status orders: {orderStats.pendingStatusCount}
+            Pending status bills: {orderStats.pendingStatusCount}
           </p>
         </div>
       </div>
@@ -359,8 +425,8 @@ export default function ReportsPage() {
       {/* RESOURCES OVERVIEW */}
       <div className="grid gap-3 md:grid-cols-3">
         {/* PRODUCTS + WAREHOUSE */}
-        <div className="rounded-xl bg-[color:var(--color-white)] p-4 shadow-sm border border-slate-200">
-          <p className="text-xs font-semibold text-[color:var(--color-sidebar)] flex items-center gap-1">
+        <div className="rounded-xl border border-slate-200 bg-[color:var(--color-white)] p-4 shadow-sm">
+          <p className="flex items-center gap-1 text-xs font-semibold text-[color:var(--color-sidebar)]">
             <Package className="h-4 w-4 text-[color:var(--color-primary)]" />
             Products & Warehouses
           </p>
@@ -374,15 +440,15 @@ export default function ReportsPage() {
             <div>
               <p className="text-[11px] text-slate-500">Warehouses</p>
               <p className="text-xl font-semibold text-[color:var(--color-sidebar)]">
-                {warehouses.length}
+                {warehouseCount}
               </p>
             </div>
           </div>
         </div>
 
         {/* INVENTORY ALERT COUNTS */}
-        <div className="rounded-xl bg-[color:var(--color-white)] p-4 shadow-sm border border-slate-200">
-          <p className="text-xs font-semibold text-[color:var(--color-sidebar)] flex items-center gap-1">
+        <div className="rounded-xl border border-slate-200 bg-[color:var(--color-white)] p-4 shadow-sm">
+          <p className="flex items-center gap-1 text-xs font-semibold text-[color:var(--color-sidebar)]">
             <AlertTriangle className="h-4 w-4 text-[color:var(--color-warning)]" />
             Inventory alerts
           </p>
@@ -403,9 +469,9 @@ export default function ReportsPage() {
         </div>
 
         {/* DRIVERS SUMMARY */}
-        <div className="rounded-xl bg-[color:var(--color-white)] p-4 shadow-sm border border-slate-200 flex flex-col justify-between">
+        <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-[color:var(--color-white)] p-4 shadow-sm">
           <div>
-            <p className="text-xs font-semibold text-[color:var(--color-sidebar)] flex items-center gap-1">
+            <p className="flex items-center gap-1 text-xs font-semibold text-[color:var(--color-sidebar)]">
               <Truck className="h-4 w-4 text-[color:var(--color-primary)]" />
               Drivers
             </p>
@@ -418,7 +484,7 @@ export default function ReportsPage() {
               </div>
               <div>
                 <p className="text-[11px] text-slate-500">
-                  Active (has orders)
+                  Active (has bills)
                 </p>
                 <p className="text-xl font-semibold text-[color:var(--color-success)]">
                   {driverSummary.length}
@@ -426,25 +492,15 @@ export default function ReportsPage() {
               </div>
             </div>
           </div>
-          <div className="mt-2 flex justify-end">
-            <button
-              type="button"
-              onClick={() => router.push("/admin/driver")}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-2 py-0.5 text-[11px] hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
-            >
-              View all drivers
-              <ArrowRight className="h-3 w-3" />
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* DRIVER + CUSTOMERS SECTION (2 columns) */}
+      {/* DRIVER + CUSTOMERS SECTION */}
       <div className="grid gap-3 lg:grid-cols-2">
         {/* DRIVER PERFORMANCE TABLE */}
-        <div className="rounded-xl bg-[color:var(--color-white)] p-4 shadow-sm border border-slate-200 flex flex-col">
+        <div className="flex flex-col rounded-xl border border-slate-200 bg-[color:var(--color-white)] p-4 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold text-[color:var(--color-sidebar)] flex items-center gap-1">
+            <p className="flex items-center gap-1 text-xs font-semibold text-[color:var(--color-sidebar)]">
               <Truck className="h-4 w-4 text-[color:var(--color-primary)]" />
               Top drivers (by collection)
             </p>
@@ -452,7 +508,7 @@ export default function ReportsPage() {
 
           {driverSummary.length === 0 && (
             <p className="text-xs text-slate-500">
-              No driver order data in selected range.
+              No driver billing data in selected range.
             </p>
           )}
 
@@ -462,7 +518,7 @@ export default function ReportsPage() {
                 <thead className="bg-slate-50">
                   <tr>
                     <th className="border-b px-2 py-1 text-left">Driver</th>
-                    <th className="border-b px-2 py-1 text-right">Orders</th>
+                    <th className="border-b px-2 py-1 text-right">Bills</th>
                     <th className="border-b px-2 py-1 text-right">
                       Delivered
                     </th>
@@ -498,23 +554,12 @@ export default function ReportsPage() {
               </table>
             </div>
           )}
-
-          <div className="mt-2 flex justify-end text-[11px] text-slate-500">
-            <button
-              type="button"
-              onClick={() => router.push("/admin/drivers")}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-2 py-0.5 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
-            >
-              Manage drivers
-              <ArrowRight className="h-3 w-3" />
-            </button>
-          </div>
         </div>
 
         {/* TOP CUSTOMERS */}
-        <div className="rounded-xl bg-[color:var(--color-white)] p-4 shadow-sm border border-slate-200 flex flex-col">
+        <div className="flex flex-col rounded-xl border border-slate-200 bg-[color:var(--color-white)] p-4 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold text-[color:var(--color-sidebar)] flex items-center gap-1">
+            <p className="flex items-center gap-1 text-xs font-semibold text-[color:var(--color-sidebar)]">
               <Users className="h-4 w-4 text-[color:var(--color-primary)]" />
               Top customers (by billing)
             </p>
@@ -532,7 +577,7 @@ export default function ReportsPage() {
                 <thead className="bg-slate-50">
                   <tr>
                     <th className="border-b px-2 py-1 text-left">Customer</th>
-                    <th className="border-b px-2 py-1 text-right">Orders</th>
+                    <th className="border-b px-2 py-1 text-right">Bills</th>
                     <th className="border-b px-2 py-1 text-right">Total</th>
                     <th className="border-b px-2 py-1 text-right">
                       Outstanding
@@ -566,14 +611,14 @@ export default function ReportsPage() {
             </div>
           )}
 
-          <div className="mt-2 flex justify-between items-center text-[11px] text-slate-500">
-            <span>Top 5 customers in selected period.</span>
+          <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Top 5 customers for your warehouse(s).</span>
             <button
               type="button"
-              onClick={() => router.push("/admin/orders")}
+              onClick={() => router.push("/warehouse/billing")}
               className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-2 py-0.5 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
             >
-              View all customers (orders)
+              View all bills
               <ArrowRight className="h-3 w-3" />
             </button>
           </div>

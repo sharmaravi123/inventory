@@ -9,6 +9,7 @@ import {
   Menu,
   LogOut,
   X as XIcon,
+  Receipt,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -26,9 +27,9 @@ const navItems = [
   { href: "/warehouse", label: "Dashboard", icon: <LayoutDashboard size={16} />, perm: null },
   { href: "/warehouse/inventory", label: "Inventory", icon: <Package size={16} />, perm: "inventory" },
   { href: "/warehouse/product", label: "Product", icon: <Package size={16} />, perm: "product" },
+  { href: "/warehouse/billing", label: "Billing", icon: <CreditCard size={16} />, perm: "billing" },
   { href: "/warehouse/orders", label: "Orders", icon: <ShoppingCart size={16} />, perm: "orders" },
   { href: "/warehouse/reports", label: "Reports", icon: <BarChart2 size={16} />, perm: "reports" },
-  { href: "/warehouse/billing", label: "Billing", icon: <CreditCard size={16} />, perm: "billing" },
 ] as const;
 
 const WarehouseSidebar: React.FC<Props> = ({ allowedPerms = [], allowedPaths = [] }) => {

@@ -1,27 +1,49 @@
-// server helper to centralize token -> user + access checks
+// src/lib/access.ts
 import jwt from "jsonwebtoken";
 import dbConnect from "./mongodb";
 import User from "@/models/User";
-import { redirect } from "next/navigation";
+
+interface JwtAccess {
+  permissions?: string[];
+  level?: string;
+}
 
 interface JwtPayload {
   sub?: string;
   role?: string;
-  access?: { permissions?: string[]; level?: string };
+  access?: JwtAccess;
   warehouses?: unknown[];
 }
 
-export async function getUserFromTokenOrDb(token?: string) {
+export interface AccessUser {
+  _id?: string;
+  role?: string;
+  access?: JwtAccess;
+  warehouses?: unknown[];
+}
+
+export interface AccessResult {
+  user: AccessUser | null;
+  authorized: boolean;
+}
+
+/**
+ * Token -> user (DB se)
+ */
+export async function getUserFromTokenOrDb(token?: string): Promise<AccessUser | null> {
   if (!token) return null;
-  let payload: JwtPayload | null = null;
+
+  let payload: JwtPayload;
   try {
     payload = jwt.verify(token, process.env.JWT_SECRET ?? "") as JwtPayload;
-  } catch (e) {
+  } catch {
     return null;
   }
 
-  // If permissions exist in token, return minimal object
-  if (payload && payload.sub && payload.access?.permissions) {
+  if (!payload.sub) return null;
+
+  // Agar token me hi access data hai to minimal object return
+  if (payload.access?.permissions) {
     return {
       _id: payload.sub,
       role: payload.role,
@@ -30,58 +52,63 @@ export async function getUserFromTokenOrDb(token?: string) {
     };
   }
 
-  // fallback: load from DB
   try {
     await dbConnect();
-    const user = await User.findById(payload?.sub).select("-password").lean();
-    if (!user) return null;
-    return user;
+    const userDoc = await User.findById(payload.sub).select("-password").lean();
+    if (!userDoc) return null;
+
+    return {
+      _id: userDoc._id?.toString(),
+      role: userDoc.role,
+      access: userDoc.access,
+      warehouses: userDoc.warehouses ?? [],
+    };
   } catch (e) {
+    // eslint-disable-next-line no-console
     console.error("getUserFromTokenOrDb error:", e);
     return null;
   }
 }
 
 /**
- * ensureHasAccess - call at top of server page components
- * If user isn't allowed to view `requiredPermOrPath` then redirect to /warehouse (or 403)
- *
- * Usage in a server page:
- * const token = cookies().get('token')?.value;
- * await ensureHasAccess(token, { perm: 'inventory' });
+ * ensureHasAccess
+ * - Koi redirect nahi karega
+ * - Sirf { user, authorized } return karega
  */
-export async function ensureHasAccess(token: string | null | undefined, opts: { perm?: string; path?: string }) {
+export async function ensureHasAccess(
+  token: string | null | undefined,
+  opts: { perm?: string; path?: string }
+): Promise<AccessResult> {
   const user = await getUserFromTokenOrDb(token ?? undefined);
   if (!user) {
-    redirect("/"); // not logged in
+    return { user: null, authorized: false };
   }
 
-  // dashboard always allowed for user role
   const { perm, path } = opts;
-  if (!perm && !path) return;
+
+  // Map path -> permission
+  const permMap: Record<string, string> = {
+    "/warehouse/inventory": "inventory",
+    "/warehouse/product": "product",
+    "/warehouse/orders": "orders",
+    "/warehouse/reports": "reports",
+    "/warehouse/billing": "billing",
+  };
 
   const allowedPermissions: string[] = user.access?.permissions ?? [];
-  // if user has 'all' level then allow everything
-  if (user.access?.level === "all") return;
 
-  // check permission
-  if (perm) {
-    if (!allowedPermissions.includes(perm)) {
-      // redirect to dashboard or show 403 UI (we choose redirect)
-      redirect("/warehouse");
-    }
-  } else if (path) {
-    // map path->perm if you like, or check allowedPaths if passed
-    const permMap: Record<string, string> = {
-      "/warehouse/inventory": "inventory",
-      "/warehouse/product": "product",
-      "/warehouse/orders": "orders",
-      "/warehouse/reports": "reports",
-      "/warehouse/billing": "billing",
-    };
-    const requiredPerm = permMap[path];
-    if (requiredPerm && !allowedPermissions.includes(requiredPerm)) {
-      redirect("/warehouse");
-    }
+  // Admin ya level === "all" -> full access
+  if (user.role === "admin" || user.access?.level === "all") {
+    return { user, authorized: true };
   }
+
+  const requiredPerm = perm ?? (path ? permMap[path] : undefined);
+
+  // Agar koi specific permission nahi mangi -> allow
+  if (!requiredPerm) {
+    return { user, authorized: true };
+  }
+
+  const authorized = allowedPermissions.includes(requiredPerm);
+  return { user, authorized };
 }

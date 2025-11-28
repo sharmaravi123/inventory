@@ -27,6 +27,34 @@ const formatDate = (iso: string): string => {
   });
 };
 
+function formatCsvValue(value: string | number | null | undefined): string {
+  const str =
+    value === null || value === undefined
+      ? ""
+      : typeof value === "number"
+      ? value.toString()
+      : value;
+  const escaped = str.replace(/"/g, '""');
+  return `"${escaped}"`;
+}
+
+function getCsvFileName(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `orders-list-${yyyy}-${mm}-${dd}.csv`;
+}
+
+function getDriverNameForBill(bill: Bill, drivers?: Driver[]): string {
+  if (drivers && bill.driver) {
+    const found = drivers.find((d) => d._id === bill.driver);
+    if (found) return found.name;
+  }
+  if (bill.driver) return "Assigned";
+  return "Unassigned";
+}
+
 export default function BillList({
   bills,
   loading,
@@ -38,15 +66,94 @@ export default function BillList({
   onMarkDelivered,
   hideEditOrderButton,
 }: BillListProps) {
+  const handleExport = () => {
+    if (bills.length === 0) return;
+
+    const header = [
+      "Invoice Number",
+      "Bill Date",
+      "Customer Name",
+      "Shop Name",
+      "Phone",
+      "Grand Total",
+      "Amount Collected",
+      "Balance Amount",
+      "Order Status",
+      "Payment Status",
+      "Driver",
+    ];
+
+    const rows: string[] = [];
+    rows.push(header.map((h) => formatCsvValue(h)).join(","));
+
+    bills.forEach((bill) => {
+      const billDateObj = new Date(bill.billDate);
+      const billDate = billDateObj.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+
+      const balance = bill.balanceAmount;
+      const paymentStatusLabel =
+        balance <= 0
+          ? "Paid"
+          : bill.status === "PARTIALLY_PAID"
+          ? "Partially Paid"
+          : "Pending";
+
+      const driverName = getDriverNameForBill(bill, drivers);
+
+      const line = [
+        formatCsvValue(bill.invoiceNumber ?? ""),
+        formatCsvValue(billDate),
+        formatCsvValue(bill.customerInfo.name ?? ""),
+        formatCsvValue(bill.customerInfo.shopName ?? ""),
+        formatCsvValue(bill.customerInfo.phone ?? ""),
+        formatCsvValue(bill.grandTotal.toFixed(2)),
+        formatCsvValue(bill.amountCollected.toFixed(2)),
+        formatCsvValue(balance.toFixed(2)),
+        formatCsvValue(bill.status),
+        formatCsvValue(paymentStatusLabel),
+        formatCsvValue(driverName),
+      ].join(",");
+
+      rows.push(line);
+    });
+
+    const csvContent = `\uFEFF${rows.join("\r\n")}`;
+    const blob = new Blob([csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = getCsvFileName();
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="rounded-xl bg-[color:var(--color-white)] p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-[color:var(--color-sidebar)]">
           Orders
         </h2>
-        <span className="text-xs text-slate-500">
-          {loading ? "Loading..." : `${bills.length} records`}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">
+            {loading ? "Loading..." : `${bills.length} records`}
+          </span>
+          <button
+            type="button"
+            onClick={handleExport}
+            className="rounded-full border border-slate-300 px-3 py-1 text-[11px] text-slate-700 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
+          >
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {bills.length === 0 && !loading && (
@@ -74,14 +181,7 @@ export default function BillList({
               ? "Partially Paid"
               : "Pending";
 
-          const driverName = (() => {
-            if (drivers && bill.driver) {
-              const found = drivers.find((d) => d._id === bill.driver);
-              if (found) return found.name;
-            }
-            if (bill.driver) return "Assigned";
-            return "Unassigned";
-          })();
+          const driverName = getDriverNameForBill(bill, drivers);
 
           return (
             <div
@@ -208,7 +308,7 @@ export default function BillList({
                     </button>
                   )}
 
-                  {/* Edit Payment – admin + driver dono use kar sakte */}
+                  {/* Edit Payment */}
                   <button
                     type="button"
                     onClick={(e) => {
