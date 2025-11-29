@@ -1,3 +1,4 @@
+// src/app/login/page.tsx (ya jahan bhi tera LoginPage hai)
 "use client";
 
 import { useState, KeyboardEvent } from "react";
@@ -31,28 +32,32 @@ export default function LoginPage() {
     setLocalError(null);
 
     try {
-      if (role === "admin") {
-        await dispatch(adminLogin({ email, password })).unwrap();
-        window.location.href = "/admin";
-        return;
-      }
-
-      if (role === "user") {
-        await dispatch(userLogin({ email, password })).unwrap();
-        window.location.href = "/warehouse";
-        return;
-      }
-
+      // DRIVER
       if (role === "driver") {
         await dispatch(loginDriver({ email, password })).unwrap();
         window.location.href = "/driver";
         return;
       }
 
+      // ADMIN
+      if (role === "admin") {
+        await dispatch(adminLogin({ email, password })).unwrap();
+        window.location.href = "/admin";
+        return;
+      }
+
+      // USER
+      if (role === "user") {
+        await dispatch(userLogin({ email, password })).unwrap();
+        window.location.href = "/warehouse";
+        return;
+      }
+
       setLocalError("Invalid role selection.");
     } catch (err: unknown) {
-      // thunk se aaya hua error message ho to use kar sakte ho
-      if (typeof err === "object" && err !== null && "error" in err) {
+      if (typeof err === "string") {
+        setLocalError(err);
+      } else if (typeof err === "object" && err !== null && "error" in err) {
         const msg = (err as { error?: string }).error;
         setLocalError(msg || "Invalid credentials");
       } else {
@@ -117,7 +122,7 @@ export default function LoginPage() {
               Select your role and use your registered email and password to login.
             </p>
 
-            {/* Role selector buttons */}
+            {/* Role selector */}
             <div className="flex justify-center gap-2 mb-6">
               <button
                 type="button"

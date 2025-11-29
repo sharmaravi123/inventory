@@ -28,16 +28,37 @@ interface TokenPayload {
 }
 
 function toStringId(id: unknown): string {
+  // direct primitives
   if (typeof id === "string") return id;
   if (typeof id === "number") return String(id);
+
+  if (!id || typeof id !== "object") return "";
+
+  // Mongoose ObjectId ya koi aur object jisme toString() ho
   if (
-    id &&
-    typeof id === "object" &&
-    "_id" in (id as Record<string, unknown>)
+    "toString" in id &&
+    typeof (id as { toString: () => string }).toString === "function"
   ) {
-    const inner = (id as { _id: unknown })._id;
-    return toStringId(inner);
+    return (id as { toString: () => string }).toString();
   }
+
+  // Agar object ke andar _id hai
+  if ("_id" in (id as Record<string, unknown>)) {
+    const inner = (id as { _id: unknown })._id;
+
+    if (typeof inner === "string") return inner;
+    if (typeof inner === "number") return String(inner);
+
+    if (
+      inner &&
+      typeof inner === "object" &&
+      "toString" in inner &&
+      typeof (inner as { toString: () => string }).toString === "function"
+    ) {
+      return (inner as { toString: () => string }).toString();
+    }
+  }
+
   return "";
 }
 
@@ -45,15 +66,17 @@ export async function GET() {
   try {
     await dbConnect();
 
+    // cookies() sync hai, yaha await nahi hoga
     const cookieStore = cookies();
-    // ⛔️ cookies() is NOT async → no await here
-    const tokenCookie = (await cookieStore).get("token"); // change name if your cookie is different
+    const tokenCookie = (await cookieStore).get("token");
+
     if (!tokenCookie) {
       return NextResponse.json(
         { error: "Not authenticated (no token cookie)" },
         { status: 401 }
       );
     }
+
     const token = tokenCookie.value;
 
     const secret = process.env.JWT_SECRET;
@@ -101,9 +124,11 @@ export async function GET() {
         if (typeof w === "string") {
           return { _id: w };
         }
+
         const id = toStringId(w._id);
         const name =
           typeof w.name === "string" ? (w.name as string) : undefined;
+
         return { _id: id, name };
       }
     );
