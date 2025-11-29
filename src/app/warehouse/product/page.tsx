@@ -1,4 +1,4 @@
-// src/app/admin/products/page.tsx
+// src/app/warehouse/products/page.tsx
 export const dynamic = "force-dynamic";
 import React from "react";
 import { cookies } from "next/headers";

@@ -45,12 +45,12 @@ export default async function WarehouseBillingPage() {
     const allowedWarehouseIds: string[] | undefined = isAdmin
       ? undefined
       : Array.isArray(user.warehouses)
-      ? (user.warehouses as WarehouseRef[])
+        ? (user.warehouses as WarehouseRef[])
           .map((w) =>
             w._id === undefined || w._id === null ? undefined : String(w._id)
           )
           .filter((id): id is string => Boolean(id))
-      : [];
+        : [];
 
     if (Array.isArray(allowedWarehouseIds) && allowedWarehouseIds.length === 0) {
       return (

@@ -1,5 +1,6 @@
-// app/admin/layout.tsx  (server component)
+// src/app/admin/layout.tsx
 export const dynamic = "force-dynamic";
+
 import "../globals.css";
 import Topbar from "./components/Topbar";
 import Sidebar from "./components/Sidebar";
@@ -13,10 +14,17 @@ export const metadata = {
   description: "Admin dashboard",
 };
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const cookieStore = await cookies();
   const token = cookieStore.get("token")?.value ?? null;
-  if (!token) redirect("/");
+
+  if (!token) {
+    redirect("/");
+  }
 
   let payload: AuthTokenPayload;
   try {
@@ -29,7 +37,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect("/");
   }
 
-  // If we reach here, token is present and valid (server-side)
   return (
     <div className="min-h-screen flex flex-col bg-[var(--color-neutral)]">
       <Topbar />

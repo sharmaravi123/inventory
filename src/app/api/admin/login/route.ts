@@ -7,7 +7,6 @@ import { signToken, AuthTokenPayload } from "@/lib/jwt";
 
 type Body = { email?: string; password?: string };
 
-// Strongly typed admin doc
 interface AdminDoc {
   _id: { toString(): string };
   name?: string | null;

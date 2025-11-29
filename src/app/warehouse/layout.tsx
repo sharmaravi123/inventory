@@ -34,7 +34,6 @@ export default async function WarehouseLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // ✅ yaha await zaroori hai (tumhare TS error ka reason yehi tha)
   const cookieStore = await cookies();
   const token = cookieStore.get("token")?.value ?? null;
 
@@ -49,8 +48,10 @@ export default async function WarehouseLayout({
     redirect("/");
   }
 
-  // ✅ user login ka token role "user" hai
-  if (payload.role !== "user") {
+  // 🔵 Warehouse area ke liye JWT me role "warehouse" expect kar rahe
+  // agar admin ko bhi allow karna hai to is condition ko change karke:
+  // if (payload.role !== "warehouse" && payload.role !== "admin") { ... }
+  if (payload.role !== "warehouse") {
     redirect("/");
   }
 

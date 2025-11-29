@@ -1,3 +1,4 @@
+// src/app/api/auth/login/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { Document } from "mongoose";
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     const userDoc = (await User.findOne({
       email: { $regex: `^${emailInput}$`, $options: "i" },
-      role: "user",
+      role: "user", // DB me role
     })
       .select("+password")
       .populate("warehouses", "name")) as UserDoc | null;
@@ -76,10 +77,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ✅ Token matches AuthTokenPayload format
+    // 👉 JWT payload – warehouse layout + ensureHasAccess ke hisaab se
     const payload: AuthTokenPayload = {
       id: String(userDoc._id),
-      role: "user",
+      role: "warehouse",
     };
 
     const token = signToken(payload);

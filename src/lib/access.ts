@@ -1,114 +1,110 @@
 // src/lib/access.ts
-import jwt from "jsonwebtoken";
-import dbConnect from "./mongodb";
-import User from "@/models/User";
+import dbConnect from "@/lib/mongodb";
+import User, { IUser } from "@/models/User";
+import { verifyToken } from "@/lib/jwt";
 
-interface JwtAccess {
-  permissions?: string[];
-  level?: string;
+export type AccessPath =
+  | "/warehouse/billing"
+  | "/warehouse/inventory"
+  | "/warehouse/orders"
+  | "/warehouse/reports"
+  | "/admin/products"
+  | string; // fallback for any other paths
+
+export interface EnsureAccessOptions {
+  path: AccessPath;
 }
 
-interface JwtPayload {
-  sub?: string;
+export interface EnsuredUser {
+  // lean user structure
+  _id: unknown;
+  name?: string;
+  email?: string;
   role?: string;
-  access?: JwtAccess;
   warehouses?: unknown[];
-}
-
-export interface AccessUser {
-  _id?: string;
-  role?: string;
-  access?: JwtAccess;
-  warehouses?: unknown[];
-}
-
-export interface AccessResult {
-  user: AccessUser | null;
-  authorized: boolean;
+  access?: {
+    level?: string;
+    permissions?: string[];
+  } | null;
 }
 
 /**
- * Token -> user (DB se)
+ * Token se JWT decode karo, user ko DB se load karo (password ke bina),
+ * warehouses populate karo.
  */
-export async function getUserFromTokenOrDb(token?: string): Promise<AccessUser | null> {
+export async function getUserFromTokenOrDb(
+  token?: string | null
+): Promise<EnsuredUser | null> {
   if (!token) return null;
 
-  let payload: JwtPayload;
   try {
-    payload = jwt.verify(token, process.env.JWT_SECRET ?? "") as JwtPayload;
-  } catch {
-    return null;
-  }
+    const payload = verifyToken(token);
 
-  if (!payload.sub) return null;
+    // id prefer karo, agar kabhi sub set ho to fallback me use kar sakte
+    const userId = payload.id || payload.sub;
+    if (!userId) {
+      return null;
+    }
 
-  // Agar token me hi access data hai to minimal object return
-  if (payload.access?.permissions) {
-    return {
-      _id: payload.sub,
-      role: payload.role,
-      access: payload.access,
-      warehouses: payload.warehouses ?? [],
-    };
-  }
-
-  try {
     await dbConnect();
-    const userDoc = await User.findById(payload.sub).select("-password").lean();
-    if (!userDoc) return null;
 
-    return {
-      _id: userDoc._id?.toString(),
-      role: userDoc.role,
-      access: userDoc.access,
-      warehouses: userDoc.warehouses ?? [],
-    };
-  } catch (e) {
+    const user = await User.findById(userId)
+      .select("-password")
+      .populate("warehouses", "name")
+      .lean<IUser>()
+      .exec();
+
+    if (!user) return null;
+
+    return user as unknown as EnsuredUser;
+  } catch (err) {
     // eslint-disable-next-line no-console
-    console.error("getUserFromTokenOrDb error:", e);
+    console.error("getUserFromTokenOrDb error:", err);
     return null;
   }
 }
 
 /**
- * ensureHasAccess
- * - Koi redirect nahi karega
- * - Sirf { user, authorized } return karega
+ * path + user.access.permissions ke basis par authorized check karega.
+ * Admin ko full access.
  */
 export async function ensureHasAccess(
-  token: string | null | undefined,
-  opts: { perm?: string; path?: string }
-): Promise<AccessResult> {
-  const user = await getUserFromTokenOrDb(token ?? undefined);
+  token: string | null,
+  options: EnsureAccessOptions
+): Promise<{ user: EnsuredUser | null; authorized: boolean }> {
+  const user = await getUserFromTokenOrDb(token);
   if (!user) {
     return { user: null, authorized: false };
   }
 
-  const { perm, path } = opts;
+  const role = user.role ?? "";
 
-  // Map path -> permission
-  const permMap: Record<string, string> = {
-    "/warehouse/inventory": "inventory",
-    "/warehouse/product": "product",
-    "/warehouse/orders": "orders",
-    "/warehouse/reports": "reports",
-    "/warehouse/billing": "billing",
-  };
-
-  const allowedPermissions: string[] = user.access?.permissions ?? [];
-
-  // Admin ya level === "all" -> full access
-  if (user.role === "admin" || user.access?.level === "all") {
+  // Admin -> sab allowed
+  if (role === "admin") {
     return { user, authorized: true };
   }
 
-  const requiredPerm = perm ?? (path ? permMap[path] : undefined);
+  const perms = user.access?.permissions ?? [];
 
-  // Agar koi specific permission nahi mangi -> allow
+  // Path -> permission mapping
+  const pathToPermission: Record<string, string> = {
+    "/warehouse/billing": "billing",
+    "/warehouse/inventory": "inventory",
+    "/warehouse/orders": "orders",
+    "/warehouse/reports": "reports",
+    // agar products ke liye bhi permission hai to yaha map kar sakte
+    "/admin/products": "inventory",
+  };
+
+  const requiredPerm = pathToPermission[options.path];
+
+  // Agar koi mapping nahi mili, to by default allow kar do user ko.
+  // (agar strict chahiye, to yaha false kar sakte)
   if (!requiredPerm) {
     return { user, authorized: true };
   }
 
-  const authorized = allowedPermissions.includes(requiredPerm);
+  const authorized = perms.includes(requiredPerm);
+
   return { user, authorized };
 }
