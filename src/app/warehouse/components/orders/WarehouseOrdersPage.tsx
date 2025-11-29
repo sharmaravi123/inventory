@@ -18,7 +18,7 @@ import type { RootState, AppDispatch } from "@/store/store";
 type StatusFilter = "ALL" | "PENDING" | "PARTIALLY_PAID" | "PAID";
 
 type WarehouseOrdersPageProps = {
-  // undefined => no restriction (admin)
+  // undefined => admin (no restriction)
   // string[] => sirf in warehouses ke orders
   allowedWarehouseIds?: string[];
 };
@@ -31,20 +31,8 @@ function extractId(ref: unknown): string | undefined {
     const candidate = obj._id ?? obj.id;
     if (candidate == null || candidate === "") return undefined;
     return String(candidate);
-    }
+  }
   return undefined;
-}
-
-function getBillWarehouseId(bill: Bill): string | undefined {
-  const withWarehouse = bill as unknown as {
-    warehouseId?: unknown;
-    warehouse?: unknown;
-  };
-
-  const direct = withWarehouse.warehouseId;
-  const fromObj = withWarehouse.warehouse;
-
-  return extractId(direct ?? fromObj);
 }
 
 export default function WarehouseOrdersPage({
@@ -73,23 +61,26 @@ export default function WarehouseOrdersPage({
   const limitByWarehouse =
     Array.isArray(allowedWarehouseIds) && allowedWarehouseIds.length > 0;
 
-  // ---------- BILL LIST LIMITED BY WAREHOUSE ----------
+  // 🔹 EXACT same warehouse filter as BillingWarehousePage.tsx
   const warehouseBills = useMemo(() => {
-    if (!limitByWarehouse) return bills;
-
-    // Check: kya data me warehouseId/warehouse aa hi raha hai?
-    const anyHasWarehouse = bills.some((b) => !!getBillWarehouseId(b));
-    if (!anyHasWarehouse) {
-      // Agar kisi bhi bill me warehouse info nahi hai,
-      // to filter nahi lagayenge, sab dikha denge (warna sab 0 ho jate).
+    if (!limitByWarehouse) {
+      // admin -> saare orders
       return bills;
     }
 
-    return bills.filter((bill) => {
-      const wid = getBillWarehouseId(bill);
-      if (!wid) return false;
-      return allowedWarehouseIds.includes(wid);
-    });
+    return bills.filter((bill) =>
+      bill.items.some((line) => {
+        const rawLine = line as {
+          warehouseId?: string | number;
+          warehouse?: unknown;
+        };
+        const widFromField = rawLine.warehouseId;
+        const widFromPopulate = extractId(rawLine.warehouse);
+        const wid = widFromField ?? widFromPopulate;
+        if (!wid) return false;
+        return allowedWarehouseIds.includes(String(wid));
+      })
+    );
   }, [bills, allowedWarehouseIds, limitByWarehouse]);
 
   // ---------- FILTERED LIST (search + date + status) ----------

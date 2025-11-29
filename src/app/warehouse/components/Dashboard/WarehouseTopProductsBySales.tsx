@@ -1,3 +1,4 @@
+// app/warehouse/components/Dashboard/WarehouseTopProductsBySales.tsx
 "use client";
 
 import React, { useMemo } from "react";
@@ -16,41 +17,55 @@ type ProductBarData = {
   sales: number;
 };
 
-type TopProductsBySalesProps = {
+type WarehouseTopProductsBySalesProps = {
   warehouseId?: string;
 };
 
-interface BillWithWarehouse extends Bill {
+interface BillLineWarehouseRef {
   warehouseId?: string;
-  warehouse?: {
-    _id?: string;
-    name?: string;
-  };
+  warehouse?: unknown;
 }
 
-export default function TopProductsBySales({
+interface BillWithWarehouseLines extends Bill {
+  items: (BillLineWarehouseRef & Bill["items"][number])[];
+}
+
+function extractId(ref: unknown): string | undefined {
+  if (ref == null) return undefined;
+  if (typeof ref === "string" || typeof ref === "number") return String(ref);
+  if (typeof ref === "object") {
+    const obj = ref as Record<string, unknown>;
+    const candidate = obj._id ?? obj.id;
+    if (candidate == null || candidate === "") return undefined;
+    return String(candidate);
+  }
+  return undefined;
+}
+
+function filterBillsForWarehouse(
+  bills: BillWithWarehouseLines[],
+  warehouseId?: string
+): BillWithWarehouseLines[] {
+  if (!warehouseId) return [];
+  return bills.filter((bill) =>
+    bill.items.some((line) => {
+      const wid = line.warehouseId ?? extractId(line.warehouse);
+      if (!wid) return false;
+      return String(wid) === String(warehouseId);
+    })
+  );
+}
+
+export default function WarehouseTopProductsBySales({
   warehouseId,
-}: TopProductsBySalesProps) {
+}: WarehouseTopProductsBySalesProps) {
   const { data, isLoading } = useListBillsQuery({ search: "" });
-  const bills = (data?.bills ?? []) as BillWithWarehouse[];
+  const bills = (data?.bills ?? []) as BillWithWarehouseLines[];
 
-  const filteredBills = useMemo(() => {
-    if (!warehouseId) return bills;
-
-    const hasWarehouseInfo = bills.some(
-      (bill) => bill.warehouseId || bill.warehouse?._id
-    );
-
-    if (!hasWarehouseInfo) return bills;
-
-    const filtered = bills.filter((bill) => {
-      const objectId = bill.warehouse?._id;
-      const directId = bill.warehouseId;
-      return objectId === warehouseId || directId === warehouseId;
-    });
-
-    return filtered.length > 0 ? filtered : bills;
-  }, [bills, warehouseId]);
+  const filteredBills = useMemo(
+    () => filterBillsForWarehouse(bills, warehouseId),
+    [bills, warehouseId]
+  );
 
   const chartData: ProductBarData[] = useMemo(() => {
     const now = new Date();
@@ -67,14 +82,17 @@ export default function TopProductsBySales({
       if (year !== currentYear || month !== currentMonth) return;
 
       bill.items.forEach((item) => {
-        const name = item.productName || "Unknown Product";
+        const name =
+          (item as Bill["items"][number]).productName || "Unknown Product";
 
         const baseAmount =
-          typeof item.lineTotal === "number"
-            ? item.lineTotal
-            : typeof item.sellingPrice === "number" &&
-              typeof item.totalItems === "number"
-            ? item.sellingPrice * item.totalItems
+          typeof (item as Bill["items"][number]).lineTotal === "number"
+            ? (item as Bill["items"][number]).lineTotal
+            : typeof (item as Bill["items"][number]).sellingPrice ===
+                "number" &&
+              typeof (item as Bill["items"][number]).totalItems === "number"
+            ? (item as Bill["items"][number]).sellingPrice *
+              (item as Bill["items"][number]).totalItems
             : 0;
 
         const prev = salesMap.get(name) ?? 0;
@@ -97,10 +115,10 @@ export default function TopProductsBySales({
   return (
     <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-6 w-full max-w-md">
       <h2 className="text-xl font-semibold text-gray-900">
-        Top 5 Products by Sales
+        Top 5 Products – This Warehouse
       </h2>
       <p className="text-sm text-gray-500 mb-4">
-        Performance of top products this month.
+        Performance of top products this month for this warehouse.
       </p>
 
       <div className="w-full h-64">
@@ -110,7 +128,7 @@ export default function TopProductsBySales({
           </div>
         ) : chartData.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            No sales data found
+            No sales data found for this warehouse
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -145,7 +163,7 @@ export default function TopProductsBySales({
       </div>
 
       <div className="text-xs text-gray-400 mt-4 text-center">
-        Made with 💙 Akash Namkeen
+        Made with 💙 Akash Namkeen – Warehouse
       </div>
     </div>
   );
