@@ -49,8 +49,9 @@ export async function GET(
       );
     }
 
-    const user = await UserModel.findById(userId).exec();
-    if (!user || !user.isActive) {
+    // Use .lean() to get a plain object (not a Mongoose Document) so custom properties like isActive are accessible
+    const user = await UserModel.findById(userId).lean().exec();
+    if (!user || !(user as any).isActive) {
       return NextResponse.json(
         { error: "User not found" },
         { status: 404 }
