@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/store/store";
@@ -12,35 +12,53 @@ export default function AdminGuard({
 }) {
   const router = useRouter();
   const authRole = useSelector((state: RootState) => state.auth.role);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
-  const [checked, setChecked] = useState(false);
-  const [allowed, setAllowed] = useState(false);
-
-  useEffect(() => {
-    let storedRole: string | null = null;
-
-    if (typeof window !== "undefined") {
-      storedRole = window.localStorage.getItem("admin_role");
-    }
-
-    if (authRole === "admin" || storedRole === "admin") {
-      setAllowed(true);
-      setChecked(true);
+  const checkAuth = useCallback(async () => {
+    // 1. First check Redux state
+    if (authRole === "admin") {
+      setIsAuthorized(true);
+      setIsLoading(false);
       return;
     }
 
-    setAllowed(false);
-    setChecked(true);
-    router.replace("/");
-  }, [authRole, router]);
+    // 2. Check cookie via API call (server-side safe)
+    try {
+      const response = await fetch("/api/admin/me", {
+        credentials: "include", // Critical for cookies
+      });
 
-  if (!checked) {
-    // guard check ho raha hai, kuch bhi mat dikhाओ
-    return null;
+      if (response.ok) {
+        const data = await response.json();
+        if (data.role === "admin") {
+          setIsAuthorized(true);
+        }
+      }
+    } catch (error) {
+      console.error("Auth check failed:", error);
+    }
+
+    setIsLoading(false);
+  }, [authRole]);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--color-primary)]"></div>
+      </div>
+    );
   }
 
-  if (!allowed) {
-    // redirect ho chuka hoga
+  // Not authorized - redirect
+  if (!isAuthorized) {
+    router.replace("/");
+    router.refresh();
     return null;
   }
 

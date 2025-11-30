@@ -23,7 +23,6 @@ export default function AdminLayout({
       <div className="flex flex-1">
         <Sidebar />
         <main className="flex-1 p-6 lg:ml-64 overflow-y-auto bg-[var(--color-neutral)]">
-          {/* 👇 yaha client-side guard chalega */}
           <AdminGuard>{children}</AdminGuard>
         </main>
       </div>

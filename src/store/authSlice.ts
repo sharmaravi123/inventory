@@ -11,6 +11,14 @@ interface LoginUser {
   access: Record<string, unknown>;
 }
 
+interface AdminLoginData {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: "admin";
+  token: string;
+}
+
 interface AuthState {
   role: "admin" | "user" | null;
   loading: boolean;
@@ -25,14 +33,6 @@ const initialState: AuthState = {
   user: null,
 };
 
-interface AdminLoginData {
-  id: string;
-  name: string | null;
-  email: string | null;
-  role: "admin";
-  token: string;
-}
-
 export const adminLogin = createAsyncThunk<
   { role: "admin"; admin: AdminLoginData },
   { email: string; password: string },
@@ -43,8 +43,6 @@ export const adminLogin = createAsyncThunk<
       withCredentials: true,
     });
 
-    // yaha response ka shape API se match hona chahiye:
-    // { success: true, admin: { id, name, email, role, token } }
     const admin = res.data.admin as AdminLoginData;
 
     return { role: "admin" as const, admin };
@@ -54,7 +52,6 @@ export const adminLogin = createAsyncThunk<
   }
 });
 
-// 👉 Ye sirf USER ke liye hai
 export const userLogin = createAsyncThunk<
   { role: "user"; user: LoginUser },
   { email: string; password: string },
@@ -77,7 +74,6 @@ export const userLogin = createAsyncThunk<
       return rejectWithValue(data.error ?? "Login failed");
     }
 
-    // backend se agar galti se role admin aajaye phir bhi hum yaha USER hi set karenge
     return { role: "user" as const, user: data.user };
   } catch {
     return rejectWithValue("Login failed");
@@ -107,25 +103,28 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // ADMIN LOGIN
       .addCase(adminLogin.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(
-        adminLogin.fulfilled,
-        (state, action: PayloadAction<{ role: "admin"; admin: unknown }>) => {
-          state.loading = false;
-          state.role = action.payload.role;
-          state.error = null;
-        }
-      )
+      .addCase(adminLogin.fulfilled, (state, action) => {
+        state.loading = false;
+        state.role = action.payload.role;
+        state.error = null;
+        // Admin data store karo if needed
+        state.user = {
+          id: action.payload.admin.id,
+          name: action.payload.admin.name || "",
+          email: action.payload.admin.email || "",
+          role: "admin",
+          warehouses: [],
+          access: {},
+        };
+      })
       .addCase(adminLogin.rejected, (state, action) => {
         state.loading = false;
         state.error = (action.payload as string) || "Login failed";
       })
-
-      // USER LOGIN
       .addCase(userLogin.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -134,7 +133,7 @@ const authSlice = createSlice({
         userLogin.fulfilled,
         (state, action: PayloadAction<{ role: "user"; user: LoginUser }>) => {
           state.loading = false;
-          state.role = action.payload.role; // hamesha "user"
+          state.role = action.payload.role;
           state.user = action.payload.user;
           state.error = null;
         }
@@ -143,8 +142,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = (action.payload as string) || "Login failed";
       })
-
-      // LOGOUT
       .addCase(logoutUser.fulfilled, (state) => {
         state.role = null;
         state.loading = false;

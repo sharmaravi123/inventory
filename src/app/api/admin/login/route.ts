@@ -85,12 +85,13 @@ export async function POST(req: NextRequest) {
     const isProd = process.env.NODE_ENV === "production";
 
     res.cookies.set("token", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProd,
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60,
-    });
+  httpOnly: true,
+  sameSite: "strict", // "lax" se "strict" karo production ke liye
+  secure: isProd,     // production mein true
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60,
+  domain: isProd ? "https://inventory-five-iota.vercel.app/" : undefined, // Vercel custom domain add karo
+});
 
     return res;
   } catch (err) {
