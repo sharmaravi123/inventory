@@ -1,7 +1,7 @@
 // src/lib/access.ts
 import dbConnect from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
-import { verifyToken } from "@/lib/jwt";
+import { verifyAppToken } from "@/lib/jwt";
 
 export type AccessPath =
   | "/warehouse/billing"
@@ -38,13 +38,13 @@ export async function getUserFromTokenOrDb(
   if (!token) return null;
 
   try {
-    const payload = verifyToken(token);
+    const payload = verifyAppToken(token);
 
     // id prefer karo, agar kabhi sub set ho to fallback me use kar sakte
-    const userId = payload.id || payload.sub;
-    if (!userId) {
-      return null;
-    }
+    const userId = payload.sub;
+if (!userId) {
+  return null;
+}
 
     await dbConnect();
 

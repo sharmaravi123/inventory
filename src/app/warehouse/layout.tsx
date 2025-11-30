@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 import "@/models/Warehouse";
-import { verifyToken, AuthTokenPayload } from "@/lib/jwt";
+import { AppJwtPayload, verifyAppToken } from "@/lib/jwt";
 
 export const metadata = {
   title: "Warehouse Dashboard | BlackOSInventory",
@@ -41,9 +41,9 @@ export default async function WarehouseLayout({
     redirect("/");
   }
 
-  let payload: AuthTokenPayload;
+  let payload: AppJwtPayload;
   try {
-    payload = verifyToken(token);
+    payload = verifyAppToken(token);
   } catch {
     redirect("/");
   }
@@ -51,11 +51,11 @@ export default async function WarehouseLayout({
   // 🔵 Warehouse area ke liye JWT me role "warehouse" expect kar rahe
   // agar admin ko bhi allow karna hai to is condition ko change karke:
   // if (payload.role !== "warehouse" && payload.role !== "admin") { ... }
-  if (payload.role !== "warehouse") {
+  if (payload.role !== "WAREHOUSE") {
     redirect("/");
   }
 
-  const userId = payload.id;
+  const userId = payload.sub;
 
   await dbConnect();
 

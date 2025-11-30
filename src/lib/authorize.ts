@@ -1,6 +1,6 @@
 // lib/authorize.ts
 import { NextRequest } from "next/server";
-import { verifyToken, AuthTokenPayload } from "@/lib/jwt";
+import { verifyAppToken, AppJwtPayload } from "@/lib/jwt";
 import mongoose from "mongoose";
 import dbConnect from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
@@ -13,24 +13,24 @@ export async function verifyAndGetUser(req: NextRequest): Promise<IUser> {
 
   const token = authHeader.split(" ")[1];
 
-  let decoded: AuthTokenPayload;
+  let decoded: AppJwtPayload;
   try {
-    decoded = verifyToken(token);
+    decoded = verifyAppToken(token);
   } catch {
     throw new Error("Token verification failed");
   }
 
   if (
-    !decoded.id ||
-    typeof decoded.id !== "string" ||
-    !mongoose.Types.ObjectId.isValid(decoded.id)
+    !decoded.sub ||
+    typeof decoded.sub !== "string" ||
+    !mongoose.Types.ObjectId.isValid(decoded.sub)
   ) {
     throw new Error("Invalid user ID in token");
   }
 
   await dbConnect();
 
-  const user = await User.findById(decoded.id);
+  const user = await User.findById(decoded.sub).exec();
   if (!user) throw new Error("User not found");
 
   return user;

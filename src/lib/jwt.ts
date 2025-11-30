@@ -1,19 +1,20 @@
 // src/lib/jwt.ts
-import jwt, { JwtPayload } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 
-const SECRET = process.env.JWT_SECRET ?? "devsecret";
+const JWT_SECRET = process.env.JWT_SECRET || "dev_inventory_secret_key";
 
-export interface AuthTokenPayload extends JwtPayload {
-  id: string;
-  role: "admin" | "user" | "warehouse" | "DRIVER";
-  sub?: string; // backward compatibility if any old token used `sub`
+export type AppJwtRole = "ADMIN" | "WAREHOUSE" | "DRIVER";
+
+export type AppJwtPayload = {
+  sub: string; // userId / adminId / driverId
+  role: AppJwtRole;
+  warehouseId?: string; // warehouse user ke liye agar hai toh
+};
+
+export function signAppToken(payload: AppJwtPayload): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
 
-export function signToken(payload: AuthTokenPayload): string {
-  return jwt.sign(payload, SECRET, { expiresIn: "7d" });
-}
-
-export function verifyToken(token: string): AuthTokenPayload {
-  const decoded = jwt.verify(token, SECRET) as AuthTokenPayload;
-  return decoded;
+export function verifyAppToken(token: string): AppJwtPayload {
+  return jwt.verify(token, JWT_SECRET) as AppJwtPayload;
 }

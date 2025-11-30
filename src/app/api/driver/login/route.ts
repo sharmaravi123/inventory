@@ -1,9 +1,10 @@
+// src/app/api/driver/login/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import dbConnect from "@/lib/mongodb";
 import DriverModel, { DriverDocument } from "@/models/Driver";
 import { Types } from "mongoose";
+import { signAppToken } from "@/lib/jwt";
 
 type LoginBody = {
   email: string;
@@ -27,9 +28,6 @@ type SuccessBody = {
 type ErrorBody = { error: string };
 
 const COOKIE_NAME = "token";
-
-// SAME secret har jagah
-const SECRET = process.env.JWT_SECRET ?? "inventory_secret_key";
 
 function toSafeDriver(doc: DriverDocument): DriverSafe {
   return {
@@ -81,19 +79,10 @@ export async function POST(
       );
     }
 
-    // optional: warn in dev
-    if (!process.env.JWT_SECRET) {
-      console.warn("JWT_SECRET not set, using fallback secret for driver login");
-    }
-
-    const token = jwt.sign(
-      {
-        sub: (driver._id as Types.ObjectId).toString(),
-        role: "DRIVER",
-      },
-      SECRET,
-      { expiresIn: "7d" }
-    );
+    const token = signAppToken({
+      sub: (driver._id as Types.ObjectId).toString(),
+      role: "DRIVER",
+    });
 
     const res = NextResponse.json(
       {

@@ -1,23 +1,18 @@
+// src/app/driver/layout.tsx
 import "../globals.css";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import jwt from "jsonwebtoken";
 import React from "react";
 import DriverSidebar from "./components/sidebar";
 import Topbar from "./components/topbar";
+import { verifyAppToken } from "@/lib/jwt";
 
 export const metadata = {
   title: "Driver Panel | BlackOSInventory",
   description: "Driver dashboard",
 };
 
-const SECRET = process.env.JWT_SECRET ?? "inventory_secret_key";
-
-interface DriverTokenPayload {
-  role?: string;
-  id?: string;
-  sub?: string;
-}
+const COOKIE_NAME = "token";
 
 export default async function DriverLayout({
   children,
@@ -25,16 +20,15 @@ export default async function DriverLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value ?? null;
+  const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
   if (!token) {
     redirect("/");
   }
 
   try {
-    const payload = jwt.verify(token, SECRET) as DriverTokenPayload;
-
-    if (!payload || payload.role !== "DRIVER") {
+    const payload = verifyAppToken(token);
+    if (payload.role !== "DRIVER") {
       redirect("/");
     }
   } catch {

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
-import { signToken, AuthTokenPayload } from "@/lib/jwt";
+import { AppJwtPayload, signAppToken,  } from "@/lib/jwt";
 
 type Body = { email?: string; password?: string };
 
@@ -61,12 +61,12 @@ export async function POST(req: NextRequest) {
 
     const adminId = admin._id.toString();
 
-    const payload: AuthTokenPayload = {
-      id: adminId,
-      role: "admin",
+    const payload: AppJwtPayload = {
+      sub: adminId,
+      role: "ADMIN",
     };
 
-    const token = signToken(payload);
+    const token = signAppToken(payload);
 
     const res = NextResponse.json(
       {
