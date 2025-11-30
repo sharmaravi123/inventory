@@ -381,6 +381,7 @@ export default function BillingWarehousePage({
         phone: customer.phone,
         address: customer.address,
         gstNumber: customer.gstNumber || undefined,
+        _id: ""
       },
       companyGstNumber: COMPANY_GST_NUMBER,
       billDate: new Date().toISOString(),
@@ -434,6 +435,7 @@ export default function BillingWarehousePage({
         phone: customer.phone,
         address: customer.address,
         gstNumber: customer.gstNumber || undefined,
+        _id: ""
       },
       companyGstNumber: billForEdit.companyGstNumber,
       billDate: billForEdit.billDate,
