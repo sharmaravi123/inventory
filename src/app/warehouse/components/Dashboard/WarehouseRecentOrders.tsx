@@ -52,7 +52,10 @@ function filterBillsForWarehouse(
 export default function WarehouseRecentOrders({
   warehouseId,
 }: WarehouseRecentOrdersProps) {
-  const { data, isLoading } = useListBillsQuery({ search: "" });
+  const { data, isLoading } = useListBillsQuery({
+    search: "",
+    warehouseId,
+  });
   const bills = (data?.bills ?? []) as BillWithWarehouseLines[];
 
   const filteredBills = useMemo(

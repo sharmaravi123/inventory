@@ -37,12 +37,25 @@ interface InventoryItem {
   warehouseId?: string;
   warehouse?: {
     _id?: string;
+    id?: string;
     name?: string;
   };
 }
 
 interface InventorySliceState {
   items: InventoryItem[];
+}
+
+function extractId(ref: unknown): string | undefined {
+  if (ref == null) return undefined;
+  if (typeof ref === "string" || typeof ref === "number") return String(ref);
+  if (typeof ref === "object") {
+    const obj = ref as Record<string, unknown>;
+    const candidate = obj._id ?? obj.id;
+    if (candidate == null || candidate === "") return undefined;
+    return String(candidate);
+  }
+  return undefined;
 }
 
 function getCategoryLabel(product: ProductType): string {
@@ -83,9 +96,11 @@ export default function WarehouseInventoryDistribution({
   const relevantInventory = useMemo(() => {
     if (!warehouseId) return [];
     return allInventory.filter((item) => {
-      const objectId = item.warehouse?._id;
-      const directId = item.warehouseId;
-      return objectId === warehouseId || directId === warehouseId;
+      const wid =
+        item.warehouseId ??
+        extractId(item.warehouse);
+      if (!wid) return false;
+      return String(wid) === String(warehouseId);
     });
   }, [warehouseId, allInventory]);
 

@@ -2,13 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo } from "react";
-import {
-  Package,
-  AlertTriangle,
-  Plus,
-  FileText,
-  IndianRupee,
-} from "lucide-react";
+import { Package, AlertTriangle, Plus, FileText, IndianRupee } from "lucide-react";
 import { motion } from "framer-motion";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "@/store/store";
@@ -119,7 +113,11 @@ export default function WarehouseDashboardOverview({
     };
   });
 
-  const { data: billsData } = useListBillsQuery({ search: "" });
+  // 👇 yaha warehouseId pass kar rahe hain
+  const { data: billsData } = useListBillsQuery({
+    search: "",
+    warehouseId,
+  });
   const allBills = (billsData?.bills ?? []) as BillWithWarehouseLines[];
 
   useEffect(() => {
@@ -131,9 +129,7 @@ export default function WarehouseDashboardOverview({
   const filteredInventory = useMemo(() => {
     if (!warehouseId) return [];
     return allInventory.filter((item) => {
-      const wid =
-        item.warehouseId ??
-        extractId(item.warehouse);
+      const wid = item.warehouseId ?? extractId(item.warehouse);
       if (!wid) return false;
       return String(wid) === String(warehouseId);
     });
@@ -161,7 +157,7 @@ export default function WarehouseDashboardOverview({
   }, [filteredInventory, warehouseId]);
 
   const { lowStock, outOfStock } = useMemo(() => {
-    if (!filteredInventory?.length) return { lowStock: 0, outOfStock: 0 };
+    if (!filteredInventory.length) return { lowStock: 0, outOfStock: 0 };
 
     let low = 0;
     let out = 0;

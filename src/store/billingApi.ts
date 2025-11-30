@@ -1,3 +1,4 @@
+// store/billingApi.ts
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 export type Customer = {
@@ -43,22 +44,7 @@ export type BillItemInput = {
   itemsPerBox: number;
 };
 
-export type CreateBillPayload = {
-  customer: {
-    name: string;
-    shopName?: string;
-    phone: string;
-    address: string;
-    gstNumber?: string;
-  };
-  companyGstNumber?: string;
-  billDate?: string;
-  items: BillItemInput[];
-  payment: CreateBillPaymentInput;
-  driverId?: string;
-  vehicleNumber?: string;
-};
-
+// 👇 server se jo item aata hai, usme warehouseId bhi rakho
 export type BillItemForClient = {
   productName: string;
   sellingPrice: number;
@@ -70,6 +56,14 @@ export type BillItemForClient = {
   totalBeforeTax: number;
   taxAmount: number;
   lineTotal: number;
+
+  // warehouse wise filtering ke liye important:
+  warehouseId?: string;
+  warehouse?: {
+    _id?: string;
+    id?: string;
+    name?: string;
+  };
 };
 
 export type PaymentInfoClient = {
@@ -108,7 +102,7 @@ export type Bill = {
   status: BillStatus;
 
   // driver + delivery info
-  driver?: string; // driver ObjectId as string
+  driver?: string;
   vehicleNumber?: string;
   deliveredAt?: string;
 };
@@ -143,8 +137,7 @@ type MarkDeliveredPayload = {
   billId: string;
 };
 
-// ---------- RETURNS TYPES (new) ----------
-
+// ---------- RETURNS TYPES (same as before) ----------
 export type BillReturnItem = {
   productId: string;
   warehouseId: string;
@@ -178,6 +171,16 @@ export type CreateBillReturnItemInput = {
   quantityLoose: number;
 };
 
+export type CreateBillPayload = {
+  customer: Customer;
+  companyGstNumber?: string;
+  billDate: string;
+  items: BillItemInput[];
+  payment: CreateBillPaymentInput;
+  driverId?: string;
+  vehicleNumber?: string;
+};
+
 export type CreateBillReturnPayload = {
   billId: string;
   items: CreateBillReturnItemInput[];
@@ -191,6 +194,12 @@ type BillReturnsResponse = {
 
 type CreateBillReturnResponse = {
   returnDoc: BillReturn;
+};
+
+// 👇 yaha args type change kiya: warehouseId optional
+export type BillsListArgs = {
+  search: string;
+  warehouseId?: string;
 };
 
 export const billingApi = createApi({
@@ -210,19 +219,26 @@ export const billingApi = createApi({
       invalidatesTags: ["BillList"],
     }),
 
-    // -------- list bills --------
-    listBills: builder.query<BillsListResponse, { search: string }>({
-      query: ({ search }) => {
+    // -------- list bills (warehouse wise) --------
+    listBills: builder.query<BillsListResponse, BillsListArgs>({
+      query: ({ search, warehouseId }) => {
         const trimmed = search.trim();
-        if (!trimmed) {
-          return { url: "billing" };
+        const params: Record<string, string> = {};
+
+        if (trimmed) {
+          // existing filters
+          params.customer = trimmed;
+          params.phone = trimmed;
         }
+
+        if (warehouseId) {
+          // 👇 IMPORTANT: backend ko ye param pe filter lagana hoga
+          params.warehouseId = warehouseId;
+        }
+
         return {
           url: "billing",
-          params: {
-            customer: trimmed,
-            phone: trimmed,
-          },
+          params,
         };
       },
       providesTags: (result) =>
@@ -302,7 +318,7 @@ export const billingApi = createApi({
       }
     ),
 
-    // -------- mark bill delivered (button click) --------
+    // -------- mark bill delivered --------
     markBillDelivered: builder.mutation<
       SingleBillResponse,
       MarkDeliveredPayload
@@ -320,7 +336,7 @@ export const billingApi = createApi({
       ],
     }),
 
-    // -------- create bill return (stock back to warehouse) --------
+    // -------- create bill return --------
     createBillReturn: builder.mutation<
       CreateBillReturnResponse,
       CreateBillReturnPayload

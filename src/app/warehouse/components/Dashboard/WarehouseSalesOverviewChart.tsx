@@ -76,10 +76,12 @@ function filterBillsForWarehouse(
 export default function WarehouseSalesOverviewChart({
   warehouseId,
 }: WarehouseSalesOverviewChartProps) {
-  const { data, isLoading } = useListBillsQuery({ search: "" });
+  const { data, isLoading } = useListBillsQuery({
+    search: "",
+    warehouseId,
+  });
   const bills = (data?.bills ?? []) as BillWithWarehouseLines[];
 
-  // 🔥 yahi se warehouse-wise bills aa rahe hain (reports jaisa)
   const filteredBills = useMemo(
     () => filterBillsForWarehouse(bills, warehouseId),
     [bills, warehouseId]
@@ -109,7 +111,6 @@ export default function WarehouseSalesOverviewChart({
       });
     });
 
-    // months ko proper order me lane ke लिए
     result.sort((a, b) => {
       const monthIndexA = Object.values(MONTHS).indexOf(a.month);
       const monthIndexB = Object.values(MONTHS).indexOf(b.month);

@@ -59,7 +59,10 @@ function filterBillsForWarehouse(
 export default function WarehouseTopProductsBySales({
   warehouseId,
 }: WarehouseTopProductsBySalesProps) {
-  const { data, isLoading } = useListBillsQuery({ search: "" });
+  const { data, isLoading } = useListBillsQuery({
+    search: "",
+    warehouseId,
+  });
   const bills = (data?.bills ?? []) as BillWithWarehouseLines[];
 
   const filteredBills = useMemo(
@@ -82,17 +85,15 @@ export default function WarehouseTopProductsBySales({
       if (year !== currentYear || month !== currentMonth) return;
 
       bill.items.forEach((item) => {
-        const name =
-          (item as Bill["items"][number]).productName || "Unknown Product";
+        const typedItem = item as Bill["items"][number];
+        const name = typedItem.productName || "Unknown Product";
 
         const baseAmount =
-          typeof (item as Bill["items"][number]).lineTotal === "number"
-            ? (item as Bill["items"][number]).lineTotal
-            : typeof (item as Bill["items"][number]).sellingPrice ===
-                "number" &&
-              typeof (item as Bill["items"][number]).totalItems === "number"
-            ? (item as Bill["items"][number]).sellingPrice *
-              (item as Bill["items"][number]).totalItems
+          typeof typedItem.lineTotal === "number"
+            ? typedItem.lineTotal
+            : typeof typedItem.sellingPrice === "number" &&
+              typeof typedItem.totalItems === "number"
+            ? typedItem.sellingPrice * typedItem.totalItems
             : 0;
 
         const prev = salesMap.get(name) ?? 0;

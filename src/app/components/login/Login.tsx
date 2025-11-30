@@ -1,4 +1,4 @@
-// src/app/page.tsx (ya jahan LoginPage hai)
+// src/app/page.tsx (LoginPage)
 "use client";
 
 import { useState, KeyboardEvent } from "react";
@@ -34,6 +34,7 @@ export default function LoginPage() {
     setLocalError(null);
 
     try {
+      // 👉 DRIVER
       if (role === "driver") {
         await dispatch(loginDriver({ email, password })).unwrap();
         router.push("/driver");
@@ -41,33 +42,41 @@ export default function LoginPage() {
         return;
       }
 
+      // 👉 ADMIN
       if (role === "admin") {
-        const result = await dispatch(
+        await dispatch(
           adminLogin({ email, password })
         ).unwrap();
 
-        // LocalStorage backup (optional - ab zaruri nahi)
         if (typeof window !== "undefined") {
           window.localStorage.setItem("admin_role", "admin");
         }
 
-        // Success ke baad immediate check
         router.push("/admin");
         router.refresh();
+        return;
       }
 
+      // 👉 WAREHOUSE USER
       if (role === "user") {
-        await dispatch(userLogin({ email, password })).unwrap();
+        await dispatch(
+          userLogin({ email, password })
+        ).unwrap();
         router.push("/warehouse");
         router.refresh();
         return;
       }
 
+      // theoretically yaha kabhi nahi aana chahiye
       setLocalError("Invalid role selection.");
     } catch (err: unknown) {
       if (typeof err === "string") {
         setLocalError(err);
-      } else if (typeof err === "object" && err !== null && "error" in err) {
+      } else if (
+        typeof err === "object" &&
+        err !== null &&
+        "error" in err
+      ) {
         const msg = (err as { error?: string }).error;
         setLocalError(msg || "Invalid credentials");
       } else {
@@ -84,7 +93,6 @@ export default function LoginPage() {
     }
   };
 
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--color-neutral)] py-10">
       <div className="w-full max-w-6xl bg-white shadow-xl rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
@@ -98,7 +106,11 @@ export default function LoginPage() {
             </p>
 
             <div className="w-full max-w-xs">
-              <Swiper modules={[Pagination]} pagination={{ clickable: true }} loop>
+              <Swiper
+                modules={[Pagination]}
+                pagination={{ clickable: true }}
+                loop
+              >
                 <SwiperSlide>
                   <div className="p-4">
                     <img
@@ -127,40 +139,46 @@ export default function LoginPage() {
           >
             <h1 className="text-2xl font-extrabold text-[var(--color-primary)] text-center mb-2">
               Welcome to{" "}
-              <span className="text-[var(--color-sidebar)]">Aakash Inventory</span>
+              <span className="text-[var(--color-sidebar)]">
+                Aakash Inventory
+              </span>
             </h1>
             <p className="text-center text-xs text-[var(--text-secondary)] mb-6">
-              Select your role and use your registered email and password to login.
+              Select your role and use your registered email and password to
+              login.
             </p>
 
             <div className="flex justify-center gap-2 mb-6">
               <button
                 type="button"
                 onClick={() => setRole("admin")}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold border ${role === "admin"
-                  ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
-                  : "bg-white text-[var(--text-secondary)] border-gray-300"
-                  }`}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold border ${
+                  role === "admin"
+                    ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                    : "bg-white text-[var(--text-secondary)] border-gray-300"
+                }`}
               >
                 Admin
               </button>
               <button
                 type="button"
                 onClick={() => setRole("user")}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold border ${role === "user"
-                  ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
-                  : "bg-white text-[var(--text-secondary)] border-gray-300"
-                  }`}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold border ${
+                  role === "user"
+                    ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                    : "bg-white text-[var(--text-secondary)] border-gray-300"
+                }`}
               >
                 Warehouse User
               </button>
               <button
                 type="button"
                 onClick={() => setRole("driver")}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold border ${role === "driver"
-                  ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
-                  : "bg-white text-[var(--text-secondary)] border-gray-300"
-                  }`}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold border ${
+                  role === "driver"
+                    ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                    : "bg-white text-[var(--text-secondary)] border-gray-300"
+                }`}
               >
                 Driver
               </button>
@@ -197,8 +215,8 @@ export default function LoginPage() {
                 ? role === "admin"
                   ? "Logging in as Admin..."
                   : role === "user"
-                    ? "Logging in as User..."
-                    : "Logging in as Driver..."
+                  ? "Logging in as User..."
+                  : "Logging in as Driver..."
                 : "Login"}
             </button>
 
