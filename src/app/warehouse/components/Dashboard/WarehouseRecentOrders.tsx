@@ -89,46 +89,48 @@ export default function WarehouseRecentOrders({
   }, [filteredBills]);
 
   return (
-    <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-6 w-full max-w-md">
-      <h2 className="text-xl font-semibold text-gray-900">
+    <div className="w-full">
+      <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
         Recent Orders – This Warehouse
       </h2>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
         Latest customer orders for this warehouse.
       </p>
 
       {isLoading ? (
-        <p className="text-sm text-gray-500">Loading...</p>
+        <p className="text-xs sm:text-sm text-gray-500">Loading...</p>
       ) : recentOrders.length === 0 ? (
-        <p className="text-sm text-gray-500">
+        <p className="text-xs sm:text-sm text-gray-500">
           No recent orders found for this warehouse.
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm text-gray-700">
+          <table className="min-w-[460px] text-xs sm:text-sm text-gray-700">
             <thead>
               <tr className="border-b text-gray-500">
-                <th className="py-2 text-left">Invoice</th>
-                <th className="py-2 text-left">Customer</th>
-                <th className="py-2 text-left">Payment</th>
+                <th className="py-2 pr-2 text-left">Invoice</th>
+                <th className="py-2 pr-2 text-left">Customer</th>
+                <th className="py-2 pr-2 text-left">Payment</th>
                 <th className="py-2 text-left">Amount</th>
               </tr>
             </thead>
             <tbody>
               {recentOrders.map((o) => (
                 <tr key={o.invoice} className="border-b last:border-0">
-                  <td className="py-2">{o.invoice}</td>
-                  <td className="py-2">{o.customer}</td>
-                  <td className="py-2">
+                  <td className="py-2 pr-2 whitespace-nowrap">{o.invoice}</td>
+                  <td className="py-2 pr-2">
+                    <span className="line-clamp-1">{o.customer}</span>
+                  </td>
+                  <td className="py-2 pr-2">
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      className={`px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold ${
                         statusColors[o.status]
                       }`}
                     >
                       {o.status}
                     </span>
                   </td>
-                  <td className="py-2">₹{o.amount}</td>
+                  <td className="py-2 whitespace-nowrap">₹{o.amount}</td>
                 </tr>
               ))}
             </tbody>
@@ -136,7 +138,7 @@ export default function WarehouseRecentOrders({
         </div>
       )}
 
-      <div className="text-xs text-gray-400 mt-4 text-center">
+      <div className="text-[10px] sm:text-xs text-gray-400 mt-3 sm:mt-4 text-center">
         Made with 💙 Akash Namkeen – Warehouse
       </div>
     </div>

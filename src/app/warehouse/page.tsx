@@ -9,8 +9,8 @@ import { fetchWarehouses } from "@/store/warehouseSlice";
 import WarehouseDashboardOverview from "./components/Dashboard/WarehouseDashboardOverview";
 import WarehouseSalesOverviewChart from "./components/Dashboard/WarehouseSalesOverviewChart";
 import WarehouseTopProductsBySales from "./components/Dashboard/WarehouseTopProductsBySales";
-import WarehouseInventoryDistribution from "./components/Dashboard/WarehouseInventoryDistribution";
 import WarehouseRecentOrders from "./components/Dashboard/WarehouseRecentOrders";
+import WarehouseInventoryDistribution from "./components/Dashboard/WarehouseInventoryDistribution";
 
 interface WarehouseItem {
   _id: string;
@@ -46,7 +46,7 @@ export default function WarehousePage() {
   const [meLoading, setMeLoading] = useState(false);
   const [meError, setMeError] = useState<string | null>(null);
 
-  // 🔹 user info load
+  // user info load
   useEffect(() => {
     const loadMe = async (): Promise<void> => {
       try {
@@ -77,7 +77,7 @@ export default function WarehousePage() {
     void loadMe();
   }, []);
 
-  // 🔹 warehouses load (agar list empty hai)
+  // warehouses load (agar list empty hai)
   useEffect(() => {
     if (!warehouseState.list || warehouseState.list.length === 0) {
       dispatch(fetchWarehouses());
@@ -108,29 +108,28 @@ export default function WarehousePage() {
   const hasWarehouses =
     Array.isArray(warehouseState.list) && warehouseState.list.length > 0;
 
-  // 🔹 loading state: jab tak user ya warehouses load ho rahe hain
+  // loading state
   if ((meLoading && !me) || (warehousesLoading && !hasWarehouses)) {
     return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold text-[var(--color-sidebar)]">
+      <div className="p-4 sm:p-6">
+        <h1 className="text-lg sm:text-xl font-semibold text-[var(--color-sidebar)]">
           Loading warehouse dashboard...
         </h1>
       </div>
     );
   }
 
-  // 🔹 actually koi warehouse assign hi nahi hai
+  // actually koi warehouse assign hi nahi hai
   if (!warehousesLoading && !hasWarehouses) {
     return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold text-red-600">
+      <div className="p-4 sm:p-6">
+        <h1 className="text-lg sm:text-xl font-semibold text-red-600">
           No warehouses found for this account.
         </h1>
       </div>
     );
   }
 
-  // optional: thoda loading state jab tak me aa raha hai
   const headingSuffix =
     meLoading && !me ? "Loading warehouse..." : `(${activeWarehouseName})`;
 
@@ -139,40 +138,56 @@ export default function WarehousePage() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="space-y-6"
+      className="space-y-4 sm:space-y-6 pb-4 sm:pb-6"
     >
-      <h1 className="text-2xl font-bold text-[var(--color-sidebar)] py-2 px-3 md:px-8 flex items-center gap-2 flex-wrap">
-        Warehouse Dashboard
-        <span className="text-sm font-medium text-[var(--text-secondary)] bg-[var(--color-neutral)] px-3 py-1 rounded-full">
-          {headingSuffix}
-        </span>
-      </h1>
-
-      {meError && (
-        <p className="px-6 text-sm text-red-500">
-          {meError}
-        </p>
-      )}
-
-      <div className="p-6">
-        <WarehouseDashboardOverview warehouseId={activeWarehouseId} />
+      <div className="px-3 sm:px-6 md:px-8">
+        <h1 className="text-xl sm:text-2xl font-bold text-[var(--color-sidebar)] flex items-center gap-2 flex-wrap">
+          Warehouse Dashboard
+          <span className="text-xs sm:text-sm font-medium text-[var(--text-secondary)] bg-[var(--color-neutral)] px-3 py-1 rounded-full">
+            {headingSuffix}
+          </span>
+        </h1>
+        {meError && (
+          <p className="mt-1 text-xs sm:text-sm text-red-500">
+            {meError}
+          </p>
+        )}
       </div>
 
-      <h1 className="text-2xl font-bold text-[var(--color-sidebar)] py-2 px-3 md:px-8">
-        Analytics Overview
-      </h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-6">
-          <WarehouseSalesOverviewChart warehouseId={activeWarehouseId} />
+      {/* Stats + quick actions */}
+      <section className="px-3 sm:px-6 md:px-8">
+        <div className="rounded-2xl bg-[var(--color-neutral)]/60 p-3 sm:p-4">
+          <WarehouseDashboardOverview warehouseId={activeWarehouseId} />
         </div>
-        <WarehouseTopProductsBySales warehouseId={activeWarehouseId} />
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <WarehouseInventoryDistribution warehouseId={activeWarehouseId} />
-        <WarehouseRecentOrders warehouseId={activeWarehouseId} />
-      </div>
+      {/* Charts row */}
+      <section className="px-3 sm:px-6 md:px-8 space-y-3 sm:space-y-4">
+        <h2 className="text-lg sm:text-2xl font-bold text-[var(--color-sidebar)]">
+          Analytics Overview
+        </h2>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+          <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-4 sm:p-6 w-full">
+            <WarehouseSalesOverviewChart warehouseId={activeWarehouseId} />
+          </div>
+          <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-4 sm:p-6 w-full">
+            <WarehouseTopProductsBySales warehouseId={activeWarehouseId} />
+          </div>
+        </div>
+      </section>
+
+      {/* Inventory + recent orders */}
+      <section className="px-3 sm:px-6 md:px-8">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+          <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-4 sm:p-6 w-full">
+            <WarehouseInventoryDistribution warehouseId={activeWarehouseId} />
+          </div>
+          <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-4 sm:p-6 w-full">
+            <WarehouseRecentOrders warehouseId={activeWarehouseId} />
+          </div>
+        </div>
+      </section>
     </motion.div>
   );
 }

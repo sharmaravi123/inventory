@@ -121,19 +121,21 @@ export default function WarehouseSalesOverviewChart({
   }, [filteredBills]);
 
   return (
-    <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-6 w-full max-w-md">
-      <h2 className="text-xl font-semibold text-gray-900">
+    <div className="w-full">
+      <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
         Warehouse Sales Overview
       </h2>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
         Total sales & items sold for this warehouse (current year)
       </p>
 
-      <div className="w-full h-64">
+      <div className="w-full h-56 sm:h-64">
         {isLoading ? (
-          <p className="text-center text-gray-400">Loading...</p>
+          <p className="flex items-center justify-center h-full text-xs sm:text-sm text-gray-400">
+            Loading...
+          </p>
         ) : chartData.length === 0 ? (
-          <div className="flex justify-center items-center h-full text-gray-400 text-sm">
+          <div className="flex justify-center items-center h-full text-xs sm:text-sm text-gray-400">
             No sales data found for this warehouse
           </div>
         ) : (
@@ -142,12 +144,12 @@ export default function WarehouseSalesOverviewChart({
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis
                 dataKey="month"
-                tick={{ fill: "#9CA3AF" }}
+                tick={{ fill: "#9CA3AF", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: "#9CA3AF" }}
+                tick={{ fill: "#9CA3AF", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
               />
@@ -179,7 +181,7 @@ export default function WarehouseSalesOverviewChart({
         )}
       </div>
 
-      <div className="text-xs text-gray-400 mt-4 text-center">
+      <div className="text-[10px] sm:text-xs text-gray-400 mt-3 sm:mt-4 text-center">
         Made with 💙 Akash Namkeen – Warehouse
       </div>
     </div>

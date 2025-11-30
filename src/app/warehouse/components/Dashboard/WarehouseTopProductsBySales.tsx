@@ -114,31 +114,34 @@ export default function WarehouseTopProductsBySales({
   }, [filteredBills]);
 
   return (
-    <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-6 w-full max-w-md">
-      <h2 className="text-xl font-semibold text-gray-900">
+    <div className="w-full">
+      <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
         Top 5 Products – This Warehouse
       </h2>
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
         Performance of top products this month for this warehouse.
       </p>
 
-      <div className="w-full h-64">
+      <div className="w-full h-56 sm:h-64">
         {isLoading ? (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+          <div className="flex items-center justify-center h-full text-xs sm:text-sm text-gray-400">
             Loading...
           </div>
         ) : chartData.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+          <div className="flex items-center justify-center h-full text-xs sm:text-sm text-gray-400">
             No sales data found for this warehouse
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} layout="vertical">
-              <XAxis type="number" tick={{ fill: "#9CA3AF" }} />
+              <XAxis
+                type="number"
+                tick={{ fill: "#9CA3AF", fontSize: 10 }}
+              />
               <YAxis
                 dataKey="name"
                 type="category"
-                tick={{ fill: "#9CA3AF" }}
+                tick={{ fill: "#9CA3AF", fontSize: 10 }}
                 width={120}
               />
               <Tooltip
@@ -156,14 +159,14 @@ export default function WarehouseTopProductsBySales({
                 dataKey="sales"
                 fill="var(--color-error)"
                 radius={8}
-                barSize={20}
+                barSize={18}
               />
             </BarChart>
           </ResponsiveContainer>
         )}
       </div>
 
-      <div className="text-xs text-gray-400 mt-4 text-center">
+      <div className="text-[10px] sm:text-xs text-gray-400 mt-3 sm:mt-4 text-center">
         Made with 💙 Akash Namkeen – Warehouse
       </div>
     </div>

@@ -113,7 +113,6 @@ export default function WarehouseDashboardOverview({
     };
   });
 
-  // 👇 yaha warehouseId pass kar rahe hain
   const { data: billsData } = useListBillsQuery({
     search: "",
     warehouseId,
@@ -248,26 +247,27 @@ export default function WarehouseDashboardOverview({
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-      <div className="lg:col-span-9 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 h-15">
+    <div className="grid grid-cols-1 gap-4 lg:gap-6 lg:grid-cols-12">
+      {/* Stats cards */}
+      <div className="lg:col-span-8 xl:col-span-9 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {stats.map((item) => (
           <motion.div
             key={item.key}
-            whileHover={{ y: -5, scale: 1.02 }}
+            whileHover={{ y: -4, scale: 1.01 }}
             transition={{ type: "spring", stiffness: 200 }}
-            className="rounded-xl border border-[var(--border-color)] bg-[var(--color-white)] p-4 shadow-sm hover:shadow-md"
+            className="rounded-xl border border-[var(--border-color)] bg-[var(--color-white)] px-3 py-3 sm:px-4 sm:py-4 shadow-sm hover:shadow-md"
           >
-            <div className="flex items-center justify-between ">
-              <span className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-xs sm:text-sm font-medium text-[var(--text-secondary)]">
                 {item.icon}
                 {item.title}
               </span>
             </div>
             <div className="mt-2">
-              <h3 className="text-2xl font-bold text-[var(--text-primary)]">
+              <h3 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
                 {item.value}
               </h3>
-              <p className={`mt-1 text-xs ${item.infoColor}`}>
+              <p className={`mt-1 text-[10px] sm:text-xs ${item.infoColor}`}>
                 {item.info ?? ""}
               </p>
             </div>
@@ -275,29 +275,30 @@ export default function WarehouseDashboardOverview({
         ))}
       </div>
 
+      {/* Quick actions */}
       <motion.div
         initial={{ opacity: 0, x: 30 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.2 }}
-        className="lg:col-span-3 rounded-xl border border-[var(--border-color)] bg-[var(--color-neutral)] p-5"
+        transition={{ delay: 0.15 }}
+        className="lg:col-span-4 xl:col-span-3 rounded-xl border border-[var(--border-color)] bg-[var(--color-white)] sm:bg-[var(--color-neutral)] p-4 sm:p-5"
       >
-        <h3 className="mb-1 font-semibold text-[var(--text-primary)]">
+        <h3 className="mb-1 text-sm sm:text-base font-semibold text-[var(--text-primary)]">
           Quick Actions
         </h3>
-        <p className="mb-4 text-xs text-[var(--text-secondary)]">
+        <p className="mb-4 text-[11px] sm:text-xs text-[var(--text-secondary)]">
           Perform essential tasks for this warehouse.
         </p>
-        <div className="flex flex-col space-y-2 ">
+        <div className="flex flex-col space-y-2">
           {quickActions.map((action) => (
             <motion.button
               key={action.label}
-              whileHover={{ scale: 1.03 }}
-              transition={{ duration: 0.2 }}
+              whileHover={{ scale: 1.02 }}
+              transition={{ duration: 0.15 }}
               onClick={() => router.push(action.link)}
-              className="flex items-center gap-2 rounded-lg border border-[var(--border-color)] bg-[var(--color-white)] px-3 py-2 text-sm font-medium text-[var(--text-primary)] hover:text-[var(--color-primary)] hover:shadow-sm transition-colors"
+              className="flex items-center gap-2 rounded-lg border border-[var(--border-color)] bg-[var(--color-white)] px-3 py-2 text-xs sm:text-sm font-medium text-[var(--text-primary)] hover:text-[var(--color-primary)] hover:shadow-sm transition-colors"
             >
               {action.icon}
-              {action.label}
+              <span className="truncate">{action.label}</span>
             </motion.button>
           ))}
         </div>
