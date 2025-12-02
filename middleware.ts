@@ -9,32 +9,35 @@ function getCookie(req: NextRequest, name: string): string | null {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // admin ke liye dono naam support karo: "adminToken" ya purana "token"
-  const adminToken =
-    getCookie(req, "adminToken") ?? getCookie(req, "token");
-
+  const adminToken = getCookie(req, "token");
   const userToken = getCookie(req, "userToken");
   const warehouseToken = getCookie(req, "warehouseToken");
   const driverToken = getCookie(req, "driverToken");
 
-  // 1) ROOT `/` – yahi sabka login page hai → hamesha allow
-  if (pathname === "/") {
-    return NextResponse.next();
-  }
-
-  // 2) Baaki public paths (agar future me alag login pages banaye)
+  // -------- PUBLIC PATHS KO BHI ALLOW KARNA ZARURI HAI --------
   const publicPaths: string[] = [
+    "/",
     "/login",
     "/admin/login",
     "/warehouse/login",
     "/driver/login",
   ];
 
-  if (publicPaths.includes(pathname)) {
+  // Agar koi public path hai, seedha allow karo
+  if (publicPaths.some((publicPath) => pathname.startsWith(publicPath))) {
     return NextResponse.next();
   }
 
-  // 3) ADMIN PAGES PROTECT
+  // -------- API LOGIN ROUTES KO BHI BYPASS KARO --------
+  if (
+    pathname === "/api/admin/login" ||
+    pathname === "/api/auth/login" ||
+    pathname === "/api/driver/login"
+  ) {
+    return NextResponse.next();
+  }
+
+  // -------- ADMIN PAGES PROTECT --------
   if (pathname.startsWith("/admin")) {
     if (!adminToken) {
       const url = req.nextUrl.clone();
@@ -44,7 +47,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 4) WAREHOUSE PAGES PROTECT – isko main touch nahi kar raha
+  // -------- WAREHOUSE PAGES PROTECT --------
   if (pathname.startsWith("/warehouse")) {
     if (!warehouseToken) {
       const url = req.nextUrl.clone();
@@ -54,7 +57,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 5) API PROTECTION – driver/user/warehouse same hi rakhe
+  // -------- API PROTECTION --------
   if (pathname.startsWith("/api")) {
     // admin APIs
     if (pathname.startsWith("/api/admin")) {
@@ -107,6 +110,7 @@ export function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
+// Make sure matcher covers sirf relevant paths
 export const config = {
   matcher: ["/admin/:path*", "/warehouse/:path*", "/api/:path*"],
 };
