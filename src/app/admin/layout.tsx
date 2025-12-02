@@ -12,6 +12,8 @@ export const metadata = {
   description: "Admin dashboard",
 };
 
+// yahan wahi naam rakho jo tum admin login API + middleware me use kar rahe ho
+// example: "adminToken"
 const COOKIE_NAME = "token";
 
 export default async function AdminLayout({
@@ -22,17 +24,22 @@ export default async function AdminLayout({
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
+  // 1) token hi nahi mila → admin login page par bhejo
   if (!token) {
     redirect("/");
   }
 
+  let payload: ReturnType<typeof verifyAppToken>;
   try {
-    const payload = verifyAppToken(token);
-
-    if (payload.role !== "ADMIN") {
-      redirect("/");
-    }
+    payload = verifyAppToken(token);
   } catch {
+    // 2) token invalid / expire → login page
+    redirect("/");
+  }
+
+  // 3) role check
+  if (payload.role !== "ADMIN") {
+    // agar admin nahi hai, normal home pe bhej do
     redirect("/");
   }
 

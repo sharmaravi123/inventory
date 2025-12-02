@@ -25,16 +25,15 @@ interface TokenPayload {
   sub?: string;
   id?: string;
   _id?: string;
+  role?: string;
 }
 
 function toStringId(id: unknown): string {
-  // direct primitives
   if (typeof id === "string") return id;
   if (typeof id === "number") return String(id);
 
   if (!id || typeof id !== "object") return "";
 
-  // Mongoose ObjectId ya koi aur object jisme toString() ho
   if (
     "toString" in id &&
     typeof (id as { toString: () => string }).toString === "function"
@@ -42,7 +41,6 @@ function toStringId(id: unknown): string {
     return (id as { toString: () => string }).toString();
   }
 
-  // Agar object ke andar _id hai
   if ("_id" in (id as Record<string, unknown>)) {
     const inner = (id as { _id: unknown })._id;
 
@@ -64,16 +62,22 @@ function toStringId(id: unknown): string {
 
 export async function GET() {
   try {
-    await dbConnect();
+    const cookieStore = await cookies();
 
-    // cookies() sync hai, yaha await nahi hoga
-    const cookieStore = cookies();
-    const tokenCookie = (await cookieStore).get("token");
+    // 👉 yahan multiple cookie names support kar rahe hain:
+    //  - userToken
+    //  - warehouseToken
+    //  - purana token (fallback)
+    const tokenCookie =
+      cookieStore.get("userToken") ??
+      cookieStore.get("warehouseToken") ??
+      cookieStore.get("token") ??
+      null;
 
     if (!tokenCookie) {
       return NextResponse.json(
         { error: "Not authenticated (no token cookie)" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -81,19 +85,20 @@ export async function GET() {
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
+      // Vercel me pakka set karna padega
       return NextResponse.json(
         { error: "JWT secret not configured on server" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     let payload: TokenPayload;
     try {
       payload = jwt.verify(token, secret) as TokenPayload;
-    } catch (_error) {
+    } catch {
       return NextResponse.json(
         { error: "Invalid or expired token" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -101,9 +106,11 @@ export async function GET() {
     if (!userId) {
       return NextResponse.json(
         { error: "Token payload missing user id" },
-        { status: 401 }
+        { status: 401 },
       );
     }
+
+    await dbConnect();
 
     const userDoc = await User.findById(String(userId))
       .populate("warehouses", "name")
@@ -113,7 +120,7 @@ export async function GET() {
     if (!userDoc) {
       return NextResponse.json(
         { error: "User not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -130,7 +137,7 @@ export async function GET() {
           typeof w.name === "string" ? (w.name as string) : undefined;
 
         return { _id: id, name };
-      }
+      },
     );
 
     const access =
@@ -157,7 +164,7 @@ export async function GET() {
         error: "Internal server error",
         detail: (error as Error)?.message ?? String(error),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
