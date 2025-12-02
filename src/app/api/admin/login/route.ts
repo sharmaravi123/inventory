@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
-import { AppJwtPayload, signAppToken,  } from "@/lib/jwt";
+import { AppJwtPayload, signAppToken, } from "@/lib/jwt";
 
 type Body = { email?: string; password?: string };
 
@@ -85,13 +85,17 @@ export async function POST(req: NextRequest) {
     const isProd = process.env.NODE_ENV === "production";
 
     res.cookies.set("adminToken", token, {
-  httpOnly: true,
-  sameSite: "strict", // "lax" se "strict" karo production ke liye
-  secure: isProd,     // production mein true
-  path: "/",
-  maxAge: 7 * 24 * 60 * 60,
-  domain: isProd ? "https://inventory-five-iota.vercel.app/" : undefined, // Vercel custom domain add karo
-});
+      httpOnly: true,
+      // "lax" login flows ke liye safer hai, strict se kuch edge cases me cookie skip ho sakti
+      sameSite: "lax",
+      secure: isProd,
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60,
+      // ❗ domain mat do – host-only cookie rahegi
+      //  -> localhost par bhi chalegi
+      //  -> production main domain + preview domain dono par chalegi
+    });
+
 
     return res;
   } catch (err) {

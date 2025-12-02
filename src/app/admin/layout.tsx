@@ -12,12 +12,12 @@ export const metadata = {
   description: "Admin dashboard",
 };
 
-// yahan dono support: "adminToken" (naya) + "token" (purana)
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // 👇 yahan await lagao
   const cookieStore = await cookies();
 
   const token =
@@ -36,7 +36,6 @@ export default async function AdminLayout({
     redirect("/");
   }
 
-  // role check – "ADMIN" ya "admin" dono allow
   const role = typeof payload.role === "string" ? payload.role : "";
   if (role.toLowerCase() !== "admin") {
     redirect("/");

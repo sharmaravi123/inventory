@@ -9,7 +9,7 @@ function getCookie(req: NextRequest, name: string): string | null {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  const adminToken = getCookie(req, "token");
+  const adminToken = getCookie(req, "adminToken");
   const userToken = getCookie(req, "userToken");
   const warehouseToken = getCookie(req, "warehouseToken");
   const driverToken = getCookie(req, "driverToken");
