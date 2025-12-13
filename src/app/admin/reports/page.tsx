@@ -134,11 +134,12 @@ export default function ReportsPage() {
     let outOfStockCount = 0;
 
     inventory.forEach((item) => {
-      const totalItems =
-        item.boxes * item.itemsPerBox + item.looseItems;
+      const itemsPerBox = item.product?.perBoxItem ?? 1;
+
+      const totalItems = item.boxes * itemsPerBox + item.looseItems;
 
       const lowStockTotal =
-        (item.lowStockBoxes ?? 0) * item.itemsPerBox +
+        (item.lowStockBoxes ?? 0) * itemsPerBox +
         (item.lowStockItems ?? 0);
 
       if (totalItems === 0) {

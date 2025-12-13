@@ -1,329 +1,152 @@
-// src/app/api/billing/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { Types } from "mongoose";
 import dbConnect from "@/lib/mongodb";
-import BillModel, {
-  BillDocument,
-  BillItem,
-  PaymentInfo,
-} from "@/models/Bill";
-import type { CreateBillPaymentInput } from "../route";
+import BillModel from "@/models/Bill";
+import CustomerModel from "@/models/Customer";
+import { Types } from "mongoose";
+import { BillingItemInput, CreateBillPaymentInput } from "../route";
 
-type UpdateBillCustomerInput = {
-  name: string;
-  shopName?: string;
-  phone: string;
-  address: string;
-  gstNumber?: string;
+const toNum = (v: unknown, fb = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fb;
 };
 
-type UpdateBillItemInput = {
-  stockId: string;
-  productId: string;
-  warehouseId: string;
-  productName: string;
-  sellingPrice: number;
-  taxPercent: number;
-  quantityBoxes: number;
-  quantityLoose: number;
-  itemsPerBox: number;
-};
+function validatePayment(p: CreateBillPaymentInput, total: number) {
+  const cash = toNum(p.cashAmount);
+  const upi = toNum(p.upiAmount);
+  const card = toNum(p.cardAmount);
 
-type UpdateBillRequestBody = {
-  customer?: UpdateBillCustomerInput;
-  companyGstNumber?: string;
-  billDate?: string;
-  items?: UpdateBillItemInput[];
+  if (cash + upi + card > total) throw new Error("Overpaid");
 
-  payment?: CreateBillPaymentInput;
-  driverId?: string;
-  vehicleNumber?: string;
-  status?: "PENDING" | "OUT_FOR_DELIVERY" | "DELIVERED" | "PARTIALLY_PAID";
-  amountCollected?: number;
-};
+  return { mode: p.mode, cashAmount: cash, upiAmount: upi, cardAmount: card };
+}
 
-type BillResponseBody = {
-  bill: BillDocument;
-};
+function calcLine(it: BillingItemInput) {
+  const qty = it.quantityBoxes * it.itemsPerBox + it.quantityLoose;
 
-function validatePaymentForUpdate(
-  payment: CreateBillPaymentInput,
-  grandTotal: number
-): PaymentInfo {
-  const mode = payment.mode;
-  const cashAmount = payment.cashAmount ?? 0;
-  const upiAmount = payment.upiAmount ?? 0;
-  const cardAmount = payment.cardAmount ?? 0;
+  let price = it.sellingPrice;
+  if (it.discountType === "PERCENT") price -= (price * it.discountValue) / 100;
+  else if (it.discountType === "CASH") price = Math.max(0, price - it.discountValue);
 
-  if (cashAmount < 0 || upiAmount < 0 || cardAmount < 0) {
-    throw new Error("Payment amounts cannot be negative");
-  }
-
-  const sum = cashAmount + upiAmount + cardAmount;
-  if (sum > grandTotal + 0.001) {
-    throw new Error("Collected amount cannot exceed grand total");
-  }
+  const gross = qty * price;
+  const tax = (gross * it.taxPercent) / (100 + it.taxPercent);
+  const before = gross - tax;
 
   return {
-    mode,
-    cashAmount,
-    upiAmount,
-    cardAmount,
+    item: {
+      product: new Types.ObjectId(it.productId),
+      warehouse: new Types.ObjectId(it.warehouseId),
+      productName: it.productName,
+      sellingPrice: price,
+      taxPercent: it.taxPercent,
+      quantityBoxes: it.quantityBoxes,
+      quantityLoose: it.quantityLoose,
+      itemsPerBox: it.itemsPerBox,
+      discountType: it.discountType,
+      discountValue: it.discountValue,
+      overridePriceForCustomer: it.overridePriceForCustomer,
+      totalItems: qty,
+      totalBeforeTax: before,
+      taxAmount: tax,
+      lineTotal: gross,
+    },
+    totals: { qty, before, tax, gross },
   };
 }
 
-function deriveStatus(
-  amountCollected: number,
-  grandTotal: number,
-  explicit?: UpdateBillRequestBody["status"]
-): BillDocument["status"] {
-  if (explicit) return explicit;
-  if (amountCollected === 0) return "PENDING";
-  if (amountCollected >= grandTotal) return "DELIVERED";
-  return "PARTIALLY_PAID";
-}
-
-type CalculatedLine = {
-  item: BillItem;
-  totalItems: number;
-  totalBeforeTax: number;
-  taxAmount: number;
-  lineTotal: number;
-};
-
-function calculateLine(input: UpdateBillItemInput): CalculatedLine {
-  const totalItems =
-    input.quantityBoxes * input.itemsPerBox + input.quantityLoose;
-
-  const gross = totalItems * input.sellingPrice;
-
-  let taxAmount = 0;
-  let totalBeforeTax = gross;
-
-  if (input.taxPercent > 0) {
-    taxAmount =
-      (gross * input.taxPercent) / (100 + input.taxPercent);
-    totalBeforeTax = gross - taxAmount;
-  }
-
-  const lineTotal = gross;
-
-  const item: BillItem = {
-    product: new Types.ObjectId(input.productId),
-    warehouse: new Types.ObjectId(input.warehouseId),
-    productName: input.productName,
-    sellingPrice: input.sellingPrice,
-    taxPercent: input.taxPercent,
-    quantityBoxes: input.quantityBoxes,
-    quantityLoose: input.quantityLoose,
-    itemsPerBox: input.itemsPerBox,
-    totalItems,
-    totalBeforeTax,
-    taxAmount,
-    lineTotal,
-  };
-
-  return {
-    item,
-    totalItems,
-    totalBeforeTax,
-    taxAmount,
-    lineTotal,
-  };
-}
-
-// ✅ FIXED: context.params is Promise<{ id: string }>
 export async function GET(
   _req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-): Promise<NextResponse<BillResponseBody | { error: string }>> {
-  try {
-    await dbConnect();
-
-    const { id } = await context.params;
-
-    const bill = await BillModel.findById(id).exec();
-
-    if (!bill) {
-      return NextResponse.json(
-        { error: "Bill not found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ bill });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
-  }
+  ctx: { params: Promise<{ id: string }> }
+) {
+  await dbConnect();
+  const { id } = await ctx.params;
+  const bill = await BillModel.findById(id);
+  if (!bill) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ bill });
 }
 
-// ✅ FIXED: same signature change for PUT
 export async function PUT(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-): Promise<NextResponse<BillResponseBody | { error: string }>> {
+  ctx: { params: Promise<{ id: string }> }
+) {
   try {
     await dbConnect();
+    const { id } = await ctx.params;
 
-    const { id } = await context.params;
+    const bill = await BillModel.findById(id);
+    if (!bill) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const existing = await BillModel.findById(id).exec();
+    const body = await req.json();
 
-    if (!existing) {
-      return NextResponse.json(
-        { error: "Bill not found" },
-        { status: 404 }
-      );
-    }
-
-    const body = (await req.json()) as UpdateBillRequestBody;
-
-    // 1) Customer snapshot update (optional)
+    // update customer
     if (body.customer) {
-      existing.customerInfo.name = body.customer.name;
-      existing.customerInfo.shopName = body.customer.shopName;
-      existing.customerInfo.phone = body.customer.phone;
-      existing.customerInfo.address = body.customer.address;
-      existing.customerInfo.gstNumber = body.customer.gstNumber;
+      bill.customerInfo.name = body.customer.name;
+      bill.customerInfo.phone = body.customer.phone;
+      bill.customerInfo.address = body.customer.address;
+      bill.customerInfo.shopName = body.customer.shopName;
+      bill.customerInfo.gstNumber = body.customer.gstNumber;
     }
 
-    // 2) Company GST / billDate update (optional)
-    if (typeof body.companyGstNumber === "string") {
-      existing.companyGstNumber = body.companyGstNumber;
-    }
+    if (body.billDate) bill.billDate = new Date(body.billDate);
 
-    if (body.billDate) {
-      const newDate = new Date(body.billDate);
-      if (!Number.isNaN(newDate.getTime())) {
-        existing.billDate = newDate;
-      }
-    }
-
-    // 3) Items + totals update (optional)
-    let itemsChanged = false;
-
-    if (body.items && body.items.length > 0) {
-      itemsChanged = true;
-
+    if (Array.isArray(body.items)) {
       let totalItems = 0;
-      let totalBeforeTax = 0;
-      let totalTax = 0;
-      let grandTotal = 0;
+      let before = 0;
+      let tax = 0;
+      let grand = 0;
 
-      const newItems = body.items.map((input) => {
-        const calculated = calculateLine(input);
-        totalItems += calculated.totalItems;
-        totalBeforeTax += calculated.totalBeforeTax;
-        totalTax += calculated.taxAmount;
-        grandTotal += calculated.lineTotal;
-        return calculated.item;
+      const newItems = body.items.map((it: BillingItemInput) => {
+        const { item, totals } = calcLine(it);
+        totalItems += totals.qty;
+        before += totals.before;
+        tax += totals.tax;
+        grand += totals.gross;
+
+        if (it.overridePriceForCustomer) {
+          CustomerModel.updateOne(
+            { _id: bill.customerInfo.customer },
+            { $pull: { customPrices: { product: it.productId } } }
+          ).exec();
+
+          CustomerModel.updateOne(
+            { _id: bill.customerInfo.customer },
+            {
+              $push: {
+                customPrices: {
+                  product: it.productId,
+                  price: it.sellingPrice,
+                },
+              },
+            }
+          ).exec();
+        }
+
+        return item;
       });
 
-      existing.items = newItems as unknown as BillDocument["items"];
-      existing.totalItems = totalItems;
-      existing.totalBeforeTax = totalBeforeTax;
-      existing.totalTax = totalTax;
-      existing.grandTotal = grandTotal;
+      // FIXED TS ERROR: assign plain array, not DocumentArray
+      bill.items = newItems;
+      bill.totalItems = totalItems;
+      bill.totalBeforeTax = before;
+      bill.totalTax = tax;
+      bill.grandTotal = grand;
     }
 
-    const grandTotal = existing.grandTotal;
+    const grand = bill.grandTotal;
 
-    // 4) Payment / status handling
     if (body.payment) {
-      const updatedPayment = validatePaymentForUpdate(
-        body.payment,
-        grandTotal
-      );
-
-      existing.payment = updatedPayment;
-
+      const pay = validatePayment(body.payment, grand);
+      bill.payment = pay;
       const collected =
-        (updatedPayment.cashAmount ?? 0) +
-        (updatedPayment.upiAmount ?? 0) +
-        (updatedPayment.cardAmount ?? 0);
-
-      existing.amountCollected = collected;
-      existing.balanceAmount = grandTotal - collected;
-      existing.status = deriveStatus(
-        collected,
-        grandTotal,
-        body.status
-      );
-    } else if (typeof body.amountCollected === "number") {
-      const collected = body.amountCollected;
-      if (collected < 0) {
-        return NextResponse.json(
-          { error: "Collected amount cannot be negative" },
-          { status: 400 }
-        );
-      }
-      if (collected > grandTotal) {
-        return NextResponse.json(
-          { error: "Collected amount cannot exceed grand total" },
-          { status: 400 }
-        );
-      }
-
-      existing.amountCollected = collected;
-      existing.balanceAmount = grandTotal - collected;
-      existing.status = deriveStatus(
-        collected,
-        grandTotal,
-        body.status
-      );
-    } else if (itemsChanged) {
-      const currentPayment: CreateBillPaymentInput = {
-        mode: existing.payment.mode,
-        cashAmount: existing.payment.cashAmount,
-        upiAmount: existing.payment.upiAmount,
-        cardAmount: existing.payment.cardAmount,
-      };
-
-      const adjustedPayment = validatePaymentForUpdate(
-        currentPayment,
-        grandTotal
-      );
-
-      existing.payment = adjustedPayment;
-
-      const collected =
-        (adjustedPayment.cashAmount ?? 0) +
-        (adjustedPayment.upiAmount ?? 0) +
-        (adjustedPayment.cardAmount ?? 0);
-
-      existing.amountCollected = collected;
-      existing.balanceAmount = grandTotal - collected;
-      existing.status = deriveStatus(
-        collected,
-        grandTotal,
-        body.status
-      );
-    } else if (body.status) {
-      existing.status = body.status;
+        toNum(pay.cashAmount) + toNum(pay.upiAmount) + toNum(pay.cardAmount);
+      bill.amountCollected = collected;
+      bill.balanceAmount = grand - collected;
     }
 
-    // 5) Driver / vehicle assignment updates
-    if (body.driverId) {
-      existing.driver = new Types.ObjectId(body.driverId);
-    }
-
-    if (body.vehicleNumber) {
-      existing.vehicleNumber = body.vehicleNumber;
-    }
-
-    await existing.save();
-
-    return NextResponse.json({ bill: existing });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
+    await bill.save();
+    return NextResponse.json({ bill });
+  } catch (e) {
     return NextResponse.json(
-      { error: message },
+      { error: (e as Error).message },
       { status: 500 }
     );
   }

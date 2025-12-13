@@ -1,74 +1,84 @@
-// app/warehouse/components/Dashboard/WarehouseDashboardOverview.tsx
 "use client";
 
 import React, { useEffect, useMemo } from "react";
-import { Package, AlertTriangle, Plus, FileText, IndianRupee } from "lucide-react";
+import {
+  Package,
+  AlertTriangle,
+  Plus,
+  FileText,
+  IndianRupee,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "@/store/store";
+
 import { fetchInventory } from "@/store/inventorySlice";
-import { fetchProducts } from "@/store/productSlice";
+import { fetchProducts, type ProductType } from "@/store/productSlice";
 import { fetchDrivers } from "@/store/driverSlice";
 import { useListBillsQuery, type Bill } from "@/store/billingApi";
 import { useRouter } from "next/navigation";
 
-type WarehouseDashboardOverviewProps = {
-  warehouseId?: string;
-};
+// ---------------------------------------------
+// TYPES
+// ---------------------------------------------
 
-interface InventoryItemForDashboard {
-  boxes: number;
-  itemsPerBox: number;
-  looseItems: number;
-  lowStockBoxes?: number | null;
-  lowStockItems?: number | null;
-  warehouseId?: string;
-  warehouse?: {
-    _id?: string;
-    id?: string;
-    name?: string;
-  };
-  productId?: string;
-  product?: {
-    _id?: string;
-  };
-}
-
-interface InventorySliceState {
-  items: InventoryItemForDashboard[];
-}
-
-interface ProductSliceState {
-  products: unknown[];
-}
-
-interface DriverItem {
+interface WarehouseRef {
   _id?: string;
+  id?: string | number;
   name?: string;
 }
 
-interface DriverSliceState {
-  items: DriverItem[];
+interface ProductRef {
+  _id?: string;
+  id?: string | number;
+  name?: string;
+  perBoxItem?: number;
+}
+
+interface InventoryRaw {
+  _id: string;
+  boxes: number;
+  looseItems: number;
+  lowStockBoxes?: number | null;
+  lowStockItems?: number | null;
+
+  productId?: string;
+  product?: ProductRef;
+
+  warehouseId?: string;
+  warehouse?: WarehouseRef;
+}
+
+interface InventoryWithProduct extends InventoryRaw {
+  itemsPerBox: number;
+  productName: string;
+  warehouseName: string;
 }
 
 interface BillLineWarehouseRef {
   warehouseId?: string;
-  warehouse?: unknown;
+  warehouse?: WarehouseRef;
 }
 
 interface BillWithWarehouseLines extends Bill {
   items: (BillLineWarehouseRef & Bill["items"][number])[];
 }
 
-function extractId(ref: unknown): string | undefined {
-  if (ref == null) return undefined;
-  if (typeof ref === "string" || typeof ref === "number") return String(ref);
-  if (typeof ref === "object") {
-    const obj = ref as Record<string, unknown>;
-    const candidate = obj._id ?? obj.id;
-    if (candidate == null || candidate === "") return undefined;
-    return String(candidate);
+// ---------------------------------------------
+// HELPERS
+// ---------------------------------------------
+
+function extractId(ref: WarehouseRef | ProductRef | string | number | null | undefined): string | undefined {
+  if (!ref) return undefined;
+
+  if (typeof ref === "string" || typeof ref === "number") {
+    return String(ref);
   }
+
+  if (typeof ref === "object") {
+    return ref._id ? String(ref._id) : ref.id ? String(ref.id) : undefined;
+  }
+
   return undefined;
 }
 
@@ -80,38 +90,26 @@ function filterBillsForWarehouse(
   return bills.filter((bill) =>
     bill.items.some((line) => {
       const wid = line.warehouseId ?? extractId(line.warehouse);
-      if (!wid) return false;
-      return String(wid) === String(warehouseId);
+      return wid && String(wid) === String(warehouseId);
     })
   );
 }
 
+// ---------------------------------------------
+// COMPONENT
+// ---------------------------------------------
+
 export default function WarehouseDashboardOverview({
   warehouseId,
-}: WarehouseDashboardOverviewProps) {
+}: {
+  warehouseId?: string;
+}) {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
 
-  const { products } = useSelector((state: RootState) => {
-    const productState = state.product as ProductSliceState;
-    return {
-      products: productState.products,
-    };
-  });
-
-  const { items: allInventory } = useSelector((state: RootState) => {
-    const slice = state.inventory as InventorySliceState;
-    return {
-      items: slice.items,
-    };
-  });
-
-  const { items: drivers } = useSelector((state: RootState) => {
-    const slice = state.driver as DriverSliceState;
-    return {
-      items: slice.items,
-    };
-  });
+  const { items: inventoryRaw } = useSelector((state: RootState) => state.inventory);
+  const { products } = useSelector((state: RootState) => state.product);
+  const { items: drivers } = useSelector((state: RootState) => state.driver);
 
   const { data: billsData } = useListBillsQuery({
     search: "",
@@ -119,56 +117,91 @@ export default function WarehouseDashboardOverview({
   });
   const allBills = (billsData?.bills ?? []) as BillWithWarehouseLines[];
 
+  // LOAD DATA
   useEffect(() => {
     dispatch(fetchProducts());
     dispatch(fetchInventory());
     dispatch(fetchDrivers());
   }, [dispatch]);
 
+  // ---------------------------------------------
+  // MERGE: Inventory + Product Data
+  // ---------------------------------------------
+
+  const inventory: InventoryWithProduct[] = useMemo(() => {
+    return inventoryRaw.map((inv: InventoryRaw) => {
+      const pid = extractId(inv.product) ?? inv.productId;
+
+      const prod = products.find((p: ProductType) => String(p._id) === String(pid));
+
+      const warehouseName =
+        inv.warehouse?.name ??
+        (typeof inv.warehouseId === "string" ? inv.warehouseId : "Unknown");
+
+      return {
+        ...inv,
+        itemsPerBox: prod?.perBoxItem ?? 1,
+        productName: prod?.name ?? "Unknown Product",
+        warehouseName,
+      };
+    });
+  }, [inventoryRaw, products]);
+
+  // ---------------------------------------------
+  // FILTER inventory by warehouse
+  // ---------------------------------------------
+
   const filteredInventory = useMemo(() => {
     if (!warehouseId) return [];
-    return allInventory.filter((item) => {
+
+    return inventory.filter((item) => {
       const wid = item.warehouseId ?? extractId(item.warehouse);
-      if (!wid) return false;
-      return String(wid) === String(warehouseId);
+      return wid && String(wid) === String(warehouseId);
     });
-  }, [allInventory, warehouseId]);
+  }, [inventory, warehouseId]);
+
+  // ---------------------------------------------
+  // FILTER bills
+  // ---------------------------------------------
 
   const filteredBills = useMemo(
     () => filterBillsForWarehouse(allBills, warehouseId),
     [allBills, warehouseId]
   );
 
-  const totalProducts = useMemo(() => {
-    if (!warehouseId) return 0;
+  // ---------------------------------------------
+  // COUNT products
+  // ---------------------------------------------
 
+  const totalProducts = useMemo(() => {
     const set = new Set<string>();
+
     filteredInventory.forEach((item) => {
-      const idFromProduct = item.product?._id;
-      const idFromField = item.productId;
-      const id = idFromProduct ?? idFromField;
-      if (id) {
-        set.add(id);
-      }
+      const pid = extractId(item.product) ?? (item.productId ? String(item.productId) : undefined);
+      if (pid) set.add(pid);
     });
 
     return set.size;
-  }, [filteredInventory, warehouseId]);
+  }, [filteredInventory]);
+
+  // ---------------------------------------------
+  // LOW STOCK counters
+  // ---------------------------------------------
 
   const { lowStock, outOfStock } = useMemo(() => {
-    if (!filteredInventory.length) return { lowStock: 0, outOfStock: 0 };
-
     let low = 0;
     let out = 0;
 
     filteredInventory.forEach((item) => {
-      const totalItems = item.boxes * item.itemsPerBox + item.looseItems;
-      const lowStockTotal =
-        (item.lowStockBoxes ?? 0) * item.itemsPerBox +
+      const qtyPerBox = item.itemsPerBox;
+      const totalItems = item.boxes * qtyPerBox + item.looseItems;
+
+      const threshold =
+        (item.lowStockBoxes ?? 0) * qtyPerBox +
         (item.lowStockItems ?? 0);
 
-      if (totalItems === 0) out += 1;
-      else if (totalItems > 0 && totalItems <= lowStockTotal) low += 1;
+      if (totalItems === 0) out++;
+      else if (threshold > 0 && totalItems <= threshold) low++;
     });
 
     return { lowStock: low, outOfStock: out };
@@ -176,22 +209,25 @@ export default function WarehouseDashboardOverview({
 
   const totalStockAlerts = lowStock + outOfStock;
 
+  // ---------------------------------------------
+  // Orders + Dues
+  // ---------------------------------------------
+
   const { totalOrders, outstandingDues } = useMemo(() => {
-    let ordersCount = 0;
+    let count = 0;
     let dues = 0;
 
     filteredBills.forEach((bill) => {
-      ordersCount += 1;
-      if (bill.balanceAmount > 0) {
-        dues += bill.balanceAmount;
-      }
+      count++;
+      if (bill.balanceAmount > 0) dues += bill.balanceAmount;
     });
 
-    return {
-      totalOrders: ordersCount,
-      outstandingDues: dues,
-    };
+    return { totalOrders: count, outstandingDues: dues };
   }, [filteredBills]);
+
+  // ---------------------------------------------
+  // UI STATS
+  // ---------------------------------------------
 
   const stats = [
     {
@@ -200,15 +236,14 @@ export default function WarehouseDashboardOverview({
       value: totalProducts.toString(),
       icon: <Package size={18} />,
       infoColor: "text-green-600",
-      info: "",
     },
     {
       key: "stockAlerts",
       title: "Stock Alerts",
       value: totalStockAlerts.toString(),
       icon: <AlertTriangle size={18} />,
-      info: `${lowStock} low • ${outOfStock} out`,
       infoColor: totalStockAlerts > 0 ? "text-red-600" : "text-green-600",
+      info: `${lowStock} low • ${outOfStock} out`,
     },
     {
       key: "orders",
@@ -216,7 +251,6 @@ export default function WarehouseDashboardOverview({
       value: totalOrders.toString(),
       icon: <FileText size={18} />,
       infoColor: "text-green-600",
-      info: "",
     },
     {
       key: "dues",
@@ -224,7 +258,6 @@ export default function WarehouseDashboardOverview({
       value: `₹${outstandingDues.toFixed(2)}`,
       icon: <IndianRupee size={18} />,
       infoColor: outstandingDues > 0 ? "text-red-600" : "text-green-600",
-      info: "",
     },
   ];
 
@@ -246,59 +279,54 @@ export default function WarehouseDashboardOverview({
     },
   ];
 
+  // ---------------------------------------------
+  // RENDER
+  // ---------------------------------------------
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:gap-6 lg:grid-cols-12">
-      {/* Stats cards */}
+      {/* Stats */}
       <div className="lg:col-span-8 xl:col-span-9 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {stats.map((item) => (
           <motion.div
             key={item.key}
-            whileHover={{ y: -4, scale: 1.01 }}
-            transition={{ type: "spring", stiffness: 200 }}
-            className="rounded-xl border border-[var(--border-color)] bg-[var(--color-white)] px-3 py-3 sm:px-4 sm:py-4 shadow-sm hover:shadow-md"
+            whileHover={{ y: -4, scale: 1.02 }}
+            className="rounded-xl border p-4 shadow-sm"
           >
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-xs sm:text-sm font-medium text-[var(--text-secondary)]">
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2 text-sm text-gray-600">
                 {item.icon}
                 {item.title}
               </span>
             </div>
-            <div className="mt-2">
-              <h3 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">
-                {item.value}
-              </h3>
-              <p className={`mt-1 text-[10px] sm:text-xs ${item.infoColor}`}>
-                {item.info ?? ""}
-              </p>
-            </div>
+
+            <h3 className="mt-2 text-2xl font-bold">{item.value}</h3>
+
+            <p className={`mt-1 text-xs ${item.infoColor}`}>{item.info ?? ""}</p>
           </motion.div>
         ))}
       </div>
 
-      {/* Quick actions */}
+      {/* Quick Actions */}
       <motion.div
         initial={{ opacity: 0, x: 30 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.15 }}
-        className="lg:col-span-4 xl:col-span-3 rounded-xl border border-[var(--border-color)] bg-[var(--color-white)] sm:bg-[var(--color-neutral)] p-4 sm:p-5"
+        className="lg:col-span-4 xl:col-span-3 rounded-xl border p-4 bg-gray-50"
       >
-        <h3 className="mb-1 text-sm sm:text-base font-semibold text-[var(--text-primary)]">
-          Quick Actions
-        </h3>
-        <p className="mb-4 text-[11px] sm:text-xs text-[var(--text-secondary)]">
-          Perform essential tasks for this warehouse.
-        </p>
+        <h3 className="font-semibold mb-1">Quick Actions</h3>
+        <p className="text-xs text-gray-500 mb-4">Warehouse shortcuts.</p>
+
         <div className="flex flex-col space-y-2">
           {quickActions.map((action) => (
             <motion.button
               key={action.label}
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.15 }}
+              whileHover={{ scale: 1.04 }}
               onClick={() => router.push(action.link)}
-              className="flex items-center gap-2 rounded-lg border border-[var(--border-color)] bg-[var(--color-white)] px-3 py-2 text-xs sm:text-sm font-medium text-[var(--text-primary)] hover:text-[var(--color-primary)] hover:shadow-sm transition-colors"
+              className="flex items-center gap-2 border rounded-lg p-2 bg-white text-sm hover:text-blue-600"
             >
               {action.icon}
-              <span className="truncate">{action.label}</span>
+              {action.label}
             </motion.button>
           ))}
         </div>

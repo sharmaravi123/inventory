@@ -1,19 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Types } from "mongoose";
 import dbConnect from "@/lib/mongodb";
-import BillModel, {
-  BillDocument,
-  BillItem,
-  PaymentInfo,
-  CustomerSnapshot,
-} from "@/models/Bill";
-import CustomerModel, {
-  CustomerDocument,
-} from "@/models/Customer";
-import { getNextInvoiceNumber } from "@/models/InvoiceCounter";
+import BillModel from "@/models/Bill";
+import CustomerModel from "@/models/Customer";
 import Stock from "@/models/Stock";
+import { Types } from "mongoose";
+import { getNextInvoiceNumber } from "@/models/InvoiceCounter";
 
-type CreateBillCustomerInput = {
+export type BillingItemInput = {
+  stockId: string;
+  productId: string;
+  warehouseId: string;
+  productName: string;
+  sellingPrice: number;
+  taxPercent: number;
+  quantityBoxes: number;
+  quantityLoose: number;
+  itemsPerBox: number;
+  discountType: "NONE" | "PERCENT" | "CASH";
+  discountValue: number;
+  overridePriceForCustomer: boolean;
+};
+
+export type CreateBillCustomerInput = {
+  _id?: string;
   name: string;
   shopName?: string;
   phone: string;
@@ -21,428 +30,231 @@ type CreateBillCustomerInput = {
   gstNumber?: string;
 };
 
-// 👇 yahan stockId add kiya
-type CreateBillItemInput = {
-  stockId: string; // Stock / Inventory document _id
-  productId: string;
-  warehouseId: string;
-  productName: string;
-  sellingPrice: number; // per piece (GST included)
-  taxPercent: number;
-  quantityBoxes: number;
-  quantityLoose: number;
-  itemsPerBox: number;
-};
-
-type PaymentMode = "CASH" | "UPI" | "CARD" | "SPLIT";
-
 export type CreateBillPaymentInput = {
-  mode: PaymentMode;
+  mode: "CASH" | "UPI" | "CARD" | "SPLIT";
   cashAmount?: number;
   upiAmount?: number;
   cardAmount?: number;
 };
 
-type CreateBillRequestBody = {
+export type CreateBillPayload = {
   customer: CreateBillCustomerInput;
+  items: BillingItemInput[];
+  payment: CreateBillPaymentInput;
   companyGstNumber?: string;
   billDate?: string;
-  items: CreateBillItemInput[];
-  payment: CreateBillPaymentInput;
-  driverId?: string;
-  vehicleNumber?: string;
 };
 
-type StockShape = {
-  _id: Types.ObjectId | string;
-  product?: Types.ObjectId | string;
-  warehouse?: Types.ObjectId | string;
-  productId?: Types.ObjectId | string;
-  warehouseId?: Types.ObjectId | string;
-  boxes: number;
-  itemsPerBox: number;
-  looseItems?: number;
-  loose?: number;
+const toNum = (v: unknown, fb = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fb;
 };
 
-type BillSummary = {
-  _id: string;
-  invoiceNumber: string;
-  billDate: string;
-  grandTotal: number;
-};
+// -------------------- PAYMENT VALIDATION --------------------
 
-type CreateBillResponseBody = {
-  bill: BillSummary;
-};
+function validatePayment(p: CreateBillPaymentInput, total: number) {
+  const cash = toNum(p.cashAmount);
+  const upi = toNum(p.upiAmount);
+  const card = toNum(p.cardAmount);
+  const collected = cash + upi + card;
 
-// ----------------- helpers -----------------
+  if (collected > total) throw new Error("Payment exceeds grand total");
 
-function validatePaymentInput(
-  payment: CreateBillPaymentInput,
-  grandTotal: number
-): PaymentInfo {
-  const mode = payment.mode;
-  const cashAmount = payment.cashAmount ?? 0;
-  const upiAmount = payment.upiAmount ?? 0;
-  const cardAmount = payment.cardAmount ?? 0;
-
-  if (cashAmount < 0 || upiAmount < 0 || cardAmount < 0) {
-    throw new Error("Payment amounts cannot be negative");
-  }
-
-  const sum = cashAmount + upiAmount + cardAmount;
-
-  if (sum > grandTotal + 0.001) {
-    throw new Error("Total collected amount cannot exceed grand total");
-  }
-
-  // Ab hum mode ko sirf informational treat kar rahe:
-  // - sum 0 ho sakta hai (PENDING)
-  // - sum < total (PARTIALLY_PAID)
-  // - sum == total (DELIVERED)
-
-  return {
-    mode,
-    cashAmount,
-    upiAmount,
-    cardAmount,
-  };
+  return { mode: p.mode, cashAmount: cash, upiAmount: upi, cardAmount: card };
 }
 
-function buildCustomerSnapshot(
-  customer: CustomerDocument,
-  input: CreateBillCustomerInput
-): CustomerSnapshot {
-  return {
-    customer: customer._id,
-    name: input.name,
-    shopName: input.shopName,
-    phone: input.phone,
-    address: input.address,
-    gstNumber: input.gstNumber,
-  };
-}
+// -------------------- CUSTOMER UPSERT --------------------
 
-async function upsertCustomer(
-  input: CreateBillCustomerInput
-): Promise<CustomerDocument> {
-  const existing = await CustomerModel.findOne({
-    phone: input.phone,
-  }).exec();
-
-  if (existing) {
-    existing.name = input.name;
-    existing.shopName = input.shopName ?? existing.shopName;
-    existing.address = input.address;
-    existing.gstNumber = input.gstNumber ?? existing.gstNumber;
-    await existing.save();
-    return existing;
-  }
-
-  const customer = new CustomerModel({
-    name: input.name,
-    shopName: input.shopName,
-    phone: input.phone,
-    address: input.address,
-    gstNumber: input.gstNumber,
-  });
-
-  await customer.save();
-  return customer;
-}
-
-type CalculatedLine = {
-  item: BillItem;
-  totalItems: number;
-  totalBeforeTax: number;
-  taxAmount: number;
-  lineTotal: number;
-};
-
-/**
- * sellingPrice already INCLUDES GST.
- *
- * For a given line:
- *   gross = qty * sellingPrice
- *   taxAmount = gross * taxPercent / (100 + taxPercent)
- *   totalBeforeTax = gross - taxAmount
- *   lineTotal = gross
- */
-function calculateLine(input: CreateBillItemInput): CalculatedLine {
-  const totalItems =
-    input.quantityBoxes * input.itemsPerBox + input.quantityLoose;
-
-  const gross = totalItems * input.sellingPrice;
-
-  let taxAmount = 0;
-  let totalBeforeTax = gross;
-
-  if (input.taxPercent > 0) {
-    taxAmount =
-      (gross * input.taxPercent) /
-      (100 + input.taxPercent);
-    totalBeforeTax = gross - taxAmount;
-  }
-
-  const lineTotal = gross;
-
-  const item: BillItem = {
-    product: new Types.ObjectId(input.productId),
-    warehouse: new Types.ObjectId(input.warehouseId),
-    productName: input.productName,
-    sellingPrice: input.sellingPrice,
-    taxPercent: input.taxPercent,
-    quantityBoxes: input.quantityBoxes,
-    quantityLoose: input.quantityLoose,
-    itemsPerBox: input.itemsPerBox,
-    totalItems,
-    totalBeforeTax,
-    taxAmount,
-    lineTotal,
-  };
-
-  return {
-    item,
-    totalItems,
-    totalBeforeTax,
-    taxAmount,
-    lineTotal,
-  };
-}
-
-type GroupedUsage = {
-  stockId: string;
-  totalLooseEquivalent: number;
-};
-
-async function reserveStockForNewBill(
-  items: CreateBillItemInput[]
-): Promise<void> {
-  const grouped: Record<string, GroupedUsage> = {};
-
-  items.forEach((input) => {
-    const looseEquivalent =
-      input.quantityLoose + input.quantityBoxes * input.itemsPerBox;
-
-    const existing = grouped[input.stockId];
-    if (existing) {
-      existing.totalLooseEquivalent += looseEquivalent;
-    } else {
-      grouped[input.stockId] = {
-        stockId: input.stockId,
-        totalLooseEquivalent: looseEquivalent,
-      };
+async function upsertCustomer(c: CreateBillCustomerInput) {
+  if (c._id) {
+    const doc = await CustomerModel.findById(c._id);
+    if (doc) {
+      doc.name = c.name;
+      doc.phone = c.phone;
+      doc.address = c.address;
+      doc.shopName = c.shopName;
+      doc.gstNumber = c.gstNumber;
+      await doc.save();
+      return doc;
     }
-  });
+  }
+  return CustomerModel.create(c);
+}
 
-  const entries = Object.values(grouped);
+// -------------------- FIXED: SNAPSHOT WITHOUT ANY --------------------
 
-  for (const entry of entries) {
-    const stock = await Stock.findById(entry.stockId)
-      .lean<StockShape>()
-      .exec();
+function takeSnapshot(
+  customerDoc: { _id: string | Types.ObjectId },
+  src: CreateBillCustomerInput
+) {
+  return {
+    customer: customerDoc._id.toString(),
+    name: src.name,
+    phone: src.phone,
+    address: src.address,
+    shopName: src.shopName,
+    gstNumber: src.gstNumber,
+  };
+}
 
-    if (!stock) {
-      throw new Error("Stock not found for selected product and warehouse");
-    }
 
-    const looseCount =
-      typeof stock.looseItems === "number"
-        ? stock.looseItems
-        : typeof stock.loose === "number"
-        ? stock.loose
-        : 0;
+// -------------------- FIXED: RESERVE STOCK WITHOUT ANY --------------------
 
-    const availableLooseEquivalent =
-      looseCount + stock.boxes * stock.itemsPerBox;
-
-    if (entry.totalLooseEquivalent > availableLooseEquivalent) {
-      throw new Error(
-        "Requested quantity is more than available stock"
-      );
-    }
-
-    const remainingLooseEquivalent =
-      availableLooseEquivalent - entry.totalLooseEquivalent;
-
-    const remainingBoxes = Math.floor(
-      remainingLooseEquivalent / stock.itemsPerBox
-    );
-    const remainingLoose =
-      remainingLooseEquivalent % stock.itemsPerBox;
-
-    const update: {
+async function reserveStock(items: BillingItemInput[]) {
+  for (const it of items) {
+    const stock = await Stock.findById(it.stockId).lean<{
       boxes: number;
       looseItems: number;
-      loose: number;
-    } = {
-      boxes: remainingBoxes,
-      looseItems: remainingLoose,
-      loose: remainingLoose,
-    };
+      itemsPerBox?: number;
+    }>();
+
+    if (!stock) throw new Error("Stock not found");
+
+    const stockItemsPerBox = stock.itemsPerBox ?? it.itemsPerBox ?? 1;
+
+    const available = stock.boxes * stockItemsPerBox + stock.looseItems;
+    const req = it.quantityBoxes * stockItemsPerBox + it.quantityLoose;
+
+    if (req > available) throw new Error("Insufficient stock");
+
+    const remain = available - req;
+    const newBoxes = Math.floor(remain / stockItemsPerBox);
+    const newLoose = remain % stockItemsPerBox;
 
     await Stock.updateOne(
-      { _id: stock._id },
-      { $set: update }
-    ).exec();
+      { _id: it.stockId },
+      { $set: { boxes: newBoxes, looseItems: newLoose } }
+    );
   }
 }
 
-// ----------------- POST: create bill -----------------
+// -------------------- CALCULATE LINE --------------------
 
-export async function POST(
-  req: NextRequest
-): Promise<NextResponse<CreateBillResponseBody | { error: string }>> {
+function calcLine(it: BillingItemInput) {
+  const qty = it.quantityBoxes * it.itemsPerBox + it.quantityLoose;
+
+  let price = it.sellingPrice;
+  if (it.discountType === "PERCENT") price -= (price * it.discountValue) / 100;
+  else if (it.discountType === "CASH") price = Math.max(0, price - it.discountValue);
+
+  const gross = qty * price;
+  const tax = (gross * it.taxPercent) / (100 + it.taxPercent);
+  const before = gross - tax;
+
+  return {
+    billItem: {
+      product: new Types.ObjectId(it.productId),
+      warehouse: new Types.ObjectId(it.warehouseId),
+      productName: it.productName,
+      sellingPrice: price,
+      taxPercent: it.taxPercent,
+      quantityBoxes: it.quantityBoxes,
+      quantityLoose: it.quantityLoose,
+      itemsPerBox: it.itemsPerBox,
+      discountType: it.discountType,
+      discountValue: it.discountValue,
+      overridePriceForCustomer: it.overridePriceForCustomer,
+      totalItems: qty,
+      totalBeforeTax: before,
+      taxAmount: tax,
+      lineTotal: gross,
+    },
+    totals: { qty, before, tax, gross },
+  };
+}
+
+// -------------------- POST (CREATE BILL) --------------------
+
+export async function POST(req: NextRequest) {
   try {
     await dbConnect();
 
-    const body = (await req.json()) as CreateBillRequestBody;
+    const body = (await req.json()) as CreateBillPayload;
+    if (!body.items?.length) throw new Error("No items found");
 
-    if (!body.items || body.items.length === 0) {
-      return NextResponse.json(
-        { error: "Bill must contain at least one item" },
-        { status: 400 }
-      );
-    }
+    await reserveStock(body.items);
 
-    // 1) Inventory validation + stock update
-    await reserveStockForNewBill(body.items);
+    let totalItems = 0,
+      before = 0,
+      tax = 0,
+      grand = 0;
 
-    // 2) Calculate all line items + totals
-    let totalItems = 0;
-    let totalBeforeTax = 0;
-    let totalTax = 0;
-    let grandTotal = 0;
-
-    const lineItems: BillItem[] = body.items.map((input) => {
-      const calculated = calculateLine(input);
-      totalItems += calculated.totalItems;
-      totalBeforeTax += calculated.totalBeforeTax;
-      totalTax += calculated.taxAmount;
-      grandTotal += calculated.lineTotal;
-      return calculated.item;
+    const items = body.items.map((it) => {
+      const { billItem, totals } = calcLine(it);
+      totalItems += totals.qty;
+      before += totals.before;
+      tax += totals.tax;
+      grand += totals.gross;
+      return billItem;
     });
 
-    // 3) Payment validation
-    const paymentInfo = validatePaymentInput(
-      body.payment,
-      grandTotal
-    );
+    const pay = validatePayment(body.payment, grand);
+    const cust = await upsertCustomer(body.customer);
 
-    // 4) Customer create / update
-    const customerDoc = await upsertCustomer(body.customer);
-    const customerSnapshot = buildCustomerSnapshot(
-      customerDoc,
-      body.customer
-    );
+    // Save customer-specific custom prices
+    for (const it of body.items) {
+      if (it.overridePriceForCustomer) {
+        await CustomerModel.updateOne(
+          { _id: cust._id },
+          { $pull: { customPrices: { product: it.productId } } }
+        );
 
-    // 5) Invoice number + bill date
-    const invoiceNumber = await getNextInvoiceNumber();
-
-    const billDate = body.billDate
-      ? new Date(body.billDate)
-      : new Date();
-
-    // 6) Amount collected / balance / status
-    const amountCollected =
-      (paymentInfo.cashAmount ?? 0) +
-      (paymentInfo.upiAmount ?? 0) +
-      (paymentInfo.cardAmount ?? 0);
-
-    const balanceAmount = grandTotal - amountCollected;
-
-    let status: BillDocument["status"] = "PENDING";
-    if (amountCollected <= 0) {
-      status = "PENDING";
-    } else if (amountCollected < grandTotal) {
-      status = "PARTIALLY_PAID";
-    } else {
-      status = "DELIVERED";
+        await CustomerModel.updateOne(
+          { _id: cust._id },
+          {
+            $push: {
+              customPrices: {
+                product: it.productId,
+                price: it.sellingPrice,
+              },
+            },
+          }
+        );
+      }
     }
 
-    // 7) Save bill
-    const billDoc = new BillModel({
-      invoiceNumber,
-      billDate,
-      customerInfo: customerSnapshot,
+    const invoice = await getNextInvoiceNumber();
+
+    const bill = await BillModel.create({
+      invoiceNumber: invoice,
+      billDate: body.billDate ? new Date(body.billDate) : new Date(),
+      customerInfo: takeSnapshot(cust, body.customer),
       companyGstNumber: body.companyGstNumber,
-      items: lineItems,
+      items,
       totalItems,
-      totalBeforeTax,
-      totalTax,
-      grandTotal,
-      payment: paymentInfo,
-      driver: body.driverId ?? undefined,
-      vehicleNumber: body.vehicleNumber ?? undefined,
-      amountCollected,
-      balanceAmount,
-      status,
+      totalBeforeTax: before,
+      totalTax: tax,
+      grandTotal: grand,
+      payment: pay,
+      amountCollected:
+        toNum(pay.cashAmount) + toNum(pay.upiAmount) + toNum(pay.cardAmount),
+      balanceAmount:
+        grand -
+        (toNum(pay.cashAmount) +
+          toNum(pay.upiAmount) +
+          toNum(pay.cardAmount)),
+      status:
+        grand ===
+        (toNum(pay.cashAmount) +
+          toNum(pay.upiAmount) +
+          toNum(pay.cardAmount))
+          ? "DELIVERED"
+          : "PENDING",
     });
 
-    await billDoc.save();
-
-    const billSummary: BillSummary = {
-      _id: billDoc._id.toString(),
-      invoiceNumber: billDoc.invoiceNumber,
-      billDate: billDoc.billDate.toISOString(),
-      grandTotal: billDoc.grandTotal,
-    };
-
+    return NextResponse.json({ bill });
+  } catch (e) {
     return NextResponse.json(
-      { bill: billSummary },
-      { status: 201 }
-    );
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
-    console.error("Billing POST error:", message);
-    return NextResponse.json(
-      { error: message },
+      { error: (e as Error).message },
       { status: 500 }
     );
   }
 }
 
-// ----------------- GET: list / history -----------------
+// -------------------- GET (LIST BILLS) --------------------
 
-export async function GET(
-  req: NextRequest
-): Promise<NextResponse<{ bills: BillDocument[] } | { error: string }>> {
-  try {
-    await dbConnect();
-
-    const searchParams = req.nextUrl.searchParams;
-    const customerQuery = searchParams.get("customer");
-    const phoneQuery = searchParams.get("phone");
-
-    const filter: Record<string, unknown> = {};
-
-    if (customerQuery) {
-      filter["customerInfo.name"] = {
-        $regex: customerQuery,
-        $options: "i",
-      };
-    }
-    if (phoneQuery) {
-      filter["customerInfo.phone"] = {
-        $regex: phoneQuery,
-        $options: "i",
-      };
-    }
-
-    const bills = await BillModel.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .exec();
-
-    return NextResponse.json({ bills });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
-  }
+export async function GET() {
+  await dbConnect();
+  const bills = await BillModel.find().sort({ createdAt: -1 });
+  return NextResponse.json({ bills });
 }

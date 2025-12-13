@@ -3,6 +3,7 @@ import axios from "axios";
 
 export interface Warehouse {
   _id: string;
+  id: string;
   name: string;
   address?: string;
   meta?: Record<string, unknown>;

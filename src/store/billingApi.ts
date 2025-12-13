@@ -1,27 +1,48 @@
-// store/billingApi.ts
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
+/* ---------------------------------------------
+   CUSTOMER TYPE
+--------------------------------------------- */
 export type Customer = {
-  _id: string;
+  _id?: string;
   name: string;
   shopName?: string;
   phone: string;
   address: string;
   gstNumber?: string;
+  customPrices?: { product: string; price: number }[];
+};
+export type AssignDriverPayload = {
+  billId: string;
+  driverId: string | null;
 };
 
+export type MarkDeliveredPayload = {
+  billId: string;
+};
+
+
+/* ---------------------------------------------
+   BILLING PRODUCT OPTION (from inventory)
+--------------------------------------------- */
 export type ProductForBilling = {
-  id: string;
-  name: string;
+  id: string;                // stockId
+  productId: string;
+  warehouseId: string;
+
+  productName: string;
+  warehouseName: string;
+
   sellingPrice: number;
   taxPercent: number;
-  itemsPerBox: number;
+  itemsPerBox: number;       // ALWAYS from product.perBoxItem
   boxesAvailable: number;
   looseAvailable: number;
-  warehouseId: string;
-  warehouseName: string;
 };
 
+/* ---------------------------------------------
+   PAYMENT
+--------------------------------------------- */
 export type PaymentMode = "CASH" | "UPI" | "CARD" | "SPLIT";
 
 export type CreateBillPaymentInput = {
@@ -31,7 +52,9 @@ export type CreateBillPaymentInput = {
   cardAmount?: number;
 };
 
-// stockId included
+/* ---------------------------------------------
+   BILLING ITEM INPUT (CREATE BILL)
+--------------------------------------------- */
 export type BillItemInput = {
   stockId: string;
   productId: string;
@@ -42,9 +65,16 @@ export type BillItemInput = {
   quantityBoxes: number;
   quantityLoose: number;
   itemsPerBox: number;
+
+  // 🔥 Added fields (server already uses them)
+  discountType: "NONE" | "PERCENT" | "CASH";
+  discountValue: number;
+  overridePriceForCustomer: boolean;
 };
 
-// 👇 server se jo item aata hai, usme warehouseId bhi rakho
+/* ---------------------------------------------
+   SERVER RESPONSE ITEM (GET BILL)
+--------------------------------------------- */
 export type BillItemForClient = {
   productName: string;
   sellingPrice: number;
@@ -52,14 +82,26 @@ export type BillItemForClient = {
   quantityBoxes: number;
   quantityLoose: number;
   itemsPerBox: number;
+
   totalItems: number;
   totalBeforeTax: number;
   taxAmount: number;
   lineTotal: number;
 
-  // warehouse wise filtering ke liye important:
+  // 🔥 Added missing fields
+  discountType?: "NONE" | "PERCENT" | "CASH";
+  discountValue?: number;
+
+  // warehouse reference
   warehouseId?: string;
   warehouse?: {
+    _id?: string;
+    id?: string;
+    name?: string;
+  };
+
+  // product reference
+  product?: {
     _id?: string;
     id?: string;
     name?: string;
@@ -73,6 +115,9 @@ export type PaymentInfoClient = {
   cardAmount: number;
 };
 
+/* ---------------------------------------------
+   BILL MODEL
+--------------------------------------------- */
 export type BillStatus =
   | "PENDING"
   | "OUT_FOR_DELIVERY"
@@ -83,30 +128,40 @@ export type Bill = {
   _id: string;
   invoiceNumber: string;
   billDate: string;
+
   customerInfo: {
+    customer?: string; // customer id (added for edit)
     name: string;
     shopName?: string;
     phone: string;
     address: string;
     gstNumber?: string;
   };
+
   companyGstNumber?: string;
+
   items: BillItemForClient[];
+
   totalItems: number;
   totalBeforeTax: number;
   totalTax: number;
   grandTotal: number;
+
   payment: PaymentInfoClient;
   amountCollected: number;
   balanceAmount: number;
+
   status: BillStatus;
 
-  // driver + delivery info
+  // delivery info
   driver?: string;
   vehicleNumber?: string;
   deliveredAt?: string;
 };
 
+/* ---------------------------------------------
+   API RESPONSE TYPES
+--------------------------------------------- */
 type CreateBillResponse = {
   bill: {
     _id: string;
@@ -116,28 +171,13 @@ type CreateBillResponse = {
   };
 };
 
-type CustomersResponse = {
-  customers: Customer[];
-};
+type CustomersResponse = { customers: Customer[] };
+type BillsListResponse = { bills: Bill[] };
+type SingleBillResponse = { bill: Bill };
 
-type BillsListResponse = {
-  bills: Bill[];
-};
-
-type SingleBillResponse = {
-  bill: Bill;
-};
-
-type AssignDriverPayload = {
-  billId: string;
-  driverId: string | null;
-};
-
-type MarkDeliveredPayload = {
-  billId: string;
-};
-
-// ---------- RETURNS TYPES (same as before) ----------
+/* ---------------------------------------------
+   BILL RETURN TYPES
+--------------------------------------------- */
 export type BillReturnItem = {
   productId: string;
   warehouseId: string;
@@ -151,13 +191,7 @@ export type BillReturnItem = {
 export type BillReturn = {
   _id: string;
   billId: string;
-  customerInfo: {
-    name: string;
-    shopName?: string;
-    phone: string;
-    address: string;
-    gstNumber?: string;
-  };
+  customerInfo: Bill["customerInfo"];
   reason?: string;
   note?: string;
   items: BillReturnItem[];
@@ -171,6 +205,27 @@ export type CreateBillReturnItemInput = {
   quantityLoose: number;
 };
 
+export type CreateBillReturnPayload = {
+  billId: string;
+  items: CreateBillReturnItemInput[];
+  reason?: string;
+  note?: string;
+};
+
+type BillReturnsResponse = { returns: BillReturn[] };
+type CreateBillReturnResponse = { returnDoc: BillReturn };
+
+/* ---------------------------------------------
+   LIST BILL ARGS (warehouse wise)
+--------------------------------------------- */
+export type BillsListArgs = {
+  search: string;
+  warehouseId?: string;
+};
+
+/* ---------------------------------------------
+   CREATE BILL PAYLOAD
+--------------------------------------------- */
 export type CreateBillPayload = {
   customer: Customer;
   companyGstNumber?: string;
@@ -181,27 +236,9 @@ export type CreateBillPayload = {
   vehicleNumber?: string;
 };
 
-export type CreateBillReturnPayload = {
-  billId: string;
-  items: CreateBillReturnItemInput[];
-  reason?: string;
-  note?: string;
-};
-
-type BillReturnsResponse = {
-  returns: BillReturn[];
-};
-
-type CreateBillReturnResponse = {
-  returnDoc: BillReturn;
-};
-
-// 👇 yaha args type change kiya: warehouseId optional
-export type BillsListArgs = {
-  search: string;
-  warehouseId?: string;
-};
-
+/* ---------------------------------------------
+   BILLING API
+--------------------------------------------- */
 export const billingApi = createApi({
   reducerPath: "billingApi",
   baseQuery: fetchBaseQuery({
@@ -209,7 +246,7 @@ export const billingApi = createApi({
   }),
   tagTypes: ["Bill", "BillList", "BillReturn"],
   endpoints: (builder) => ({
-    // -------- create bill --------
+    /* ---------- CREATE BILL ---------- */
     createBill: builder.mutation<CreateBillResponse, CreateBillPayload>({
       query: (payload) => ({
         url: "billing",
@@ -219,49 +256,39 @@ export const billingApi = createApi({
       invalidatesTags: ["BillList"],
     }),
 
-    // -------- list bills (warehouse wise) --------
+    /* ---------- LIST BILLS WITH FILTERS ---------- */
     listBills: builder.query<BillsListResponse, BillsListArgs>({
       query: ({ search, warehouseId }) => {
-        const trimmed = search.trim();
         const params: Record<string, string> = {};
 
-        if (trimmed) {
-          // existing filters
-          params.customer = trimmed;
-          params.phone = trimmed;
+        if (search.trim()) {
+          params.customer = search;
+          params.phone = search;
         }
 
-        if (warehouseId) {
-          // 👇 IMPORTANT: backend ko ye param pe filter lagana hoga
-          params.warehouseId = warehouseId;
-        }
+        if (warehouseId) params.warehouseId = warehouseId;
 
-        return {
-          url: "billing",
-          params,
-        };
+        return { url: "billing", params };
       },
       providesTags: (result) =>
         result?.bills
           ? [
-              ...result.bills.map((bill) => ({
-                type: "Bill" as const,
-                id: bill._id,
-              })),
-              "BillList",
-            ]
+            ...result.bills.map((b) => ({
+              type: "Bill" as const,
+              id: b._id,
+            })),
+            "BillList",
+          ]
           : ["BillList"],
     }),
 
-    // -------- get single bill --------
+    /* ---------- GET SINGLE BILL ---------- */
     getBill: builder.query<SingleBillResponse, string>({
-      query: (id) => ({
-        url: `billing/${id}`,
-      }),
+      query: (id) => ({ url: `billing/${id}` }),
       providesTags: (_res, _err, id) => [{ type: "Bill", id }],
     }),
 
-    // -------- update full bill --------
+    /* ---------- UPDATE BILL ---------- */
     updateBill: builder.mutation<
       SingleBillResponse,
       { id: string; payload: CreateBillPayload }
@@ -269,54 +296,29 @@ export const billingApi = createApi({
       query: ({ id, payload }) => ({
         url: `billing/${id}`,
         method: "PUT",
-        body: {
-          customer: payload.customer,
-          companyGstNumber: payload.companyGstNumber,
-          billDate: payload.billDate,
-          items: payload.items,
-          payment: payload.payment,
-          driverId: payload.driverId,
-          vehicleNumber: payload.vehicleNumber,
-        },
+        body: payload,
       }),
-      invalidatesTags: (_res, _err, arg) => [
-        { type: "Bill", id: arg.id },
-        "BillList",
-      ],
-    }),
-
-    // -------- update only payment --------
-    updateBillPayment: builder.mutation<
-      SingleBillResponse,
-      { id: string; payment: CreateBillPaymentInput }
-    >({
-      query: ({ id, payment }) => ({
-        url: `billing/${id}`,
-        method: "PUT",
-        body: { payment },
-      }),
-      invalidatesTags: (_res, _err, arg) => [
+      invalidatesTags: (_r, _e, arg) => [
         { type: "Bill", id: arg.id },
         "BillList",
       ],
     }),
 
     // -------- assign / change driver --------
-    assignBillDriver: builder.mutation<SingleBillResponse, AssignDriverPayload>(
-      {
-        query: ({ billId, driverId }) => ({
-          url: `billing/${billId}`,
-          method: "PUT",
-          body: {
-            driverId: driverId ?? undefined,
-          },
-        }),
-        invalidatesTags: (_res, _err, arg) => [
-          { type: "Bill", id: arg.billId },
-          "BillList",
-        ],
-      }
-    ),
+    // -------- assign / change driver --------
+    assignBillDriver: builder.mutation<SingleBillResponse, AssignDriverPayload>({
+      query: ({ billId, driverId }) => ({
+        url: `billing/${billId}`,
+        method: "PUT",
+        body: {
+          driverId: driverId ?? undefined,
+        },
+      }),
+      invalidatesTags: (_res, _err, arg) => [
+        { type: "Bill", id: arg.billId },
+        "BillList",
+      ],
+    }),
 
     // -------- mark bill delivered --------
     markBillDelivered: builder.mutation<
@@ -336,7 +338,24 @@ export const billingApi = createApi({
       ],
     }),
 
-    // -------- create bill return --------
+
+    /* ---------- UPDATE PAYMENT ONLY ---------- */
+    updateBillPayment: builder.mutation<
+      SingleBillResponse,
+      { id: string; payment: CreateBillPaymentInput }
+    >({
+      query: ({ id, payment }) => ({
+        url: `billing/${id}`,
+        method: "PUT",
+        body: { payment },
+      }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: "Bill", id: arg.id },
+        "BillList",
+      ],
+    }),
+
+    /* ---------- RETURN BILL ---------- */
     createBillReturn: builder.mutation<
       CreateBillReturnResponse,
       CreateBillReturnPayload
@@ -346,33 +365,30 @@ export const billingApi = createApi({
         method: "POST",
         body: { items, reason, note },
       }),
-      invalidatesTags: (_res, _err, arg) => [
+      invalidatesTags: (_r, _e, arg) => [
         { type: "Bill", id: arg.billId },
         "BillList",
         "BillReturn",
       ],
     }),
 
-    // -------- list returns per bill --------
     listBillReturns: builder.query<BillReturnsResponse, string>({
-      query: (billId) => ({
-        url: `billing/${billId}/return`,
-      }),
-      providesTags: (_res, _err, billId) => [
+      query: (billId) => ({ url: `billing/${billId}/return` }),
+      providesTags: (_r, _e, billId) => [
         { type: "Bill", id: billId },
         "BillReturn",
       ],
     }),
 
-    // -------- customers search --------
+    /* ---------- SEARCH CUSTOMERS ---------- */
     searchCustomers: builder.query<CustomersResponse, string>({
-      query: (search) => ({
+      query: (q) => ({
         url: "customers",
-        params: { q: search },
+        params: { q },
       }),
     }),
 
-    // -------- products search for billing --------
+    /* ---------- SEARCH PRODUCTS FOR BILLING ---------- */
     searchProducts: builder.query<ProductForBilling[], { q: string }>({
       query: ({ q }) => ({
         url: "products/billing-search",
@@ -388,9 +404,9 @@ export const {
   useGetBillQuery,
   useUpdateBillMutation,
   useUpdateBillPaymentMutation,
+  useCreateBillReturnMutation,
   useAssignBillDriverMutation,
   useMarkBillDeliveredMutation,
-  useCreateBillReturnMutation,
   useListBillReturnsQuery,
   useLazySearchCustomersQuery,
   useLazySearchProductsQuery,

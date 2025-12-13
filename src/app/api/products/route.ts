@@ -1,14 +1,9 @@
-// src/app/api/products/route.ts
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import dbConnect from "@/lib/mongodb";
 import Product from "@/models/Product";
 import Category from "@/models/Category";
 
-/**
- * Local Type definitions for lean/populated documents we return.
- * These reflect the plain objects returned by mongoose().lean() / .toObject()
- */
 type ObjIdLike = string | { toString?: () => string };
 
 interface LeanCategory {
@@ -31,13 +26,17 @@ interface LeanProduct {
   updatedAt?: Date | string;
   __v?: number;
   taxPercent?: number | string | null;
+  perBoxItem?: number | string | null;
+  hsnCode?: string | null; 
 }
 
-/** Convert an ObjIdLike (string or ObjectId-like) to string safely */
 function objIdToString(id: unknown): string {
   if (id == null) return "";
   if (typeof id === "string") return id;
-  if (typeof id === "object" && typeof (id as { toString?: unknown }).toString === "function") {
+  if (
+    typeof id === "object" &&
+    typeof (id as { toString?: unknown }).toString === "function"
+  ) {
     try {
       return String((id as { toString: () => string }).toString());
     } catch {
@@ -47,28 +46,29 @@ function objIdToString(id: unknown): string {
   return String(id);
 }
 
-/** Narrower shape for incoming categoryId object */
 type IncomingCategoryIdObj = { _id: unknown };
 
-/** Type guard for incoming categoryId object */
 function isIncomingCategoryIdObj(x: unknown): x is IncomingCategoryIdObj {
-  return typeof x === "object" && x !== null && Object.prototype.hasOwnProperty.call(x, "_id");
+  return (
+    typeof x === "object" &&
+    x !== null &&
+    Object.prototype.hasOwnProperty.call(x, "_id")
+  );
 }
 
-/* --------------------
-   GET /api/products
-   -------------------- */
+/* GET /api/products */
 export async function GET() {
   try {
     await dbConnect();
 
-    // raw result typed as unknown then narrowed below to LeanProduct[]
-    const raw = await Product.find({}).populate("categoryId", "name").sort({ createdAt: -1 }).lean();
+    const raw = await Product.find({})
+      .populate("categoryId", "name")
+      .sort({ createdAt: -1 })
+      .lean();
 
     const products = raw as unknown as LeanProduct[];
 
     const formatted = products.map((p) => {
-      // Normalize category object if populated
       const categoryObj =
         p?.categoryId && typeof p.categoryId === "object"
           ? {
@@ -87,13 +87,14 @@ export async function GET() {
     return NextResponse.json(formatted, { status: 200 });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch products" },
+      { status: 500 }
+    );
   }
 }
 
-/* --------------------
-   POST /api/products
-   -------------------- */
+/* POST /api/products */
 
 type IncomingBody = {
   name?: unknown;
@@ -102,6 +103,8 @@ type IncomingBody = {
   sellingPrice?: unknown;
   description?: unknown;
   taxPercent?: unknown;
+  perBoxItem?: unknown;
+  hsnCode?: unknown; 
 };
 
 export async function POST(req: Request) {
@@ -110,7 +113,6 @@ export async function POST(req: Request) {
 
     const body = (await req.json()) as IncomingBody;
 
-    // support categoryId as either string or object { _id: '...' }
     const incomingCategoryId =
       typeof body.categoryId === "string"
         ? body.categoryId
@@ -119,27 +121,58 @@ export async function POST(req: Request) {
         : undefined;
 
     const name = typeof body.name === "string" ? body.name : undefined;
-    const purchasePrice = body.purchasePrice !== undefined ? Number(body.purchasePrice as unknown) : undefined;
-    const sellingPrice = body.sellingPrice !== undefined ? Number(body.sellingPrice as unknown) : undefined;
-    const description = body.description === undefined ? null : String(body.description);
+    const purchasePrice =
+      body.purchasePrice !== undefined
+        ? Number(body.purchasePrice as unknown)
+        : undefined;
+    const sellingPrice =
+      body.sellingPrice !== undefined
+        ? Number(body.sellingPrice as unknown)
+        : undefined;
+    const description =
+      body.description === undefined ? null : String(body.description);
     const taxPercentRaw = body.taxPercent;
+    const perBoxItemRaw = body.perBoxItem;
 
     if (!name || !incomingCategoryId || purchasePrice === undefined || sellingPrice === undefined) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
     }
 
     const category = await Category.findById(incomingCategoryId);
-    if (!category) return NextResponse.json({ error: "Invalid category" }, { status: 400 });
-
-    const tax =
-      taxPercentRaw === undefined || taxPercentRaw === null ? 0 : Number(taxPercentRaw as unknown);
-    if (Number.isNaN(tax) || tax < 0 || tax > 100) {
-      return NextResponse.json({ error: "Invalid taxPercent (must be 0-100)" }, { status: 400 });
+    if (!category) {
+      return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
 
+    const tax =
+      taxPercentRaw === undefined || taxPercentRaw === null
+        ? 0
+        : Number(taxPercentRaw as unknown);
+    if (Number.isNaN(tax) || tax < 0 || tax > 100) {
+      return NextResponse.json(
+        { error: "Invalid taxPercent (must be 0-100)" },
+        { status: 400 }
+      );
+    }
+
+    const perBox =
+      perBoxItemRaw === undefined || perBoxItemRaw === null
+        ? 1
+        : Number(perBoxItemRaw as unknown);
+    if (Number.isNaN(perBox) || perBox <= 0) {
+      return NextResponse.json(
+        { error: "Invalid perBoxItem (must be > 0)" },
+        { status: 400 }
+      );
+    }
+    const hsnCode =
+  body.hsnCode === undefined || body.hsnCode === null
+    ? null
+    : String(body.hsnCode);
     const sku = "SKU-" + randomBytes(4).toString("hex").toUpperCase();
 
-    // build typed payload
     const data: {
       name: string;
       sku: string;
@@ -147,7 +180,9 @@ export async function POST(req: Request) {
       purchasePrice: number;
       sellingPrice: number;
       taxPercent: number;
+      perBoxItem: number;
       description: string | null;
+      hsnCode: string | null;
     } = {
       name,
       sku,
@@ -155,24 +190,21 @@ export async function POST(req: Request) {
       purchasePrice: Number(purchasePrice),
       sellingPrice: Number(sellingPrice),
       taxPercent: tax,
+      perBoxItem: perBox,
       description,
+      hsnCode,
     };
 
     const product = await Product.create(data);
     const populated = await product.populate("categoryId", "name");
-
-    // toObject returns plain object; narrow its type
-    const obj = populated.toObject();
-
-    const categoryField = populated.categoryId as LeanCategory | undefined;
+    const obj = populated.toObject() as LeanProduct & { _id: ObjIdLike };
+    const categoryField = populated
+      .categoryId as unknown as LeanCategory | undefined;
 
     return NextResponse.json(
       {
         ...obj,
-        id:
-          obj._1d && typeof (obj as Record<string, unknown>)._1d === "object" && typeof (obj as Record<string, unknown>)._1d === "function"
-            ? objIdToString((obj as Record<string, unknown>)._1d)
-            : objIdToString((obj as Record<string, unknown>)._id),
+        id: objIdToString(obj._id),
         category: categoryField
           ? {
               id: objIdToString(categoryField._id),
@@ -184,6 +216,9 @@ export async function POST(req: Request) {
     );
   } catch (err: unknown) {
     console.error(err);
-    return NextResponse.json({ error: (err as Error).message || "Failed to create product" }, { status: 500 });
+    return NextResponse.json(
+      { error: (err as Error).message || "Failed to create product" },
+      { status: 500 }
+    );
   }
 }

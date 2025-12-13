@@ -14,15 +14,28 @@ const billItemSchema = new Schema(
       required: true,
     },
     productName: { type: String, required: true },
-    sellingPrice: { type: Number, required: true }, // per piece
+    sellingPrice: { type: Number, required: true }, // per piece (GST included)
     taxPercent: { type: Number, required: true },
+
     quantityBoxes: { type: Number, required: true, min: 0 },
     quantityLoose: { type: Number, required: true, min: 0 },
     itemsPerBox: { type: Number, required: true, min: 1 },
+
     totalItems: { type: Number, required: true, min: 0 },
     totalBeforeTax: { type: Number, required: true, min: 0 },
     taxAmount: { type: Number, required: true, min: 0 },
     lineTotal: { type: Number, required: true, min: 0 },
+
+    // 🔥 Added missing Discount Fields
+    discountType: {
+      type: String,
+      enum: ["NONE", "PERCENT", "CASH"],
+      default: "NONE",
+    },
+    discountValue: { type: Number, default: 0 },
+
+    // 🔥 To store custom price override for customer
+    overridePriceForCustomer: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -60,7 +73,6 @@ const billSchema = new Schema(
 
     customerInfo: { type: customerSnapshotSchema, required: true },
 
-    // Your company GST that you want printed on bill header
     companyGstNumber: { type: String },
 
     items: { type: [billItemSchema], required: true },
@@ -72,9 +84,9 @@ const billSchema = new Schema(
 
     payment: { type: paymentSchema, required: true },
 
-    // Driver / delivery
     driver: { type: Schema.Types.ObjectId, ref: "User" },
     vehicleNumber: { type: String },
+
     amountCollected: { type: Number, required: true, default: 0 },
     balanceAmount: { type: Number, required: true },
 

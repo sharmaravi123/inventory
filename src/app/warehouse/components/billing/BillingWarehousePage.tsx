@@ -1,7 +1,6 @@
-// src/app/warehouse/components/billing/BillingWarehousePage.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   useListBillsQuery,
   useUpdateBillMutation,
@@ -9,177 +8,125 @@ import {
   Bill,
   CreateBillPayload,
   CreateBillPaymentInput,
+  BillItemInput,
 } from "@/store/billingApi";
+
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { submitBill, clearBillingError } from "@/store/billingSlice";
-import {
-  fetchInventory,
-  InventoryItem,
-} from "@/store/inventorySlice";
-import { fetchProducts } from "@/store/productSlice";
-import { fetchWarehouses } from "@/store/warehouseSlice";
+import { fetchInventory, InventoryItem } from "@/store/inventorySlice";
+import { fetchProducts, ProductType } from "@/store/productSlice";
+import { fetchWarehouses, Warehouse } from "@/store/warehouseSlice";
 
 import OrderForm from "@/app/admin/components/billing/OrderForm";
+import type {
+  BillFormItemState,
+  CustomerFormState,
+  BillingProductOption,
+  Totals,
+} from "@/app/admin/components/billing/BillingAdminPage";
+
 import BillList from "@/app/admin/components/billing/BillList";
 import BillPreview from "@/app/admin/components/billing/BillPreview";
 import EditPaymentModal from "@/app/admin/components/billing/EditPaymentModal";
 
 const COMPANY_GST_NUMBER = "27ABCDE1234F1Z5";
 
-type BillingWarehousePageProps = {
-  allowedWarehouseIdsProp?: string[];       // server-provided (admin-style)
-  assignedWarehouseForUser?: string[];      // same pattern as inventory
-};
+// ---------------------------- UTIL ----------------------------
 
-type CustomerFormState = {
-  name: string;
-  shopName: string;
-  phone: string;
-  address: string;
-  gstNumber: string;
-};
-
-type BillingProductOption = {
-  id: string;
-  productId: string;
-  warehouseId: string;
-  productName: string;
-  warehouseName: string;
-  sellingPrice: number;
-  taxPercent: number;
-  itemsPerBox: number;
-  boxesAvailable: number;
-  looseAvailable: number;
-};
-
-type BillFormItemState = {
-  id: string;
-  productSearch: string;
-  selectedProduct?: BillingProductOption;
-  quantityBoxes: number;
-  quantityLoose: number;
-};
-
-type Product = {
-  _id?: string | number;
-  id?: string | number;
-  name?: string;
-  purchasePrice?: number;
-  purchase_price?: number;
-  sellingPrice?: number;
-  sellPrice?: number;
-  price?: number;
-};
-
-type Warehouse = {
-  _id?: string | number;
-  id?: string | number;
-  name?: string;
-};
-
-export type Totals = {
-  totalItemsCount: number;
-  totalBeforeTax: number;
-  totalTax: number;
-  grandTotal: number;
-};
-
-const createRowId = (): string => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return Math.random().toString(36).substring(2, 11);
-};
-
-const initialCustomerState: CustomerFormState = {
-  name: "",
-  shopName: "",
-  phone: "",
-  address: "",
-  gstNumber: "",
-};
-
-const initialPaymentState: CreateBillPaymentInput = {
-  mode: "CASH",
-  cashAmount: 0,
-  upiAmount: 0,
-  cardAmount: 0,
-};
-
-const createEmptyItem = (): BillFormItemState => ({
-  id: createRowId(),
-  productSearch: "",
-  selectedProduct: undefined,
-  quantityBoxes: 0,
-  quantityLoose: 0,
-});
+const createRowId = () => crypto.randomUUID();
 
 const extractId = (ref: unknown): string | undefined => {
-  if (ref == null) return undefined;
+  if (!ref) return undefined;
   if (typeof ref === "string" || typeof ref === "number") return String(ref);
   if (typeof ref === "object") {
-    const obj = ref as Record<string, unknown>;
-    const candidate = obj._id ?? obj.id;
-    if (candidate == null || candidate === "") return undefined;
-    return String(candidate);
+    const obj = ref as { _id?: string; id?: string };
+    return obj._id ?? obj.id ? String(obj._id ?? obj.id) : undefined;
   }
   return undefined;
 };
 
+// ===============================================================
+// MAIN COMPONENT
+// ===============================================================
+
 export default function BillingWarehousePage({
   allowedWarehouseIdsProp,
   assignedWarehouseForUser,
-}: BillingWarehousePageProps) {
+}: {
+  allowedWarehouseIdsProp?: string[];
+  assignedWarehouseForUser?: string[];
+}) {
   const dispatch = useAppDispatch();
-  const billingState = useAppSelector((state) => state.billing);
 
-  const inventoryItems = useAppSelector(
-    (state) => state.inventory.items
-  ) as InventoryItem[];
-  const inventoryLoading = useAppSelector(
-    (state) => state.inventory.loading
-  ) as boolean;
-  const rawProducts = useAppSelector(
-    (state) => state.product.products ?? []
-  ) as Product[];
-  const rawWarehouses = useAppSelector(
-    (state) => state.warehouse.list ?? []
-  ) as Warehouse[];
+  // ------------------- STORE DATA -------------------
 
-  const [customer, setCustomer] =
-    useState<CustomerFormState>(initialCustomerState);
+  const inventoryItems = useAppSelector((s) => s.inventory.items) as InventoryItem[];
+  const inventoryLoading = useAppSelector((s) => s.inventory.loading);
+
+  const rawProducts = useAppSelector((s) => s.product.products ?? []) as ProductType[];
+  const rawWarehouses = useAppSelector((s) => s.warehouse.list ?? []) as Warehouse[];
+
+  const billingState = useAppSelector((s) => s.billing);
+
+  // ------------------- STATE -------------------
+
   const [items, setItems] = useState<BillFormItemState[]>([
-    createEmptyItem(),
+    {
+      id: createRowId(),
+      productSearch: "",
+      selectedProduct: undefined,
+      quantityBoxes: 0,
+      quantityLoose: 0,
+      discountType: "NONE",
+      discountValue: 0,
+      overridePriceForCustomer: false,
+    },
   ]);
-  const [payment, setPayment] =
-    useState<CreateBillPaymentInput>(initialPaymentState);
+
+  const [customer, setCustomer] = useState<CustomerFormState>({
+    name: "",
+    shopName: "",
+    phone: "",
+    address: "",
+    gstNumber: "",
+  });
+
+  const [payment, setPayment] = useState<CreateBillPaymentInput>({
+    mode: "CASH",
+    cashAmount: 0,
+    upiAmount: 0,
+    cardAmount: 0,
+  });
+
+  const [billDate, setBillDate] = useState<string>("");
 
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
 
-  const [triggerCustomerSearch, customerSearchResult] =
-    useLazySearchCustomersQuery();
-
   const [billSearch, setBillSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
 
-  const [billForPaymentEdit, setBillForPaymentEdit] =
-    useState<Bill | undefined>();
-  const [billForEdit, setBillForEdit] =
-    useState<Bill | undefined>();
-  const [billForPreview, setBillForPreview] =
-    useState<Bill | undefined>();
+  const [billForEdit, setBillForEdit] = useState<Bill>();
+  const [billForPreview, setBillForPreview] = useState<Bill>();
+  const [billForPaymentEdit, setBillForPaymentEdit] = useState<Bill>();
 
-  const {
-    data: billsData,
-    isLoading: billsLoading,
-    isFetching: billsFetching,
-    refetch: refetchBills,
-  } = useListBillsQuery({ search: billSearch });
+  const [triggerCustomerSearch, customerSearchResultRaw] =
+    useLazySearchCustomersQuery();
 
-  const [updateBill] = useUpdateBillMutation();
+  const customerSearchResult = customerSearchResultRaw.data ?? {
+    customers: [],
+  };
+
+  const { data: billsData, isLoading, refetch } = useListBillsQuery({
+    search: billSearch,
+  });
 
   const bills = billsData?.bills ?? [];
+  const [updateBill] = useUpdateBillMutation();
+
+  // ===============================================================
+  // LOAD INVENTORY / PRODUCTS / WAREHOUSES
+  // ===============================================================
 
   useEffect(() => {
     dispatch(fetchInventory());
@@ -187,434 +134,346 @@ export default function BillingWarehousePage({
     dispatch(fetchWarehouses());
   }, [dispatch]);
 
-  // 🔹 EXACT same pattern as UserInventoryManager
+  // ===============================================================
+  // ALLOWED WAREHOUSES
+  // ===============================================================
+
   const allowedWarehouseIds = useMemo(() => {
-    if (Array.isArray(assignedWarehouseForUser)) return assignedWarehouseForUser;
-    if (Array.isArray(allowedWarehouseIdsProp)) return allowedWarehouseIdsProp;
-    return undefined; // admin/all
-  }, [assignedWarehouseForUser, allowedWarehouseIdsProp]);
+    if (assignedWarehouseForUser?.length) return assignedWarehouseForUser;
+    if (allowedWarehouseIdsProp?.length) return allowedWarehouseIdsProp;
+    return [];
+  }, [allowedWarehouseIdsProp, assignedWarehouseForUser]);
 
-  const getProductById = (id?: string): Product | undefined => {
-    if (!id) return undefined;
-    const searchedId = String(id);
-    return rawProducts.find(
-      (p) => String(p._id ?? p.id) === searchedId
-    );
-  };
+  // ===============================================================
+  // GET PRODUCT & WAREHOUSE (memoized to remove warnings)
+  // ===============================================================
 
-  const getWarehouseById = (id?: string): Warehouse | undefined => {
-    if (!id) return undefined;
-    const searchedId = String(id);
-    return rawWarehouses.find(
-      (w) => String(w._id ?? w.id) === searchedId
-    );
-  };
+  const getProduct = useCallback(
+    (id?: string) => rawProducts.find((p) => String(p._id) === id),
+    [rawProducts]
+  );
 
-  const getSellingPrice = (productId?: string): number => {
-    const p = getProductById(productId);
-    if (!p) return 0;
-    const selling = [
-      p.sellingPrice,
-      p.sellPrice,
-      p.price,
-    ].find((v) => typeof v === "number") as number | undefined;
-    return selling ?? 0;
-  };
+  const getWarehouse = useCallback(
+    (id?: string) => rawWarehouses.find((w) => String(w._id) === id),
+    [rawWarehouses]
+  );
 
-  // 🔹 Only inventory from allowed warehouses (same idea as inventory manager)
-  const billingProducts: BillingProductOption[] = useMemo(() => {
+  // ===============================================================
+  // BILLING PRODUCT LIST (full typed — no anys)
+  // ===============================================================
+
+  const billingProducts = useMemo<BillingProductOption[]>(() => {
     return inventoryItems
-      .map((inv) => {
-        const invRecord = inv as unknown as Record<string, unknown>;
-        const pid = extractId(inv.productId ?? invRecord.product) ?? "";
-        const wid =
-          extractId(inv.warehouseId ?? invRecord.warehouse) ?? "";
+      .map((inv: InventoryItem) => {
+        const pid = extractId((inv as { product?: string }).product ?? inv.productId);
+        const wid = extractId((inv as { warehouse?: string }).warehouse ?? inv.warehouseId);
 
-        if (
-          Array.isArray(allowedWarehouseIds) &&
-          allowedWarehouseIds.length > 0 &&
-          !allowedWarehouseIds.includes(wid)
-        ) {
+        if (!pid || !wid) return undefined;
+        if (allowedWarehouseIds.length > 0 && !allowedWarehouseIds.includes(wid)) {
           return undefined;
         }
 
-        const prod = getProductById(pid);
-        const wh = getWarehouseById(wid);
+        const prod = getProduct(pid);
+        const wh = getWarehouse(wid);
 
-        const productName = prod?.name ?? pid ?? "Unknown product";
-        const warehouseName = wh?.name ?? wid ?? "Unknown warehouse";
-        const sellingPrice = getSellingPrice(pid);
-        const taxPercent = inv.tax ?? 0;
+        if (!prod) return undefined;
 
         return {
-          id: String(inv._id ?? `${pid}-${wid}`),
+          id: String(inv._id),
           productId: pid,
           warehouseId: wid,
-          productName,
-          warehouseName,
-          sellingPrice,
-          taxPercent,
-          itemsPerBox: inv.itemsPerBox,
-          boxesAvailable: inv.boxes,
-          looseAvailable: inv.looseItems,
+          productName: prod.name ?? "Unnamed Product",
+          warehouseName: wh?.name ?? "Warehouse",
+          sellingPrice: prod.sellingPrice ?? 0,
+          taxPercent: prod.taxPercent ?? 0,
+          itemsPerBox: prod.perBoxItem ?? 1,
+          boxesAvailable: inv.boxes ?? 0,
+          looseAvailable: inv.looseItems ?? 0,
         };
       })
-      .filter((bp): bp is BillingProductOption => Boolean(bp));
-  }, [inventoryItems, rawProducts, rawWarehouses, allowedWarehouseIds]);
+      .filter((x): x is BillingProductOption => Boolean(x));
+  }, [
+    inventoryItems,
+    rawProducts,
+    rawWarehouses,
+    allowedWarehouseIds,
+    getProduct,
+    getWarehouse,
+  ]);
 
-  // Debounced customer search
+  // ===============================================================
+  // CUSTOMER SEARCH
+  // ===============================================================
+
   useEffect(() => {
-    if (customerSearch.trim().length < 2) {
-      return;
-    }
-
-    const handle = window.setTimeout(() => {
-      void triggerCustomerSearch(customerSearch);
-    }, 400);
-
-    return () => window.clearTimeout(handle);
+    if (customerSearch.trim().length < 2) return;
+    const t = setTimeout(() => triggerCustomerSearch(customerSearch), 400);
+    return () => clearTimeout(t);
   }, [customerSearch, triggerCustomerSearch]);
 
-  const totals: Totals = useMemo(() => {
-    let totalItemsCount = 0;
-    let totalBeforeTax = 0;
-    let totalTax = 0;
-    let grandTotal = 0;
+  const onCustomerSelect = useCallback(
+    (id: string) => {
+      const doc = customerSearchResult.customers.find((c) => c._id === id);
+      if (!doc) return;
 
-    items.forEach((item) => {
-      const product = item.selectedProduct;
-      if (!product) return;
+      setSelectedCustomerId(doc._id ?? "");
 
-      const totalItemsForLine =
-        item.quantityBoxes * product.itemsPerBox +
-        item.quantityLoose;
+      setCustomer({
+        _id: doc._id,
+        name: doc.name,
+        shopName: doc.shopName ?? "",
+        phone: doc.phone,
+        address: doc.address,
+        gstNumber: doc.gstNumber ?? "",
+      });
+    },
+    [customerSearchResult]
+  );
 
-      const gross =
-        totalItemsForLine * product.sellingPrice;
+  // ===============================================================
+  // TOTALS
+  // ===============================================================
 
-      let lineBeforeTax = gross;
-      let taxAmount = 0;
+  const totals = useMemo<Totals>(() => {
+    let count = 0,
+      before = 0,
+      tax = 0,
+      total = 0;
 
-      if (product.taxPercent > 0) {
-        taxAmount =
-          (gross * product.taxPercent) /
-          (100 + product.taxPercent);
-        lineBeforeTax = gross - taxAmount;
-      }
+    items.forEach((it) => {
+      const p = it.selectedProduct;
+      if (!p) return;
 
-      const lineTotal = gross;
+      const qty = it.quantityBoxes * p.itemsPerBox + it.quantityLoose;
+      if (qty <= 0) return;
 
-      totalItemsCount += totalItemsForLine;
-      totalBeforeTax += lineBeforeTax;
-      totalTax += taxAmount;
-      grandTotal += lineTotal;
+      let price = p.sellingPrice;
+
+      if (it.discountType === "CASH") price -= Number(it.discountValue);
+      else if (it.discountType === "PERCENT") price -= (price * Number(it.discountValue)) / 100;
+
+      const gross = qty * price;
+      const tx = (gross * p.taxPercent) / (100 + p.taxPercent);
+      const bt = gross - tx;
+
+      count += qty;
+      before += bt;
+      tax += tx;
+      total += gross;
     });
 
     return {
-      totalItemsCount,
-      totalBeforeTax,
-      totalTax,
-      grandTotal,
+      totalItemsCount: count,
+      totalBeforeTax: before,
+      totalTax: tax,
+      grandTotal: total,
     };
   }, [items]);
 
-  const handleCustomerSelect = (id: string): void => {
-    const customerDoc = customerSearchResult.data?.customers.find(
-      (c) => c._id === id
-    );
-    if (!customerDoc) return;
+  // ===============================================================
+  // BUILD BILL ITEMS
+  // ===============================================================
 
-    setSelectedCustomerId(customerDoc._id);
-    setCustomer({
-      name: customerDoc.name,
-      shopName: customerDoc.shopName ?? "",
-      phone: customerDoc.phone,
-      address: customerDoc.address,
-      gstNumber: customerDoc.gstNumber ?? "",
-    });
-  };
+  const buildBillItems = (valid: BillFormItemState[]): BillItemInput[] => {
+    return valid.map((it) => {
+      const p = it.selectedProduct!;
+      let price = p.sellingPrice;
 
-  const buildBillItemsPayload = (validItems: BillFormItemState[]) => {
-    return validItems.map((item) => {
-      const product = item.selectedProduct;
-      if (!product) {
-        throw new Error("Product missing");
-      }
+      if (it.discountType === "CASH") price -= Number(it.discountValue);
+      else if (it.discountType === "PERCENT")
+        price -= (price * Number(it.discountValue)) / 100;
 
       return {
-        stockId: product.id,
-        productId: product.productId,
-        warehouseId: product.warehouseId,
-        productName: product.productName,
-        sellingPrice: product.sellingPrice,
-        taxPercent: product.taxPercent,
-        quantityBoxes: item.quantityBoxes,
-        quantityLoose: item.quantityLoose,
-        itemsPerBox: product.itemsPerBox,
+        stockId: p.id,
+        productId: p.productId,
+        warehouseId: p.warehouseId,
+        productName: p.productName,
+        sellingPrice: price,
+        taxPercent: p.taxPercent,
+        quantityBoxes: it.quantityBoxes,
+        quantityLoose: it.quantityLoose,
+        itemsPerBox: p.itemsPerBox,
+        discountType: it.discountType,
+        discountValue: Number(it.discountValue),
+        overridePriceForCustomer: it.overridePriceForCustomer,
       };
     });
   };
 
-  const handleCreateBill = async (): Promise<void> => {
-    if (!customer.name.trim() || !customer.phone.trim()) {
-      alert("Customer name and phone are required");
-      return;
-    }
+  // ===============================================================
+  // CREATE BILL
+  // ===============================================================
 
-    const validItems = items.filter(
-      (item) =>
-        item.selectedProduct &&
-        (item.quantityBoxes > 0 || item.quantityLoose > 0)
+  const createBill = async () => {
+    const valid = items.filter(
+      (it) => it.selectedProduct && (it.quantityBoxes > 0 || it.quantityLoose > 0)
     );
-
-    if (validItems.length === 0) {
-      alert("Add at least one product with quantity");
-      return;
-    }
-
-    const billItems = buildBillItemsPayload(validItems);
 
     const payload: CreateBillPayload = {
       customer: {
+        _id: selectedCustomerId,
         name: customer.name,
-        shopName: customer.shopName || undefined,
+        shopName: customer.shopName,
         phone: customer.phone,
         address: customer.address,
-        gstNumber: customer.gstNumber || undefined,
-        _id: ""
+        gstNumber: customer.gstNumber,
       },
       companyGstNumber: COMPANY_GST_NUMBER,
-      billDate: new Date().toISOString(),
-      items: billItems,
+      billDate: billDate || new Date().toISOString(),
+      items: buildBillItems(valid),
       payment,
     };
 
     dispatch(clearBillingError());
+    await dispatch(submitBill(payload)).unwrap();
 
-    try {
-      await dispatch(submitBill(payload)).unwrap();
-      alert("Bill created successfully");
+    alert("Created ✔");
 
-      setCustomer(initialCustomerState);
-      setItems([createEmptyItem()]);
-      setPayment(initialPaymentState);
-      setSelectedCustomerId("");
-      setCustomerSearch("");
-      setShowForm(false);
-      void refetchBills();
-    } catch {
-      // error stored in billing slice
-    }
+    // Reset
+    setCustomer({ name: "", shopName: "", phone: "", address: "", gstNumber: "" });
+    setItems([
+      {
+        id: createRowId(),
+        productSearch: "",
+        selectedProduct: undefined,
+        quantityBoxes: 0,
+        quantityLoose: 0,
+        discountType: "NONE",
+        discountValue: 0,
+        overridePriceForCustomer: false,
+      },
+    ]);
+    setPayment({ mode: "CASH", cashAmount: 0, upiAmount: 0, cardAmount: 0 });
+    setSelectedCustomerId("");
+    setBillDate("");
+
+    setShowForm(false);
+    refetch();
   };
 
-  const handleUpdateBill = async (): Promise<void> => {
+  // ===============================================================
+  // UPDATE BILL
+  // ===============================================================
+
+  const updateBillSubmit = async () => {
     if (!billForEdit) return;
 
-    if (!customer.name.trim() || !customer.phone.trim()) {
-      alert("Customer name and phone are required");
-      return;
-    }
-
-    const validItems = items.filter(
-      (item) =>
-        item.selectedProduct &&
-        (item.quantityBoxes > 0 || item.quantityLoose > 0)
+    const valid = items.filter(
+      (it) => it.selectedProduct && (it.quantityBoxes > 0 || it.quantityLoose > 0)
     );
-
-    if (validItems.length === 0) {
-      alert("Add at least one product with quantity");
-      return;
-    }
-
-    const billItems = buildBillItemsPayload(validItems);
 
     const payload: CreateBillPayload = {
       customer: {
+        _id: billForEdit.customerInfo.customer,
         name: customer.name,
-        shopName: customer.shopName || undefined,
+        shopName: customer.shopName,
         phone: customer.phone,
         address: customer.address,
-        gstNumber: customer.gstNumber || undefined,
-        _id: ""
+        gstNumber: customer.gstNumber,
       },
       companyGstNumber: billForEdit.companyGstNumber,
-      billDate: billForEdit.billDate,
-      items: billItems,
+      billDate: billDate || billForEdit.billDate,
+      items: buildBillItems(valid),
       payment,
     };
 
-    try {
-      await updateBill({ id: billForEdit._id, payload }).unwrap();
-      alert("Bill updated successfully");
-      setBillForEdit(undefined);
-      setShowForm(false);
-      void refetchBills();
-    } catch {
-      alert("Failed to update bill");
-    }
+    await updateBill({ id: billForEdit._id, payload }).unwrap();
+
+    alert("Updated ✔");
+
+    setShowForm(false);
+    setBillForEdit(undefined);
+    refetch();
   };
 
-  const isCreating = billingState.status === "loading";
-  const isSuccess = billingState.status === "succeeded";
-  const errorMessage = billingState.errorMessage;
-  const billsBusy = billsLoading || billsFetching;
-
-  const handleEditOrder = (bill: Bill): void => {
-    setBillForEdit(bill);
-    setShowForm(true);
-
-    setCustomer({
-      name: bill.customerInfo.name,
-      shopName: bill.customerInfo.shopName ?? "",
-      phone: bill.customerInfo.phone,
-      address: bill.customerInfo.address,
-      gstNumber: bill.customerInfo.gstNumber ?? "",
-    });
-
-    const formItems: BillFormItemState[] = bill.items.map((line) => {
-      const rawLine = line as {
-        product?: unknown;
-        warehouse?: unknown;
-        productName: string;
-        quantityBoxes: number;
-        quantityLoose: number;
-      };
-
-      const productId = extractId(rawLine.product) ?? "";
-      const warehouseForLine = extractId(rawLine.warehouse) ?? "";
-
-      const selectedProduct = billingProducts.find(
-        (bp) =>
-          bp.productId === productId &&
-          bp.warehouseId === warehouseForLine
-      );
-
-      return {
-        id: createRowId(),
-        productSearch: selectedProduct?.productName ?? rawLine.productName,
-        selectedProduct,
-        quantityBoxes: rawLine.quantityBoxes,
-        quantityLoose: rawLine.quantityLoose,
-      };
-    });
-
-    setItems(formItems);
-
-    setPayment({
-      mode: bill.payment.mode,
-      cashAmount: bill.payment.cashAmount,
-      upiAmount: bill.payment.upiAmount,
-      cardAmount: bill.payment.cardAmount,
-    });
-  };
-
-  const handlePaymentUpdated = (): void => {
-    setBillForPaymentEdit(undefined);
-    void refetchBills();
-  };
-
-  // 🔹 Filter bills by allowed warehouses (like inventory filter)
-  const warehouseBills = useMemo(() => {
-    if (!Array.isArray(allowedWarehouseIds) || allowedWarehouseIds.length === 0) {
-      // Admin case: see all bills
-      return bills;
-    }
-
-    return bills.filter((bill) =>
-      bill.items.some((line) => {
-        const rawLine = line as {
-          warehouseId?: string | number;
-          warehouse?: unknown;
-        };
-        const widFromField = rawLine.warehouseId;
-        const widFromPopulate = extractId(rawLine.warehouse);
-        const wid = widFromField ?? widFromPopulate;
-        if (!wid) return false;
-        return allowedWarehouseIds.includes(String(wid));
-      })
-    );
-  }, [bills, allowedWarehouseIds]);
+  // ===============================================================
+  // UI
+  // ===============================================================
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="mb-1 text-2xl font-bold text-[color:var(--color-primary)]">
-            Warehouse Billing
-          </h1>
-          <p className="text-sm text-slate-600">
-            Create and manage invoices using inventory from your assigned warehouse(s) only.
-          </p>
-        </div>
+      <header className="flex justify-between">
+        <h1 className="text-xl font-bold">Warehouse Billing</h1>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-2">
           <input
-            type="text"
+            className="border px-3 py-2 rounded"
+            placeholder="Search bills..."
             value={billSearch}
             onChange={(e) => setBillSearch(e.target.value)}
-            placeholder="Search bills by customer / phone"
-            className="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
+
           <button
-            type="button"
+            className="bg-blue-600 text-white px-4 py-2 rounded"
             onClick={() => {
-              setShowForm((prev) => !prev);
+              setShowForm(!showForm);
+
               if (!showForm) {
+                setItems([
+                  {
+                    id: createRowId(),
+                    productSearch: "",
+                    selectedProduct: undefined,
+                    quantityBoxes: 0,
+                    quantityLoose: 0,
+                    discountType: "NONE",
+                    discountValue: 0,
+                    overridePriceForCustomer: false,
+                  },
+                ]);
+                setCustomer({
+                  name: "",
+                  shopName: "",
+                  phone: "",
+                  address: "",
+                  gstNumber: "",
+                });
+                setPayment({
+                  mode: "CASH",
+                  cashAmount: 0,
+                  upiAmount: 0,
+                  cardAmount: 0,
+                });
                 setBillForEdit(undefined);
-                setCustomer(initialCustomerState);
-                setItems([createEmptyItem()]);
-                setPayment(initialPaymentState);
               }
             }}
-            className="rounded-lg bg-[color:var(--color-primary)] px-4 py-2 text-sm font-semibold text-[color:var(--color-white)]"
           >
-            {showForm ? "Close Form" : "Create Order"}
+            {showForm ? "Close" : "New Bill"}
           </button>
         </div>
       </header>
 
       {showForm && (
-        <section className="rounded-xl bg-[color:var(--color-neutral)] p-4">
-          <OrderForm
-            mode={billForEdit ? "edit" : "create"}
-            companyGstNumber={COMPANY_GST_NUMBER}
-            customer={customer}
-            setCustomer={setCustomer}
-            items={items}
-            setItems={setItems}
-            payment={payment}
-            setPayment={setPayment}
-            customerSearch={customerSearch}
-            setCustomerSearch={setCustomerSearch}
-            selectedCustomerId={selectedCustomerId}
-            setSelectedCustomerId={setSelectedCustomerId}
-            customerSearchResult={customerSearchResult.data}
-            billingProducts={billingProducts}
-            inventoryLoading={inventoryLoading}
-            totals={totals}
-            onCustomerSelect={handleCustomerSelect}
-            onSubmit={billForEdit ? handleUpdateBill : handleCreateBill}
-            isSubmitting={isCreating}
-            lastInvoiceNumber={billingState.lastInvoiceNumber}
-            isSuccess={isSuccess}
-          />
-        </section>
+        <OrderForm
+          mode={billForEdit ? "edit" : "create"}
+          companyGstNumber={COMPANY_GST_NUMBER}
+          billDate={billDate}
+          setBillDate={setBillDate}
+          customer={customer}
+          setCustomer={setCustomer}
+          items={items}
+          setItems={setItems}
+          payment={payment}
+          setPayment={setPayment}
+          customerSearch={customerSearch}
+          setCustomerSearch={setCustomerSearch}
+          selectedCustomerId={selectedCustomerId}
+          customerSearchResult={customerSearchResult}
+          billingProducts={billingProducts}
+          inventoryLoading={inventoryLoading}
+          totals={totals}
+          onCustomerSelect={onCustomerSelect}
+          onSubmit={billForEdit ? updateBillSubmit : createBill}
+          isSubmitting={billingState.status === "loading"}
+        />
       )}
 
-      <section>
-        <BillList
-          bills={warehouseBills}
-          loading={billsBusy}
-          onSelectBill={setBillForPreview}
-          onEditPayment={setBillForPaymentEdit}
-          onEditOrder={handleEditOrder}
-        />
-      </section>
-
-      <EditPaymentModal
-        bill={billForPaymentEdit}
-        onClose={() => setBillForPaymentEdit(undefined)}
-        onUpdated={handlePaymentUpdated}
+      <BillList
+        bills={bills}
+        loading={isLoading}
+        onSelectBill={setBillForPreview}
+        onEditPayment={setBillForPaymentEdit}
+        onEditOrder={setBillForEdit}
       />
 
       <BillPreview
@@ -622,11 +481,11 @@ export default function BillingWarehousePage({
         onClose={() => setBillForPreview(undefined)}
       />
 
-      {errorMessage && (
-        <div className="rounded-lg bg-[color:var(--color-error)]/10 p-3 text-sm text-[color:var(--color-error)]">
-          {errorMessage}
-        </div>
-      )}
+      <EditPaymentModal
+        bill={billForPaymentEdit}
+        onClose={() => setBillForPaymentEdit(undefined)}
+        onUpdated={() => refetch()}
+      />
     </div>
   );
 }

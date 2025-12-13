@@ -50,25 +50,33 @@ export default function DashboardOverview() {
   const totalWarehouses = warehouses?.length ?? 0;
   const totalDrivers = drivers?.length ?? 0;
 
-  // low-stock + out-of-stock
   const { lowStock, outOfStock } = useMemo(() => {
-    if (!inventory?.length) return { lowStock: 0, outOfStock: 0 };
+  if (!inventory?.length) return { lowStock: 0, outOfStock: 0 };
 
-    let low = 0;
-    let out = 0;
+  let low = 0;
+  let out = 0;
 
-    for (const item of inventory) {
-      const totalItems = item.boxes * item.itemsPerBox + item.looseItems;
-      const lowStockTotal =
-        (item.lowStockBoxes ?? 0) * item.itemsPerBox +
-        (item.lowStockItems ?? 0);
+  const getItemsPerBox = (productId: string) => {
+    const p = products.find((prod) => String(prod._id ?? prod.id) === productId);
+    return p?.perBoxItem ?? p?.perBoxItem ?? 1;
+  };
 
-      if (totalItems === 0) out += 1;
-      else if (totalItems > 0 && totalItems <= lowStockTotal) low += 1;
-    }
+  for (const item of inventory) {
+    const qtyPerBox = getItemsPerBox(item.productId ?? "");
 
-    return { lowStock: low, outOfStock: out };
-  }, [inventory]);
+    const totalItems = item.boxes * qtyPerBox + item.looseItems;
+
+    const lowStockTotal =
+      (item.lowStockBoxes ?? 0) * qtyPerBox +
+      (item.lowStockItems ?? 0);
+
+    if (totalItems === 0) out += 1;
+    else if (totalItems > 0 && totalItems <= lowStockTotal) low += 1;
+  }
+
+  return { lowStock: low, outOfStock: out };
+}, [inventory, products]);
+
 
   const totalStockAlerts = lowStock + outOfStock;
 

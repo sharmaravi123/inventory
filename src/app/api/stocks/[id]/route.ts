@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import Stock from "@/models/Stock";
+import Product, { IProduct } from "@/models/Product";
 import { getUserFromTokenOrDb } from "@/lib/access";
 
 function normalize(n: unknown, fallback = 0): number {
@@ -8,19 +9,16 @@ function normalize(n: unknown, fallback = 0): number {
   return Number.isFinite(v) ? v : fallback;
 }
 
-/** Strict warehouse type (matches your getUserFromTokenOrDb user.warehouses shape) */
 interface UserWarehouse {
   _id?: unknown;
 }
 
-/** Strict user type */
 interface UserType {
   role?: string;
   access?: { level?: string; permissions?: string[] };
   warehouses?: UserWarehouse[];
 }
 
-/** Handles Next.js promise/normal param */
 async function resolveParams(input: { params: unknown } | undefined) {
   if (!input) return null;
 
@@ -37,7 +35,6 @@ async function resolveParams(input: { params: unknown } | undefined) {
   return typeof id === "string" ? id : null;
 }
 
-/** Read token from Authorization header OR cookie */
 function getTokenFromRequest(req: NextRequest): string | null {
   const authHeader = req.headers.get("authorization");
   if (authHeader) {
@@ -53,11 +50,9 @@ function getTokenFromRequest(req: NextRequest): string | null {
 
 type StockUpdatePayload = {
   boxes?: unknown;
-  itemsPerBox?: unknown;
   looseItems?: unknown;
   lowStockBoxes?: unknown;
   lowStockItems?: unknown;
-  tax?: unknown;
 };
 
 export async function PUT(req: NextRequest, ctx: { params: unknown }) {
@@ -66,12 +61,13 @@ export async function PUT(req: NextRequest, ctx: { params: unknown }) {
 
     const token = getTokenFromRequest(req);
 
-    // token bilkul hi nahi hai -> not logged in
     if (!token) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      );
     }
 
-    // Try resolving user; agar null mila to bhi request proceed karega
     let user: UserType | null = null;
     try {
       user = (await getUserFromTokenOrDb(token)) as UserType | null;
@@ -81,22 +77,28 @@ export async function PUT(req: NextRequest, ctx: { params: unknown }) {
 
     const id = await resolveParams(ctx);
     if (!id) {
-      return NextResponse.json({ error: "Missing id param" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing id param" },
+        { status: 400 }
+      );
     }
 
     const body = (await req.json()) as StockUpdatePayload;
 
     const existing = await Stock.findById(id).exec();
     if (!existing) {
-      return NextResponse.json({ error: "Stock not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Stock not found" },
+        { status: 404 }
+      );
     }
 
-    // warehouse permission check
-    // Sirf tab karein jab user resolve ho gaya ho aur wo admin / level all na ho
     if (user && user.access?.level !== "all" && user.role !== "admin") {
       const warehouses = user.warehouses ?? [];
       const allowedIds = warehouses
-        .map((w): string | null => (w._id !== undefined ? String(w._id) : null))
+        .map((w): string | null =>
+          w._id !== undefined ? String(w._id) : null
+        )
         .filter((x): x is string => x !== null);
 
       const stockWarehouseId = String(
@@ -107,20 +109,45 @@ export async function PUT(req: NextRequest, ctx: { params: unknown }) {
 
       if (stockWarehouseId && !allowedIds.includes(stockWarehouseId)) {
         return NextResponse.json(
-          { error: "Forbidden", detail: "Not allowed to modify this stock" },
+          {
+            error: "Forbidden",
+            detail: "Not allowed to modify this stock",
+          },
           { status: 403 }
         );
       }
     }
 
-    const boxes = normalize(body.boxes ?? existing.boxes, existing.boxes);
-    const itemsPerBox = Math.max(
-      1,
-      normalize(body.itemsPerBox ?? existing.itemsPerBox, existing.itemsPerBox)
+    const productIdValue = (existing as { productId?: unknown }).productId;
+    const productId =
+      typeof productIdValue === "string"
+        ? productIdValue
+        : String(productIdValue ?? "");
+
+    let perBox = 1;
+    if (productId) {
+      const product = (await Product.findById(productId)
+        .lean()
+        .exec()) as IProduct | null;
+      const perBoxItemFromProduct =
+        product &&
+        typeof (product as { perBoxItem?: unknown }).perBoxItem === "number"
+          ? (product as { perBoxItem: number }).perBoxItem
+          : 1;
+      perBox = perBoxItemFromProduct > 0 ? perBoxItemFromProduct : 1;
+    }
+
+    const boxes = normalize(
+      body.boxes ?? existing.boxes,
+      existing.boxes
     );
+
     let looseItems = Math.max(
       0,
-      normalize(body.looseItems ?? existing.looseItems, existing.looseItems)
+      normalize(
+        body.looseItems ?? existing.looseItems,
+        existing.looseItems
+      )
     );
 
     const lowStockItems =
@@ -133,23 +160,19 @@ export async function PUT(req: NextRequest, ctx: { params: unknown }) {
         ? normalize(body.lowStockBoxes, 0)
         : existing.lowStockBoxes;
 
-    const tax = normalize(body.tax ?? existing.tax, existing.tax);
-
-    if (itemsPerBox > 0 && looseItems >= itemsPerBox) {
-      const extra = Math.floor(looseItems / itemsPerBox);
-      looseItems = looseItems % itemsPerBox;
-      // boxes += extra; // agar auto box increase chahiye to uncomment
+    if (perBox > 0 && looseItems >= perBox) {
+      const extra = Math.floor(looseItems / perBox);
+      // boxes += extra; // agar auto box increase chahiye to server side me yahan uncomment kar sakte ho
+      looseItems = looseItems % perBox;
     }
 
-    const totalItems = boxes * itemsPerBox + looseItems;
+    const totalItems = boxes * perBox + looseItems;
 
     existing.boxes = boxes;
-    existing.itemsPerBox = itemsPerBox;
     existing.looseItems = looseItems;
     existing.totalItems = totalItems;
     existing.lowStockItems = lowStockItems ?? null;
     existing.lowStockBoxes = lowStockBoxes ?? null;
-    existing.tax = tax;
 
     const saved = await existing.save();
     const out = saved.toObject();
@@ -163,7 +186,12 @@ export async function PUT(req: NextRequest, ctx: { params: unknown }) {
     // eslint-disable-next-line no-console
     console.error("PUT ERROR:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to update stock" },
+      {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Failed to update stock",
+      },
       { status: 500 }
     );
   }
@@ -176,7 +204,10 @@ export async function DELETE(req: NextRequest, ctx: { params: unknown }) {
     const token = getTokenFromRequest(req);
 
     if (!token) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      );
     }
 
     let user: UserType | null = null;
@@ -188,18 +219,26 @@ export async function DELETE(req: NextRequest, ctx: { params: unknown }) {
 
     const id = await resolveParams(ctx);
     if (!id) {
-      return NextResponse.json({ error: "Missing id param" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing id param" },
+        { status: 400 }
+      );
     }
 
     const existing = await Stock.findById(id).exec();
     if (!existing) {
-      return NextResponse.json({ error: "Stock not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Stock not found" },
+        { status: 404 }
+      );
     }
 
     if (user && user.access?.level !== "all" && user.role !== "admin") {
       const warehouses = user.warehouses ?? [];
       const allowedIds = warehouses
-        .map((w): string | null => (w._id !== undefined ? String(w._id) : null))
+        .map((w): string | null =>
+          w._id !== undefined ? String(w._id) : null
+        )
         .filter((x): x is string => x !== null);
 
       const stockWarehouseId = String(
@@ -210,7 +249,10 @@ export async function DELETE(req: NextRequest, ctx: { params: unknown }) {
 
       if (stockWarehouseId && !allowedIds.includes(stockWarehouseId)) {
         return NextResponse.json(
-          { error: "Forbidden", detail: "Not allowed to delete this stock" },
+          {
+            error: "Forbidden",
+            detail: "Not allowed to delete this stock",
+          },
           { status: 403 }
         );
       }
@@ -223,7 +265,12 @@ export async function DELETE(req: NextRequest, ctx: { params: unknown }) {
     // eslint-disable-next-line no-console
     console.error("DELETE ERROR:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to delete stock" },
+      {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Failed to delete stock",
+      },
       { status: 500 }
     );
   }

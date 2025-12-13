@@ -7,6 +7,9 @@ export interface IProduct extends Document {
   purchasePrice: number;
   sellingPrice: number;
   description?: string | null;
+  taxPercent?: number | null;
+  perBoxItem?: number;
+  hsnCode?: string | null; 
   createdByAdminId?: string | null;
   createdByWarehouseId?: string | null;
   createdAt: Date;
@@ -21,11 +24,15 @@ const ProductSchema = new Schema<IProduct>(
     purchasePrice: { type: Number, required: true, default: 0 },
     sellingPrice: { type: Number, required: true, default: 0 },
     description: { type: String, default: null },
+    taxPercent: { type: Number, default: 0 },
+    perBoxItem: { type: Number, default: 1 },
+    hsnCode: { type: String, default: null, trim: true }, 
     createdByAdminId: { type: String, default: null },
     createdByWarehouseId: { type: String, default: null },
   },
   { timestamps: true }
 );
 
-const Product = mongoose.models.Product || mongoose.model<IProduct>("Product", ProductSchema);
+const Product =
+  mongoose.models.Product || mongoose.model<IProduct>("Product", ProductSchema);
 export default Product;

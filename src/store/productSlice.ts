@@ -1,12 +1,15 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 
 export interface ProductType {
+  _id: string;
   id: string;
   name: string;
   sku: string;
   categoryId: string;
   category?: { id: string; name: string } | null;
   purchasePrice: number;
+    taxPercent: number;     // ✅ FIXED REQUIRED
+  perBoxItem: number;
   sellingPrice: number;
   description?: string;
 }
