@@ -233,33 +233,43 @@ export default function BillingWarehousePage({
   // ===============================================================
   // TOTALS
   // ===============================================================
-
-  const totals = useMemo<Totals>(() => {
-    let count = 0,
-      before = 0,
-      tax = 0,
-      total = 0;
+const totals: Totals = useMemo(() => {
+    let count = 0;
+    let before = 0;
+    let tax = 0;
+    let total = 0;
+    let discountTotal = 0;
 
     items.forEach((it) => {
+      if (!it.selectedProduct) return;
       const p = it.selectedProduct;
-      if (!p) return;
 
-      const qty = it.quantityBoxes * p.itemsPerBox + it.quantityLoose;
-      if (qty <= 0) return;
+      const totalPieces =
+        it.quantityBoxes * p.itemsPerBox + it.quantityLoose;
+      if (totalPieces <= 0) return;
 
-      let price = p.sellingPrice;
+      const baseTotal = totalPieces * p.sellingPrice;
 
-      if (it.discountType === "CASH") price -= Number(it.discountValue);
-      else if (it.discountType === "PERCENT") price -= (price * Number(it.discountValue)) / 100;
+      let discountAmount = 0;
+      if (it.discountType === "PERCENT") {
+        discountAmount = (baseTotal * it.discountValue) / 100;
+      } else if (it.discountType === "CASH") {
+        discountAmount = it.discountValue;
+      }
 
-      const gross = qty * price;
-      const tx = (gross * p.taxPercent) / (100 + p.taxPercent);
-      const bt = gross - tx;
+      discountAmount = Math.min(discountAmount, baseTotal);
 
-      count += qty;
-      before += bt;
-      tax += tx;
-      total += gross;
+      const lineTotal = baseTotal - discountAmount;
+
+      const lineTax =
+        (lineTotal * p.taxPercent) / (100 + p.taxPercent);
+      const lineBeforeTax = lineTotal - lineTax;
+
+      count += totalPieces;
+      before += lineBeforeTax;
+      tax += lineTax;
+      total += lineTotal;
+      discountTotal += discountAmount;
     });
 
     return {
@@ -267,6 +277,7 @@ export default function BillingWarehousePage({
       totalBeforeTax: before,
       totalTax: tax,
       grandTotal: total,
+      discountTotal,
     };
   }, [items]);
 

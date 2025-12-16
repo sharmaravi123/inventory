@@ -66,8 +66,8 @@ function numberToINRWords(amount: number): string {
   const three = (n: number) =>
     Math.floor(n / 100)
       ? a[Math.floor(n / 100)] +
-        " hundred" +
-        (n % 100 ? " " + two(n % 100) : "")
+      " hundred" +
+      (n % 100 ? " " + two(n % 100) : "")
       : two(n);
 
   let num = rupees;
@@ -108,25 +108,36 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
     if (!bill) return [];
 
     return bill.items.map((l) => {
-      const pcs =
+      const totalPieces =
         (l.quantityBoxes ?? 0) * (l.itemsPerBox ?? 1) +
         (l.quantityLoose ?? 0);
 
-      const base = pcs * (l.sellingPrice ?? 0);
-      const total = l.lineTotal ?? base;
+      const baseAmount = totalPieces * (l.sellingPrice ?? 0);
+      const finalAmount = l.lineTotal ?? baseAmount;
 
       return {
         ...l,
-        totalPieces: pcs,
-        discountAmount: base - total,
+        totalPieces,
+        discountAmount: Math.max(baseAmount - finalAmount, 0),
       };
     });
   }, [bill]);
 
+
   /* -------------------- GUARD -------------------- */
   if (!bill) return null;
 
-  const discountTotal = lines.reduce((s, l) => s + l.discountAmount, 0);
+  const lineDiscountTotal = lines.reduce(
+    (sum, l) => sum + l.discountAmount,
+    0
+  );
+  // const billLevelDiscount = bill.overallDiscount ?? 0;
+
+  const discountTotal = lines.reduce(
+    (sum, l) => sum + l.discountAmount,
+    0
+  );
+
   const cgst = (bill.totalTax ?? 0) / 2;
   const sgst = (bill.totalTax ?? 0) / 2;
 
@@ -278,8 +289,13 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                       {l.hsnCode ?? "-"}
                     </td>
                     <td className="border border-black p-1">
-                      {l.totalPieces} PCS
+                      {l.quantityBoxes ?? 0} box /{" "}
+                      {l.quantityLoose ?? 0} loose
+                      <div className="text-[10px] text-slate-600">
+                        ({l.totalPieces} pcs)
+                      </div>
                     </td>
+
                     <td className="border border-black p-1">
                       {l.sellingPrice?.toFixed(2)}
                     </td>

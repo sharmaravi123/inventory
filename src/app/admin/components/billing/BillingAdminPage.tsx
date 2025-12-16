@@ -70,6 +70,7 @@ export type Totals = {
   totalBeforeTax: number;
   totalTax: number;
   grandTotal: number;
+  discountTotal: number,
 };
 
 const randomId = () => crypto.randomUUID();
@@ -214,8 +215,7 @@ export default function BillingAdminPage() {
       const wh = getWarehouse(wid);
 
       const perPiecePrice =
-        customerSavedPrices[pid] ??
-        ((prod?.sellingPrice as number) ?? 0);
+        (prod?.sellingPrice as number) ?? 0;
 
       // yahan null‑safe cast
       const prodAny = (prod ?? {}) as {
@@ -306,6 +306,7 @@ export default function BillingAdminPage() {
     let before = 0;
     let tax = 0;
     let total = 0;
+    let discountTotal = 0;
 
     items.forEach((it) => {
       if (!it.selectedProduct) return;
@@ -316,15 +317,18 @@ export default function BillingAdminPage() {
       if (totalPieces <= 0) return;
 
       const baseTotal = totalPieces * p.sellingPrice;
-      let discountAmount = 0;
 
+      let discountAmount = 0;
       if (it.discountType === "PERCENT") {
         discountAmount = (baseTotal * it.discountValue) / 100;
       } else if (it.discountType === "CASH") {
         discountAmount = it.discountValue;
       }
 
-      const lineTotal = Math.max(0, baseTotal - discountAmount);
+      discountAmount = Math.min(discountAmount, baseTotal);
+
+      const lineTotal = baseTotal - discountAmount;
+
       const lineTax =
         (lineTotal * p.taxPercent) / (100 + p.taxPercent);
       const lineBeforeTax = lineTotal - lineTax;
@@ -333,6 +337,7 @@ export default function BillingAdminPage() {
       before += lineBeforeTax;
       tax += lineTax;
       total += lineTotal;
+      discountTotal += discountAmount;
     });
 
     return {
@@ -340,8 +345,10 @@ export default function BillingAdminPage() {
       totalBeforeTax: before,
       totalTax: tax,
       grandTotal: total,
+      discountTotal,
     };
   }, [items]);
+
 
   const createBill = async () => {
     if (!customer.name || !customer.phone)
@@ -474,29 +481,38 @@ export default function BillingAdminPage() {
     setSelectedCustomerId(bill.customerInfo.customer || "");
 
     const mappedItems: BillFormItemState[] = bill.items.map((it) => {
-      // 🔑 inventory product find karo
-      const matchedInventoryProduct = billingProducts.find(
-        (bp) =>
-          bp.productId === String(it.product) &&
-          bp.warehouseId === String(it.warehouse)
-      );
+  const matchedInventoryProduct = billingProducts.find(
+    (bp) =>
+      bp.productId === String(it.product) &&
+      bp.warehouseId === String(it.warehouse)
+  );
 
-      return {
-        id: crypto.randomUUID(),
-        productSearch: it.productName,
-        selectedProduct: matchedInventoryProduct
-          ? {
-            ...matchedInventoryProduct,
-            sellingPrice: it.sellingPrice, // bill price preserve
-          }
-          : undefined, // fallback safe
-        quantityBoxes: it.quantityBoxes,
-        quantityLoose: it.quantityLoose,
-        discountType: it.discountType ?? "NONE",
-        discountValue: it.discountValue ?? 0,
-        overridePriceForCustomer: true,
-      };
-    });
+  if (!matchedInventoryProduct) return emptyItem();
+
+  return {
+    id: crypto.randomUUID(),
+    productSearch: it.productName,
+
+    // 🔒 PRICE COMES FROM BILL (NOT INVENTORY)
+    selectedProduct: {
+      ...matchedInventoryProduct,
+
+      // ✅ THIS IS THE MOST IMPORTANT LINE
+      sellingPrice: it.sellingPrice,
+    },
+
+    quantityBoxes: it.quantityBoxes,
+    quantityLoose: it.quantityLoose,
+
+    discountType: it.discountType ?? "NONE",
+    discountValue: it.discountValue ?? 0,
+
+    overridePriceForCustomer: true,
+  };
+});
+
+
+
 
     setItems(mappedItems.length ? mappedItems : [emptyItem()]);
 

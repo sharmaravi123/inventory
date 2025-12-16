@@ -126,6 +126,29 @@ export default function OrderForm({
     customerSearchResult?.customers ??
     [];
 
+  const totalDiscount = useMemo(() => {
+    return items.reduce((sum, item) => {
+      const p = item.selectedProduct;
+      if (!p) return sum;
+
+      const pcs =
+        item.quantityBoxes * p.itemsPerBox +
+        item.quantityLoose;
+
+      const base = pcs * p.sellingPrice;
+
+      let discount = 0;
+      if (item.discountType === "PERCENT") {
+        discount = (base * item.discountValue) / 100;
+      } else if (item.discountType === "CASH") {
+        discount = item.discountValue;
+      }
+
+      // ✅ discount cap
+      return sum + Math.min(discount, base);
+    }, 0);
+  }, [items]);
+
   return (
     <div className="relative">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_0_0,_rgba(59,130,246,0.08),_transparent_55%),_radial-gradient(circle_at_100%_0,_rgba(34,197,94,0.08),_transparent_55%)]" />
@@ -353,15 +376,16 @@ export default function OrderForm({
                       item.quantityLoose;
                     baseTotal = totalPieces * p.sellingPrice;
                     if (item.discountType === "PERCENT") {
-                      discountAmount =
-                        (baseTotal * item.discountValue) / 100;
+                      discountAmount = (baseTotal * item.discountValue) / 100;
                     } else if (item.discountType === "CASH") {
                       discountAmount = item.discountValue;
                     }
-                    lineTotal = Math.max(
-                      0,
-                      baseTotal - discountAmount
-                    );
+
+                    /* ✅ CAP discount so it never exceeds base total */
+                    discountAmount = Math.min(discountAmount, baseTotal);
+
+                    lineTotal = baseTotal - discountAmount;
+
                   }
 
                   return (
@@ -397,8 +421,11 @@ export default function OrderForm({
                           </label>
                           <select
                             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                            disabled={mode === "edit"}
                             value={item.selectedProduct?.id || ""}
                             onChange={(e) => {
+                              if (mode === "edit") return;
+
                               const selected = billingProducts.find(
                                 (p) => p.id === e.target.value
                               );
@@ -414,6 +441,7 @@ export default function OrderForm({
                                 productSearch: selected.productName,
                               });
                             }}
+
                           >
                             <option value="">Select product...</option>
                             {billingProducts.map((p) => (
@@ -448,13 +476,18 @@ export default function OrderForm({
                                     key={fp.id}
                                     onClick={() =>
                                       updateItem(item.id, {
-                                        selectedProduct: fp,
-                                        productSearch:
-                                          fp.productName,
+                                        selectedProduct: {
+                                          ...fp,
+                                          sellingPrice:
+                                            item.selectedProduct?.sellingPrice ?? fp.sellingPrice,
+                                        },
+                                        productSearch: fp.productName,
                                       })
                                     }
                                     className="w-full px-3 py-2 text-left text-xs sm:text-sm hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
                                   >
+
+
                                     <div className="font-medium text-slate-900">
                                       {fp.productName}
                                     </div>
@@ -636,9 +669,9 @@ export default function OrderForm({
                                 step={0.01}
                                 value={p.sellingPrice || ""}
                                 onChange={(e) => {
-                                  const newPrice = safeNum(
-                                    e.target.value
-                                  );
+                                  if (mode === "edit") return; // 🔒 HARD STOP
+
+                                  const newPrice = safeNum(e.target.value);
                                   updateItem(item.id, {
                                     selectedProduct: {
                                       ...p,
@@ -647,6 +680,7 @@ export default function OrderForm({
                                     overridePriceForCustomer: true,
                                   });
                                 }}
+
                                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
                               />
                               <div className="mt-0.5 text-[10px] text-slate-500">
@@ -839,6 +873,12 @@ export default function OrderForm({
                 <div className="flex justify-between text-slate-700">
                   <span>Sub total</span>
                   <span>₹{totals.totalBeforeTax.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-700">
+                  <span>Discount</span>
+                  <span className="text-emerald-600">
+                    −₹{totals.discountTotal.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between text-slate-700">
                   <span>CGST</span>
