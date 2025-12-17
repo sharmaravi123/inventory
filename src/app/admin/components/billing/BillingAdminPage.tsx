@@ -47,6 +47,7 @@ export type BillingProductOption = {
   warehouseId: string;
   productName: string;
   warehouseName: string;
+  basePrice: number;
   sellingPrice: number; // price per PIECE (GST incl)
   taxPercent: number;
   itemsPerBox: number;
@@ -238,6 +239,7 @@ export default function BillingAdminPage() {
         warehouseId: wid,
         productName: prod?.name ?? "Unnamed Product",
         warehouseName: wh?.name ?? "Unknown Warehouse",
+        basePrice: perPiecePrice,
         sellingPrice: perPiecePrice,
         taxPercent: (prodAny.taxPercent as number) ?? 0,
         itemsPerBox,
@@ -309,36 +311,43 @@ export default function BillingAdminPage() {
     let discountTotal = 0;
 
     items.forEach((it) => {
-      if (!it.selectedProduct) return;
-      const p = it.selectedProduct;
+  if (!it.selectedProduct) return;
 
-      const totalPieces =
-        it.quantityBoxes * p.itemsPerBox + it.quantityLoose;
-      if (totalPieces <= 0) return;
+  const p = it.selectedProduct;
 
-      const baseTotal = totalPieces * p.sellingPrice;
+  const totalPieces =
+    it.quantityBoxes * p.itemsPerBox +
+    it.quantityLoose;
 
-      let discountAmount = 0;
-      if (it.discountType === "PERCENT") {
-        discountAmount = (baseTotal * it.discountValue) / 100;
-      } else if (it.discountType === "CASH") {
-        discountAmount = it.discountValue;
-      }
+  if (totalPieces <= 0) return;
 
-      discountAmount = Math.min(discountAmount, baseTotal);
+  // ✅ USE SELLING PRICE (USER EDITED)
+ const baseTotal = totalPieces * p.sellingPrice;
 
-      const lineTotal = baseTotal - discountAmount;
+  let discountAmount = 0;
 
-      const lineTax =
-        (lineTotal * p.taxPercent) / (100 + p.taxPercent);
-      const lineBeforeTax = lineTotal - lineTax;
+  if (it.discountType === "PERCENT") {
+    discountAmount = (baseTotal * it.discountValue) / 100;
+  } else if (it.discountType === "CASH") {
+    discountAmount = it.discountValue;
+  }
 
-      count += totalPieces;
-      before += lineBeforeTax;
-      tax += lineTax;
-      total += lineTotal;
-      discountTotal += discountAmount;
-    });
+  discountAmount = Math.min(discountAmount, baseTotal);
+
+  const lineTotal = baseTotal - discountAmount;
+
+  const lineTax =
+    (lineTotal * p.taxPercent) / (100 + p.taxPercent);
+
+  const lineBeforeTax = lineTotal - lineTax;
+
+  count += totalPieces;
+  before += lineBeforeTax;
+  tax += lineTax;
+  total += lineTotal;
+  discountTotal += discountAmount;
+});
+
 
     return {
       totalItemsCount: count,
@@ -481,35 +490,35 @@ export default function BillingAdminPage() {
     setSelectedCustomerId(bill.customerInfo.customer || "");
 
     const mappedItems: BillFormItemState[] = bill.items.map((it) => {
-  const matchedInventoryProduct = billingProducts.find(
-    (bp) =>
-      bp.productId === String(it.product) &&
-      bp.warehouseId === String(it.warehouse)
-  );
+      const matchedInventoryProduct = billingProducts.find(
+        (bp) =>
+          bp.productId === String(it.product) &&
+          bp.warehouseId === String(it.warehouse)
+      );
 
-  if (!matchedInventoryProduct) return emptyItem();
+      if (!matchedInventoryProduct) return emptyItem();
 
-  return {
-    id: crypto.randomUUID(),
-    productSearch: it.productName,
+      return {
+        id: crypto.randomUUID(),
+        productSearch: it.productName,
 
-    // 🔒 PRICE COMES FROM BILL (NOT INVENTORY)
-    selectedProduct: {
-      ...matchedInventoryProduct,
+        // 🔒 PRICE COMES FROM BILL (NOT INVENTORY)
+        selectedProduct: {
+          ...matchedInventoryProduct,
 
-      // ✅ THIS IS THE MOST IMPORTANT LINE
-      sellingPrice: it.sellingPrice,
-    },
+          // ✅ THIS IS THE MOST IMPORTANT LINE
+          sellingPrice: it.sellingPrice
+        },
 
-    quantityBoxes: it.quantityBoxes,
-    quantityLoose: it.quantityLoose,
+        quantityBoxes: it.quantityBoxes,
+        quantityLoose: it.quantityLoose,
 
-    discountType: it.discountType ?? "NONE",
-    discountValue: it.discountValue ?? 0,
+        discountType: it.discountType ?? "NONE",
+        discountValue: it.discountValue ?? 0,
 
-    overridePriceForCustomer: true,
-  };
-});
+        overridePriceForCustomer: true,
+      };
+    });
 
 
 

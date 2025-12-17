@@ -76,15 +76,24 @@ function calcLine(it: IncomingItem) {
   const qty =
     it.quantityBoxes * it.itemsPerBox + it.quantityLoose;
 
-  let price = it.sellingPrice;
+  // 🔒 SELLING PRICE = INPUT (NEVER MODIFY)
+  const sellingPrice = it.sellingPrice;
+
+  const baseTotal = qty * sellingPrice;
+
+  let discountAmount = 0;
 
   if (it.discountType === "PERCENT") {
-    price -= (price * (it.discountValue ?? 0)) / 100;
+    discountAmount = (baseTotal * (it.discountValue ?? 0)) / 100;
   } else if (it.discountType === "CASH") {
-    price = Math.max(0, price - (it.discountValue ?? 0));
+    discountAmount = it.discountValue ?? 0;
   }
 
-  const gross = qty * price;
+  // safety
+  discountAmount = Math.min(discountAmount, baseTotal);
+
+  const gross = baseTotal - discountAmount;
+
   const tax = (gross * it.taxPercent) / (100 + it.taxPercent);
   const before = gross - tax;
 
@@ -94,22 +103,29 @@ function calcLine(it: IncomingItem) {
       product: new Types.ObjectId(it.productId),
       warehouse: new Types.ObjectId(it.warehouseId),
       productName: it.productName,
-      sellingPrice: price,
+
+      // ✅ SAVE ORIGINAL PRICE ONLY
+      sellingPrice: sellingPrice,
+
       taxPercent: it.taxPercent,
       quantityBoxes: it.quantityBoxes,
       quantityLoose: it.quantityLoose,
       itemsPerBox: it.itemsPerBox,
+
       discountType: it.discountType ?? "NONE",
       discountValue: it.discountValue ?? 0,
+
       totalItems: qty,
       totalBeforeTax: before,
       taxAmount: tax,
       lineTotal: gross,
+
       overridePriceForCustomer: false,
     },
     totals: { qty, before, tax, gross },
   };
 }
+
 
 /* ---------------------------------------------
    PUT – UPDATE BILL

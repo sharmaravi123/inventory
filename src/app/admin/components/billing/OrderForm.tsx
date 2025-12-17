@@ -669,17 +669,15 @@ export default function OrderForm({
                                 step={0.01}
                                 value={p.sellingPrice || ""}
                                 onChange={(e) => {
-                                  if (mode === "edit") return; // 🔒 HARD STOP
-
-                                  const newPrice = safeNum(e.target.value);
                                   updateItem(item.id, {
                                     selectedProduct: {
                                       ...p,
-                                      sellingPrice: newPrice,
+                                      sellingPrice: safeNum(e.target.value),
                                     },
                                     overridePriceForCustomer: true,
                                   });
                                 }}
+
 
                                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
                               />

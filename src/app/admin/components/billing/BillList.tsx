@@ -322,7 +322,7 @@ export default function BillList({
                   )}
 
                   {/* Edit Payment */}
-                  <button
+                  {/* <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -331,7 +331,7 @@ export default function BillList({
                     className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] text-slate-700 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
                   >
                     Edit Payment
-                  </button>
+                  </button> */}
                 </div>
               </div>
             </div>

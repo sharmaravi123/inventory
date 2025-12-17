@@ -105,23 +105,37 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
 
   /* -------------------- LINES -------------------- */
   const lines: EnhancedLine[] = useMemo(() => {
-    if (!bill) return [];
+  if (!bill) return [];
 
-    return bill.items.map((l) => {
-      const totalPieces =
-        (l.quantityBoxes ?? 0) * (l.itemsPerBox ?? 1) +
-        (l.quantityLoose ?? 0);
+  return bill.items.map((l) => {
+    const totalPieces =
+      (l.quantityBoxes ?? 0) * (l.itemsPerBox ?? 1) +
+      (l.quantityLoose ?? 0);
 
-      const baseAmount = totalPieces * (l.sellingPrice ?? 0);
-      const finalAmount = l.lineTotal ?? baseAmount;
+    const baseAmount = totalPieces * (l.sellingPrice ?? 0);
 
-      return {
-        ...l,
-        totalPieces,
-        discountAmount: Math.max(baseAmount - finalAmount, 0),
-      };
-    });
-  }, [bill]);
+    let discountAmount = 0;
+
+    if (l.discountType === "PERCENT") {
+      discountAmount = (baseAmount * (l.discountValue ?? 0)) / 100;
+    } else if (l.discountType === "CASH") {
+      discountAmount = l.discountValue ?? 0;
+    }
+
+    // 🔒 safety cap
+    discountAmount = Math.min(discountAmount, baseAmount);
+
+    const lineTotal = baseAmount - discountAmount;
+
+    return {
+      ...l,
+      totalPieces,
+      discountAmount,
+      lineTotal,
+    };
+  });
+}, [bill]);
+
 
 
   /* -------------------- GUARD -------------------- */
