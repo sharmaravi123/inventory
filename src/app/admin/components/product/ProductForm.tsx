@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Swal from "sweetalert2";
 import { useDispatch, useSelector } from "react-redux";
@@ -120,6 +120,14 @@ export default function ProductForm({ onClose, editData }: ProductFormProps) {
     );
   }
 };
+useEffect(() => {
+  document.body.style.overflow = "hidden";
+
+  return () => {
+    document.body.style.overflow = "";
+  };
+}, []);
+
 
 
   return (
@@ -137,8 +145,8 @@ export default function ProductForm({ onClose, editData }: ProductFormProps) {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 10 }}
           transition={{ duration: 0.25 }}
-          className="w-full max-w-lg rounded-2xl border border-[var(--color-neutral)] bg-[var(--color-white)] p-6 shadow-2xl"
-        >
+           className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--color-neutral)] bg-[var(--color-white)] p-6 shadow-2xl"
+>
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-[var(--color-sidebar)]">

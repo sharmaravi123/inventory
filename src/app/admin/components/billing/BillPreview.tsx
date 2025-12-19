@@ -2,12 +2,15 @@
 
 import React, { useEffect, useMemo } from "react";
 import { Bill, BillItemForClient } from "@/store/billingApi";
-import { useAppSelector } from "@/store/hooks";
-import { useRouter } from "next/navigation";
+import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import { fetchProducts, ProductType } from "@/store/productSlice";
+
 type BillPreviewProps = {
   bill?: Bill;
   onClose: () => void;
 };
+
+/* ================== CONSTANTS ================== */
 
 const COMPANY_NAME = "Akash Inventory";
 const COMPANY_ADDRESS_LINE_1 = "H NO. 240, Some Street";
@@ -18,10 +21,28 @@ const COMPANY_ACCOUNT_NAME = "Aarif Singh";
 const COMPANY_IFSC = "HDFC0000400";
 const COMPANY_ACCOUNT_NO = "5020004980XXX";
 
+/* ================== TYPES ================== */
+
 type EnhancedLine = BillItemForClient & {
   totalPieces: number;
   discountAmount: number;
 };
+
+/* ================== UTILS ================== */
+
+function extractProductId(
+  product: string | { _id?: string } | undefined
+): string | undefined {
+  if (!product) return undefined;
+
+  if (typeof product === "string") return product;
+
+  if (typeof product === "object" && product._id) {
+    return product._id;
+  }
+
+  return undefined;
+}
 
 function numberToINRWords(amount: number): string {
   const rupees = Math.round(amount);
@@ -29,85 +50,75 @@ function numberToINRWords(amount: number): string {
 
   const a = [
     "",
-    "one",
-    "two",
-    "three",
-    "four",
-    "five",
-    "six",
-    "seven",
-    "eight",
-    "nine",
-    "ten",
-    "eleven",
-    "twelve",
-    "thirteen",
-    "fourteen",
-    "fifteen",
-    "sixteen",
-    "seventeen",
-    "eighteen",
-    "nineteen",
+    "one","two","three","four","five","six","seven","eight","nine",
+    "ten","eleven","twelve","thirteen","fourteen","fifteen",
+    "sixteen","seventeen","eighteen","nineteen",
   ];
   const b = [
-    "",
-    "",
-    "twenty",
-    "thirty",
-    "forty",
-    "fifty",
-    "sixty",
-    "seventy",
-    "eighty",
-    "ninety",
+    "","",
+    "twenty","thirty","forty","fifty",
+    "sixty","seventy","eighty","ninety",
   ];
 
   const two = (n: number) =>
     n < 20 ? a[n] : b[Math.floor(n / 10)] + (n % 10 ? " " + a[n % 10] : "");
+
   const three = (n: number) =>
     Math.floor(n / 100)
-      ? a[Math.floor(n / 100)] +
-      " hundred" +
-      (n % 100 ? " " + two(n % 100) : "")
+      ? a[Math.floor(n / 100)] + " hundred" + (n % 100 ? " " + two(n % 100) : "")
       : two(n);
 
   let num = rupees;
   let str = "";
 
-  if (num >= 10000000) {
-    str += three(Math.floor(num / 10000000)) + " crore ";
-    num %= 10000000;
-  }
-  if (num >= 100000) {
-    str += three(Math.floor(num / 100000)) + " lakh ";
-    num %= 100000;
-  }
-  if (num >= 1000) {
-    str += three(Math.floor(num / 1000)) + " thousand ";
-    num %= 1000;
-  }
+  if (num >= 10000000) { str += three(Math.floor(num / 10000000)) + " crore "; num %= 10000000; }
+  if (num >= 100000)   { str += three(Math.floor(num / 100000)) + " lakh "; num %= 100000; }
+  if (num >= 1000)     { str += three(Math.floor(num / 1000)) + " thousand "; num %= 1000; }
   if (num > 0) str += three(num);
 
-  return str.trim().replace(/^./, (c) => c.toUpperCase()) + " rupees only";
+  return str.trim().replace(/^./, c => c.toUpperCase()) + " rupees only";
 }
 
+/* ================== COMPONENT ================== */
+
 export default function BillPreview({ bill, onClose }: BillPreviewProps) {
-  const router = useRouter();
-  /* -------------------- ESC KEY -------------------- */
+  const dispatch = useAppDispatch();
+
+  /* 🔹 PRODUCTS — MUST BE FIRST */
+  const products = useAppSelector(
+    (state) => state.product.products as ProductType[]
+  );
+
+  /* 🔹 ENSURE PRODUCTS ARE LOADED */
+  useEffect(() => {
+    if (products.length === 0) {
+      dispatch(fetchProducts());
+    }
+  }, [products.length, dispatch]);
+
+  /* 🔹 ESC KEY */
   useEffect(() => {
     if (!bill) return;
-
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    // router.push('/admin/billing')
-
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [bill, onClose]);
 
-  /* -------------------- LINES -------------------- */
+  /* 🔹 HSN RESOLVER */
+  const getHsnCode = (
+    product: string | { _id?: string } | undefined
+  ): string => {
+    const productId = extractProductId(product);
+    if (!productId) return "-";
 
+    const found = products.find(
+      (p) => p._id === productId || p.id === productId
+    );
+
+    return found?.hsnCode ?? "-";
+  };
+
+  /* 🔹 BILL LINES */
   const lines: EnhancedLine[] = useMemo(() => {
     if (!bill) return [];
 
@@ -116,70 +127,36 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
         (l.quantityBoxes ?? 0) * (l.itemsPerBox ?? 1) +
         (l.quantityLoose ?? 0);
 
-      const baseAmount = totalPieces * (l.sellingPrice ?? 0);
+      const base = totalPieces * (l.sellingPrice ?? 0);
 
-      let discountAmount = 0;
+      let discount = 0;
       if (l.discountType === "PERCENT") {
-        discountAmount = (baseAmount * (l.discountValue ?? 0)) / 100;
+        discount = (base * (l.discountValue ?? 0)) / 100;
       } else if (l.discountType === "CASH") {
-        discountAmount = l.discountValue ?? 0;
+        discount = l.discountValue ?? 0;
       }
 
-      discountAmount = Math.min(discountAmount, baseAmount);
-
-      const lineTotal = baseAmount - discountAmount;
+      discount = Math.min(discount, base);
 
       return {
-        ...l,                    // ✅ hsnCode yahin se aayega
+        ...l,
         totalPieces,
-        discountAmount,
-        lineTotal,
+        discountAmount: discount,
+        lineTotal: base - discount,
       };
     });
   }, [bill]);
 
-  /* -------------------- GUARD -------------------- */
   if (!bill) return null;
 
-  const lineDiscountTotal = lines.reduce(
-    (sum, l) => sum + l.discountAmount,
-    0
-  );
-  // const billLevelDiscount = bill.overallDiscount ?? 0;
-
-  const discountTotal = lines.reduce(
-    (sum, l) => sum + l.discountAmount,
-    0
-  );
-
+  const discountTotal = lines.reduce((s, l) => s + l.discountAmount, 0);
   const cgst = (bill.totalTax ?? 0) / 2;
   const sgst = (bill.totalTax ?? 0) / 2;
 
   const handlePrint = () => window.print();
 
-  const handleDownload = async () => {
-    if (typeof window === "undefined") return;
+  
 
-    const el = document.querySelector(".print-bill-root") as HTMLElement | null;
-    if (!el) return;
-
-    const html2pdf = (await import("html2pdf.js")).default;
-
-    html2pdf()
-      .set({
-        margin: 10,
-        filename: `invoice-${bill.invoiceNumber}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          backgroundColor: "#ffffff",
-          useCORS: true,
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      })
-      .from(el)
-      .save();
-  };
   return (
     <>
       {/* 🔒 PRINT = PREVIEW */}
@@ -213,15 +190,27 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
         <div className="mb-2 flex justify-between print-only-hide">
           <b>Invoice Preview</b>
           <div className="flex gap-2">
-            <button onClick={handlePrint} className="border px-3 py-1">
-              Print
+            <button
+              onClick={handlePrint}
+              className="rounded-md bg-blue-600 px-4 py-1.5 text-white font-medium shadow hover:bg-blue-700 transition"
+            >
+              🖨 Print
             </button>
-            <button onClick={handleDownload} className="border px-3 py-1">
-              Download PDF
+
+            {/* <button
+              onClick={handleDownload}
+              className="rounded-md bg-green-600 px-4 py-1.5 text-white font-medium shadow hover:bg-green-700 transition"
+            >
+              ⬇ Download PDF
+            </button> */}
+
+            <button
+              onClick={() => window.close()}
+              className="rounded-md bg-red-600 px-4 py-1.5 text-white font-medium shadow hover:bg-red-700 transition"
+            >
+              ✖ Close
             </button>
-            <button onClick={() => router.push('/admin/billing')} className="border px-3 py-1">
-              Close
-            </button>
+
           </div>
         </div>
 
@@ -298,8 +287,9 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                     {l.productName}
                   </td>
                   <td className="border border-black p-1">
-                    {l.hsnCode ?? "-"}
+                    {getHsnCode(l.product)}
                   </td>
+
                   <td className="border border-black p-1">
                     {l.quantityBoxes ?? 0} box /{" "}
                     {l.quantityLoose ?? 0} loose

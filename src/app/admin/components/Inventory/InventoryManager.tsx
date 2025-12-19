@@ -45,15 +45,30 @@ type InventoryWithRefs = InventoryItem & {
   product?: unknown;
   warehouse?: unknown;
 };
+
 type FormState = {
   _id?: string;
+
   productId: string;
   warehouseId: string;
+
+  // existing stock (readonly, from DB)
+  currentBoxes: number;
+  currentLooseItems: number;
+
+  // add stock (only in edit)
+  addBoxes: number;
+  addLooseItems: number;
+
+  // direct stock (only in add)
   boxes: number;
   looseItems: number;
+
   lowStockBoxes: number;
   lowStockItems: number;
 };
+
+
 
 const AdminInventoryManager: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -92,14 +107,19 @@ const AdminInventoryManager: React.FC = () => {
     "all" | "stock" | "low stock" | "out of stock"
   >("all");
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<FormState>({
-    productId: "",
-    warehouseId: "",
-    boxes: 0,
-    looseItems: 0,
-    lowStockBoxes: 0,
-    lowStockItems: 0,
-  });
+ const [form, setForm] = useState<FormState>({
+  productId: "",
+  warehouseId: "",
+  currentBoxes: 0,
+  currentLooseItems: 0,
+  addBoxes: 0,
+  addLooseItems: 0,
+  boxes: 0,
+  looseItems: 0,
+  lowStockBoxes: 0,
+  lowStockItems: 0,
+});
+
 
   useEffect(() => {
     dispatch(fetchProducts());
@@ -304,63 +324,73 @@ const AdminInventoryManager: React.FC = () => {
   );
 
   const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  e?.preventDefault();
 
-    if (!form._id && (!form.productId || !form.warehouseId)) {
-      void Swal.fire(
-        "Error",
-        "Please select product and warehouse",
-        "error"
-      );
-      return;
+  try {
+    const finalBoxes = form._id
+      ? form.currentBoxes + form.addBoxes
+      : form.boxes;
+
+    const finalLoose = form._id
+      ? form.currentLooseItems + form.addLooseItems
+      : form.looseItems;
+
+    const payload = {
+      boxes: finalBoxes,
+      looseItems: finalLoose,
+      lowStockBoxes: form.lowStockBoxes,
+      lowStockItems: form.lowStockItems,
+    };
+
+    if (form._id) {
+      await dispatch(
+        updateInventory({ id: form._id, data: payload })
+      ).unwrap();
+
+      await Swal.fire({
+        icon: "success",
+        title: "Stock updated",
+        text: "Inventory stock updated successfully",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } else {
+      await dispatch(
+        addInventory({
+          productId: form.productId,
+          warehouseId: form.warehouseId,
+          ...payload,
+        })
+      ).unwrap();
+
+      await Swal.fire({
+        icon: "success",
+        title: "Stock added",
+        text: "Inventory stock added successfully",
+        timer: 1500,
+        showConfirmButton: false,
+      });
     }
 
-    const createPayload = {
-      productId: form.productId,
-      warehouseId: form.warehouseId,
-      boxes: form.boxes,
-      looseItems: form.looseItems,
-      lowStockBoxes: form.lowStockBoxes ?? 0,
-      lowStockItems: form.lowStockItems ?? 0,
-    } as const;
+    setModalOpen(false);
+    dispatch(fetchInventory());
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Something went wrong while saving stock";
 
-    const updatePayload = {
-      boxes: form.boxes,
-      looseItems: form.looseItems,
-      lowStockBoxes: form.lowStockBoxes ?? 0,
-      lowStockItems: form.lowStockItems ?? 0,
-    } as const;
+    await Swal.fire({
+      icon: "error",
+      title: "Operation failed",
+      text: message,
+    });
+  }
+};
 
-    try {
-      if (form._id) {
-        await dispatch(
-          updateInventory({ id: form._id, data: updatePayload })
-        ).unwrap();
-        await Swal.fire(
-          "Updated",
-          "Stock updated successfully",
-          "success"
-        );
-      } else {
-        await dispatch(addInventory(createPayload)).unwrap();
-        await Swal.fire(
-          "Added",
-          "Stock created successfully",
-          "success"
-        );
-      }
-      setModalOpen(false);
-      void dispatch(fetchInventory());
-    } catch (err) {
-      const errorObj =
-        err instanceof Error ? err : new Error(String(err));
-      void Swal.fire(
-        "Error",
-        errorObj.message || "Operation failed",
-        "error"
-      );
-    }
-  };
+
+
+
 
   const handleDelete = (id?: string) => {
     if (!id) return;
@@ -378,37 +408,49 @@ const AdminInventoryManager: React.FC = () => {
   };
 
   const openAdd = () => {
-    setForm({
-      productId: "",
-      warehouseId: "",
-      boxes: 0,
-      looseItems: 0,
-      lowStockBoxes: 0,
-      lowStockItems: 0,
-    });
-    setModalOpen(true);
-  };
+  setForm({
+    productId: "",
+    warehouseId: "",
+    boxes: 0,
+    looseItems: 0,
+    currentBoxes: 0,
+    currentLooseItems: 0,
+    addBoxes: 0,
+    addLooseItems: 0,
+    lowStockBoxes: 0,
+    lowStockItems: 0,
+  });
+  setModalOpen(true);
+};
+
+
 
   const openEdit = (inv: InventoryItem) => {
-    setForm({
-      _id: inv._id,
-      productId:
-        extractId(
-          (inv as unknown as { product?: unknown }).product ??
-          inv.productId
-        ) ?? "",
-      warehouseId:
-        extractId(
-          (inv as unknown as { warehouse?: unknown }).warehouse ??
-          inv.warehouseId
-        ) ?? "",
-      boxes: inv.boxes,
-      looseItems: inv.looseItems,
-      lowStockBoxes: inv.lowStockBoxes ?? 0,
-      lowStockItems: inv.lowStockItems ?? 0,
-    });
-    setModalOpen(true);
-  };
+  setForm({
+    _id: inv._id,
+    productId: extractId(inv.productId) ?? "",
+    warehouseId: extractId(inv.warehouseId) ?? "",
+
+    // readonly existing
+    currentBoxes: inv.boxes,
+    currentLooseItems: inv.looseItems,
+
+    // increment inputs
+    addBoxes: 0,
+    addLooseItems: 0,
+
+    // unused in edit
+    boxes: 0,
+    looseItems: 0,
+
+    lowStockBoxes: inv.lowStockBoxes ?? 0,
+    lowStockItems: inv.lowStockItems ?? 0,
+  });
+  setModalOpen(true);
+};
+
+
+
 
   return (
     <div className="min-h-screen bg-[var(--color-neutral)] p-6">
@@ -788,11 +830,12 @@ const AdminInventoryManager: React.FC = () => {
         <AnimatePresence>
           {modalOpen && (
             <motion.div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
+
               <div
                 className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={() => setModalOpen(false)}
@@ -921,6 +964,8 @@ const AdminInventoryManager: React.FC = () => {
                     </>
                   )}
 
+                  {!form._id && (
+  <>
                   <div>
                     <label className="text-xs font-medium text-[var(--color-sidebar)]">
                       Boxes
@@ -959,8 +1004,51 @@ const AdminInventoryManager: React.FC = () => {
                       className="mt-1 w-full rounded-lg border border-[var(--color-secondary)] bg-[var(--color-neutral)] px-3 py-2 text-sm text-[var(--color-sidebar)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70"
                     />
                   </div>
+  </>
+)}
+
+                 {form._id && (
+  <>
+                  <div>
+                    <label className="text-xs font-medium text-[var(--color-sidebar)]">
+                      Add Boxes
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.addBoxes || ""}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          addBoxes: Number(e.target.value),
+                        }))
+                      }
+
+                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    />
+                  </div>
 
                   <div>
+                    <label className="text-xs font-medium text-[var(--color-sidebar)]">
+                      Add Loose Items
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.addLooseItems || ""}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          addLooseItems: Number(e.target.value),
+                        }))
+                      }
+
+                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    />
+                  </div>
+                        </>
+)}
+ <div>
                     <label className="text-xs font-medium text-[var(--color-sidebar)]">
                       Low stock (boxes)
                     </label>
@@ -979,7 +1067,6 @@ const AdminInventoryManager: React.FC = () => {
                       className="mt-1 w-full rounded-lg border border-[var(--color-secondary)] bg-[var(--color-neutral)] px-3 py-2 text-sm text-[var(--color-sidebar)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70"
                     />
                   </div>
-
                   <div>
                     <label className="text-xs font-medium text-[var(--color-sidebar)]">
                       Low stock (loose)

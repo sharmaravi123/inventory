@@ -93,100 +93,168 @@ export default function Category() {
 
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-center" style={{ color: "var(--color-primary)" }}>
-        Category Management
-      </h1>
-
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-6 bg-white p-6 rounded-2xl shadow-md border"
-        style={{ borderColor: "var(--color-primary)" }}
-      >
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Category Name"
-          className="mb-3 w-full border rounded px-3 py-2 focus:outline-none"
-          style={{ borderColor: "var(--color-primary)" }}
-        />
-        <input
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Description"
-          className="mb-3 w-full border rounded px-3 py-2 focus:outline-none"
-          style={{ borderColor: "var(--color-primary)" }}
-        />
-        <button
-          onClick={handleSubmit}
-          className="px-4 py-2 rounded font-semibold hover:opacity-90 transition-all"
-          style={{
-            backgroundColor: "var(--color-primary)",
-            color: "var(--color-white)",
-          }}
+    <div className="mx-auto max-w-7xl px-6 py-8">
+      {/* ================= HEADER ================= */}
+      <div className="mb-8 flex flex-col gap-2">
+        <h1
+          className="text-3xl font-extrabold tracking-tight"
+          style={{ color: "var(--color-sidebar)" }}
         >
-          {editId ? "Update Category" : "Add Category"}
-        </button>
+          Category Management
+        </h1>
+        <p
+          className="text-sm"
+          style={{ color: "var(--color-sidebar)", opacity: 0.7 }}
+        >
+          Organize products by category. Create, update and manage categories used
+          across inventory and billing.
+        </p>
+      </div>
+
+      {/* ================= FORM CARD ================= */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-10 rounded-2xl border bg-[var(--color-white)] p-6 shadow-sm"
+        style={{ borderColor: "var(--color-secondary)" }}
+      >
+        <div className="mb-4">
+          <h2
+            className="text-lg font-semibold"
+            style={{ color: "var(--color-sidebar)" }}
+          >
+            {editId ? "Edit Category" : "Create Category"}
+          </h2>
+          <p
+            className="text-xs"
+            style={{ color: "var(--color-sidebar)", opacity: 0.6 }}
+          >
+            Categories help group products for inventory & billing.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--color-sidebar)]">
+              Category Name
+            </label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Medicines"
+              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+              style={{
+                borderColor: "var(--color-secondary)",
+              }}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--color-sidebar)]">
+              Description
+            </label>
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description"
+              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+              style={{
+                borderColor: "var(--color-secondary)",
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={handleSubmit}
+            className="rounded-lg px-5 py-2 text-sm font-semibold shadow-sm transition hover:brightness-95"
+            style={{
+              backgroundColor: "var(--color-primary)",
+              color: "var(--color-white)",
+            }}
+          >
+            {editId ? "Update Category" : "Add Category"}
+          </button>
+
+          {editId && (
+            <button
+              onClick={() => {
+                setEditId(null);
+                setName("");
+                setDescription("");
+              }}
+              className="rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-[var(--color-neutral)]"
+              style={{ borderColor: "var(--color-secondary)" }}
+            >
+              Cancel Edit
+            </button>
+          )}
+        </div>
       </motion.div>
 
+      {/* ================= LIST ================= */}
       {loading ? (
-        <p className="text-center text-gray-600">Loading...</p>
-      ) : (
-        <Swiper
-          modules={[Navigation]}
-          spaceBetween={20}
-          slidesPerView={1}
-          navigation
-          breakpoints={{
-            640: { slidesPerView: 1 },
-            768: { slidesPerView: 2 },
-            1024: { slidesPerView: 3 },
-          }}
+        <div
+          className="py-12 text-center text-sm"
+          style={{ color: "var(--color-sidebar)", opacity: 0.7 }}
         >
+          Loading categories…
+        </div>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence>
-            {categories.map((cat: CategoryType) => (
-              <SwiperSlide key={cat._id}>
-                <motion.div
-                  layout
-                  whileHover={{ scale: 1.03 }}
-                  className="rounded-xl p-5 flex flex-col justify-between h-full shadow-md border"
-                  style={{ borderColor: "var(--color-primary)" }}
-                >
-                  <div>
-                    <h2 className="text-xl font-semibold mb-2" style={{ color: "var(--color-primary)" }}>
-                      {cat.name}
-                    </h2>
-                    <p className="text-gray-600">{cat.description}</p>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      onClick={() => handleEdit(cat)}
-                      className="px-3 py-1 rounded font-medium hover:opacity-90"
-                      style={{
-                        backgroundColor: "var(--color-secondary)",
-                        color: "var(--color-white)",
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(cat._id)}
-                      className="px-3 py-1 rounded font-medium hover:opacity-90"
-                      style={{
-                        backgroundColor: "var(--color-error)",
-                        color: "var(--color-white)",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </motion.div>
-              </SwiperSlide>
+            {categories.map((cat) => (
+              <motion.div
+                key={cat._id}
+                layout
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="group rounded-2xl border bg-[var(--color-white)] p-5 shadow-sm transition hover:shadow-md"
+                style={{ borderColor: "var(--color-secondary)" }}
+              >
+                <div className="mb-3">
+                  <h3
+                    className="text-lg font-semibold"
+                    style={{ color: "var(--color-sidebar)" }}
+                  >
+                    {cat.name}
+                  </h3>
+                  <p
+                    className="mt-1 text-sm"
+                    style={{
+                      color: "var(--color-sidebar)",
+                      opacity: 0.7,
+                    }}
+                  >
+                    {cat.description || "No description"}
+                  </p>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => handleEdit(cat)}
+                    className="rounded-full border border-[var(--color-primary)] px-3 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-[var(--color-white)] transition"
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(cat._id)}
+                    className="rounded-full border border-[var(--color-error)] px-3 py-1 text-xs font-medium text-[var(--color-error)] hover:bg-[var(--color-error)] hover:text-[var(--color-white)] transition"
+                   
+                  >
+                    Delete
+                  </button>
+                </div>
+
+              </motion.div>
             ))}
           </AnimatePresence>
-        </Swiper>
+        </div>
       )}
     </div>
   );
+
 }

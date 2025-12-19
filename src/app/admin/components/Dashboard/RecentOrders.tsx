@@ -2,6 +2,7 @@
 
 import React, { useMemo } from "react";
 import { useListBillsQuery } from "@/store/billingApi";
+import { useRouter } from "next/navigation";
 
 const statusColors: Record<string, string> = {
   Paid: "bg-[var(--color-success)] text-white",
@@ -12,7 +13,7 @@ const statusColors: Record<string, string> = {
 export default function RecentOrders() {
   const { data, isLoading } = useListBillsQuery({ search: "" });
   const bills = data?.bills ?? [];
-
+  const router = useRouter();
   // Latest 5 sorted by created or billDate
   const recentOrders = useMemo(() => {
     return bills
@@ -81,6 +82,19 @@ export default function RecentOrders() {
               ))}
             </tbody>
           </table>
+          {/* VIEW ALL BUTTON */}
+<div className="mt-4 flex justify-end">
+  <button
+    onClick={() => {
+       router.push("/admin/orders")
+    }}
+    className="rounded-full border border-[var(--color-primary)] px-3 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-[var(--color-white)] transition"
+  >
+    All Orders
+    <span className="text-sm">→</span>
+  </button>
+</div>
+
         </div>
       )}
 
