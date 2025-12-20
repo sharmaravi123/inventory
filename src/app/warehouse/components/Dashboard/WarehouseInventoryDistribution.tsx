@@ -184,7 +184,7 @@ export default function WarehouseInventoryDistribution({
       </div>
 
       <div className="text-xs text-gray-400 mt-4 text-center">
-        Made with 💙 Akash Namkeen – Warehouse
+        Made with 💙 JMK TRADERS – Warehouse
       </div>
     </div>
   );

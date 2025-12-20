@@ -70,9 +70,8 @@ export default function RecentOrders() {
                   <td className="py-2">{o.customer}</td>
                   <td className="py-2">
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        statusColors[o.status]
-                      }`}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[o.status]
+                        }`}
                     >
                       {o.status}
                     </span>
@@ -83,23 +82,23 @@ export default function RecentOrders() {
             </tbody>
           </table>
           {/* VIEW ALL BUTTON */}
-<div className="mt-4 flex justify-end">
-  <button
-    onClick={() => {
-       router.push("/admin/orders")
-    }}
-    className="rounded-full border border-[var(--color-primary)] px-3 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-[var(--color-white)] transition"
-  >
-    All Orders
-    <span className="text-sm">→</span>
-  </button>
-</div>
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={() => {
+                router.push("/admin/orders")
+              }}
+              className="rounded-full border border-[var(--color-primary)] px-3 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-[var(--color-white)] transition"
+            >
+              All Orders
+              <span className="text-sm">→</span>
+            </button>
+          </div>
 
         </div>
       )}
 
       <div className="text-xs text-gray-400 mt-4 text-center">
-        Made with 💙 Akash Namkeen
+        Made with 💙 JMK TRADERS
       </div>
     </div>
   );

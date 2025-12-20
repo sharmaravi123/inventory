@@ -490,7 +490,8 @@ export default function CreateUserPage(): JSX.Element {
                 initial={{ scale: 0.96, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.96, opacity: 0, y: 10 }}
-                className="relative z-10 w-full max-w-2xl rounded-2xl bg-[var(--color-card)] border border-[var(--color-border-soft)] p-6 shadow-2xl"
+                className="relative z-10 w-full max-w-2xl rounded-2xl bg-white
+ border border-[var(--color-border-soft)] p-6 shadow-2xl"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -600,11 +601,11 @@ export default function CreateUserPage(): JSX.Element {
                             key={p}
                             type="button"
                             onClick={() => togglePermission(p)}
-                            className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${
-                              active
-                                ? "border-[var(--color-chip-active)] bg-[var(--color-chip-active)] text-[var(--color-white)] shadow-sm"
-                                : "border-[var(--color-border-soft)] bg-[var(--color-neutral)] text-[var(--color-sidebar)] hover:border-[var(--color-primary)]"
-                            }`}
+                            className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition ${active
+                              ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-white shadow-md"
+                              : "border-[var(--color-border-soft)] bg-transparent text-[var(--color-sidebar)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+
+                              }`}
                           >
                             {p}
                           </button>

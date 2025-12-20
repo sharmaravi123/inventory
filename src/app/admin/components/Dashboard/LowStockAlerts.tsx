@@ -153,7 +153,7 @@ export default function LowStockAlerts() {
       )}
 
       <div className="text-xs text-gray-400 mt-4 text-center">
-        Made with 💙 Akash Namkeen
+        Made with 💙 JMK TRADERS
       </div>
     </div>
   );

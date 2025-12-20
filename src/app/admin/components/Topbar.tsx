@@ -10,7 +10,7 @@ const Topbar: React.FC = () => {
         <div className="flex items-center gap-2">
           <User />
           <h1 className="text-lg font-bold text-[#1E0E62]">
-            Akash <span className="text-[var(--color-primary)]">Inventory</span>
+            JMK  <span className="text-[var(--color-primary)]">TRADERS</span>
           </h1>
         </div>
 

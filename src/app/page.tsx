@@ -2,9 +2,9 @@
 import LoginPage from "./components/login/Login"; // Login is a client component
 
 export const metadata = {
-  title: "Login | Aakash Inventory",
+  title: "Login | JMK TRADERS",
   description:
-    "Login to Aakash Inventory to manage your stock, billing, and operations efficiently.",
+    "Login to JMK TRADERS to manage your stock, billing, and operations efficiently.",
 };
 
 export default function Page() {

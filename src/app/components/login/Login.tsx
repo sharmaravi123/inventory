@@ -99,7 +99,7 @@ export default function LoginPage() {
         {/* Left - Visual */}
         <div className="hidden md:block bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-sidebar)] p-8 relative">
           <div className="h-full flex flex-col justify-center items-start text-white">
-            <h2 className="text-3xl font-extrabold mb-2">Aakash Inventory</h2>
+            <h2 className="text-3xl font-extrabold mb-2">JMK TRADERS</h2>
             <p className="mb-6 text-sm max-w-xs">
               Manage warehouses, users, drivers and inventory seamlessly. Fast,
               reliable and secure.
@@ -125,7 +125,7 @@ export default function LoginPage() {
           </div>
 
           <footer className="absolute bottom-4 left-8 text-xs text-white/90">
-            © {new Date().getFullYear()} Aakash Inventory
+            © {new Date().getFullYear()} JMK TRADERS
           </footer>
         </div>
 
@@ -140,7 +140,7 @@ export default function LoginPage() {
             <h1 className="text-2xl font-extrabold text-[var(--color-primary)] text-center mb-2">
               Welcome to{" "}
               <span className="text-[var(--color-sidebar)]">
-                Aakash Inventory
+                JMK TRADERS
               </span>
             </h1>
             <p className="text-center text-xs text-[var(--text-secondary)] mb-6">

@@ -12,9 +12,12 @@ type BillPreviewProps = {
 
 /* ================== CONSTANTS ================== */
 
-const COMPANY_NAME = "Akash Inventory";
-const COMPANY_ADDRESS_LINE_1 = "H NO. 240, Some Street";
-const COMPANY_ADDRESS_LINE_2 = "Bhopal, Madhya Pradesh, 462001";
+const COMPANY_NAME = "JMK TRADERS";
+const COMPANY_ADDRESS_LINE_1 = `
+NO 240, SANUEEY NAGAR COLONY, SANJEEV NACAR, NEVARI BADVAI,
+Acharpua Industrial Area.
+`;
+const COMPANY_ADDRESS_LINE_2 = "Bhopal, Madhya Pradesh, 462018";
 const COMPANY_PHONE = "+91-9876543210";
 const COMPANY_BANK_NAME = "HDFC Bank, HAMIDIA ROAD";
 const COMPANY_ACCOUNT_NAME = "Aarif Singh";
@@ -221,9 +224,14 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
           <div className="border-b border-black pb-2">
             <div className="flex justify-between">
               <div>
+                <div className="flex">
+
                 <div className="font-bold uppercase">Tax Invoice</div>
-                <div className="font-bold text-lg">{COMPANY_NAME}</div>
-                <div>{COMPANY_ADDRESS_LINE_1}</div>
+                <div className="font-bold uppercase mx-2 border">ORIGINAL FOR RECIPIENT</div>
+                </div>
+
+                <div className="font-bold text-lg" >{COMPANY_NAME}</div>
+                <div style={{ whiteSpace: "pre-line" }}>{COMPANY_ADDRESS_LINE_1}</div>
                 <div>{COMPANY_ADDRESS_LINE_2}</div>
                 <div>GSTIN: {bill.companyGstNumber}</div>
                 <div>Mobile: {COMPANY_PHONE}</div>
@@ -242,8 +250,8 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
           <div className="mt-2 grid grid-cols-2 border border-black">
             <div className="border-r border-black p-2">
               <b>BILL TO</b>
-              <div>{bill.customerInfo.name}</div>
-              <div>{bill.customerInfo.address}</div>
+              <div>{bill.customerInfo.shopName}</div>
+              <div>Address : {bill.customerInfo.address}</div>
               <div>Mobile: {bill.customerInfo.phone}</div>
               {bill.customerInfo.gstNumber && (
                 <div>GSTIN: {bill.customerInfo.gstNumber}</div>
@@ -251,8 +259,8 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
             </div>
             <div className="p-2">
               <b>SHIP TO</b>
-              <div>{bill.customerInfo.name}</div>
-              <div>{bill.customerInfo.address}</div>
+              <div>{bill.customerInfo.shopName}</div>
+              <div>Address : {bill.customerInfo.address}</div>
             </div>
           </div>
 
