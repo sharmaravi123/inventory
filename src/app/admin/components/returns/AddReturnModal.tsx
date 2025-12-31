@@ -17,6 +17,7 @@ type BillItemForReturn = {
   quantityLoose: number;
   itemsPerBox: number;
   sellingPrice?: number;
+  taxPercent?: number;
   warehouseId?: string;
   warehouseName?: string;
 };
@@ -99,6 +100,14 @@ export default function AddReturnModal({
       setWarehousesError(null);
     }
   }, [open]);
+ const getPriceWithoutGST = (
+  sellingPrice: number,
+  taxPercent?: number
+): number => {
+  if (!taxPercent || taxPercent <= 0) return sellingPrice;
+  return sellingPrice / (1 + taxPercent / 100);
+};
+
 
   // Load warehouses when modal opens (optional)
   useEffect(() => {
@@ -256,18 +265,29 @@ export default function AddReturnModal({
 
 
   const computeItemReturnAmount = (
-    bill: BillForReturn,
-    draft: ReturnDraftItem
-  ): number => {
-    const line = bill.items[draft.billItemIndex];
-    if (!line) return 0;
+  bill: BillForReturn,
+  draft: ReturnDraftItem
+): number => {
+  const line = bill.items[draft.billItemIndex];
+  if (!line || typeof line.sellingPrice !== "number") return 0;
 
-    const totalItemsReturn =
-      draft.returnBoxes * line.itemsPerBox + draft.returnLoose;
+  const totalItemsReturn =
+    draft.returnBoxes * line.itemsPerBox + draft.returnLoose;
 
-    if (typeof line.sellingPrice !== "number") return 0;
-    return totalItemsReturn * line.sellingPrice;
-  };
+  const basePrice = getPriceWithoutGST(
+  line.sellingPrice,
+  line.taxPercent
+);
+  console.log({
+  sellingPrice: line.sellingPrice,
+  taxPercent: line.taxPercent,
+  basePrice: getPriceWithoutGST(line.sellingPrice!, line.taxPercent),
+});
+
+  return totalItemsReturn * basePrice;
+  
+};
+
 
   const totalReturnAmount = useMemo(() => {
     if (!selectedBill) return 0;
@@ -340,6 +360,7 @@ export default function AddReturnModal({
   };
 
   if (!open) return null;
+  
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -399,8 +420,8 @@ export default function AddReturnModal({
                   type="button"
                   onClick={() => handleSelectBill(b)}
                   className={`flex w-full items-center justify-between gap-2 border-b border-slate-200 px-3 py-2 text-left text-xs hover:bg-[color:var(--color-secondary)]/10 ${selectedBillId === b._id
-                      ? "bg-[color:var(--color-secondary)]/20"
-                      : ""
+                    ? "bg-[color:var(--color-secondary)]/20"
+                    : ""
                     }`}
                 >
                   <div>

@@ -64,7 +64,10 @@ export async function POST(
     }
 
     const body = (await req.json()) as CreateReturnBody;
-
+    const getPriceWithoutGST = (sellingPrice: number, taxPercent?: number): number => {
+      const tax = taxPercent || 0;
+      return sellingPrice / (1 + tax / 100);
+    };
     if (!Array.isArray(body.items) || body.items.length === 0) {
       return NextResponse.json(
         { error: "No return items provided" },
@@ -122,8 +125,11 @@ export async function POST(
       const safeTotalPieces =
         requestedPieces > soldTotal ? soldTotal : requestedPieces;
 
-      const unitPrice = billItem.sellingPrice; // per piece (GST included)
-      const lineAmount = unitPrice * safeTotalPieces;
+      const baseUnitPrice = getPriceWithoutGST(
+        billItem.sellingPrice,
+        billItem.taxPercent
+      );
+      const lineAmount = baseUnitPrice * safeTotalPieces;
 
       totalReturnAmount += lineAmount;
 
@@ -135,7 +141,8 @@ export async function POST(
         quantityLoose: loose,
         itemsPerBox,
         totalItems: safeTotalPieces,
-        unitPrice,
+        unitPrice: baseUnitPrice,
+        taxPercent: billItem.taxPercent || 0,
         lineAmount,
       };
 
@@ -176,8 +183,8 @@ export async function POST(
         typeof stockLoose.looseItems === "number"
           ? stockLoose.looseItems
           : typeof stockLoose.loose === "number"
-          ? stockLoose.loose
-          : 0;
+            ? stockLoose.loose
+            : 0;
 
       const currentLooseEq =
         stock.boxes * itemsPerBoxStock + currentLoose;

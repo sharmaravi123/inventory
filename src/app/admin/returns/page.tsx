@@ -11,6 +11,7 @@ type ReturnItem = {
   itemsPerBox: number;
   totalItems: number;
   unitPrice?: number;
+  taxPercent?: number;
   lineAmount?: number;
 };
 
@@ -74,22 +75,20 @@ export default function ReturnsPage() {
   useEffect(() => {
     void fetchReturns();
   }, []);
-
-  const computeReturnAmount = (r: ReturnRecord): number => {
-    if (typeof r.totalAmount === "number") {
-      return r.totalAmount;
-    }
-
-    return r.items.reduce((sum, item) => {
-      if (typeof item.lineAmount === "number") {
-        return sum + item.lineAmount;
-      }
-      if (typeof item.unitPrice === "number") {
-        return sum + item.unitPrice * item.totalItems;
-      }
-      return sum;
-    }, 0);
+  const getPriceWithoutGST = (
+    sellingPrice: number,
+    taxPercent?: number
+  ): number => {
+    if (!taxPercent || taxPercent <= 0) return sellingPrice;
+    return sellingPrice / (1 + taxPercent / 100);
   };
+  const computeReturnAmount = (r: ReturnRecord): number => {
+  if (typeof r.totalAmount === 'number') return r.totalAmount;
+  
+  return r.items.reduce((sum, item) => {
+    return sum + (item.lineAmount || 0);  // ✅ Use saved lineAmount directly
+  }, 0);
+}
 
   const filteredReturns = useMemo(() => {
     return returns.filter((r) => {
@@ -427,14 +426,12 @@ export default function ReturnsPage() {
                     </thead>
                     <tbody>
                       {r.items.map((it, idx) => {
-                        const unitPrice =
-                          typeof it.unitPrice === "number"
-                            ? it.unitPrice
-                            : 0;
-                        const lineAmount =
-                          typeof it.lineAmount === "number"
-                            ? it.lineAmount
-                            : unitPrice * it.totalItems;
+                        const unitPrice = typeof it.unitPrice === 'number'
+                          ? it.unitPrice  // Backend already sends GST-removed price
+                          : 0;
+                        const lineAmount = typeof it.lineAmount === 'number'
+                          ? it.lineAmount  // Backend already sends correct amount
+                          : unitPrice * it.totalItems;
 
                         return (
                           <tr key={`${r._id}-${idx}`}>

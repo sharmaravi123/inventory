@@ -10,6 +10,7 @@ export type BillReturnItem = {
   itemsPerBox: number;
   totalItems: number;
   unitPrice?: number;
+  taxPercent?: number;
   lineAmount?: number;
 };
 
@@ -26,6 +27,7 @@ export interface BillReturnDocument extends Document {
   note?: string;
   items: BillReturnItem[];
   totalAmount?: number;
+  taxPercent: { type: Number, default: 0 },
   createdAt: Date;
   updatedAt: Date;
 }

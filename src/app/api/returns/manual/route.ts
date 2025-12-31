@@ -50,28 +50,34 @@ export async function POST(req: NextRequest) {
       const totalItems = boxes * it.itemsPerBox + loose;
       if (totalItems <= 0) continue;
 
-      const lineAmount = totalItems * it.unitPrice;
-      totalAmount += lineAmount;
-const product = await Product.findById(it.productId).select("name");
+      const getPriceWithoutGST = (sellingPrice: number, taxPercent?: number): number => {
+        return sellingPrice / (1 + (taxPercent || 0) / 100);
+      };
 
-if (!product) {
-  return NextResponse.json(
-    { error: "Product not found" },
-    { status: 400 }
-  );
-}
+      const baseUnitPrice = getPriceWithoutGST(it.unitPrice, 0);
+      const lineAmount = baseUnitPrice * totalItems;
+      totalAmount += lineAmount;
+      const product = await Product.findById(it.productId).select("name");
+
+      if (!product) {
+        return NextResponse.json(
+          { error: "Product not found" },
+          { status: 400 }
+        );
+      }
 
       returnItems.push({
-  product: new Types.ObjectId(it.productId),
-  warehouse: new Types.ObjectId(it.warehouseId),
-  productName: product.name, // ✅ REQUIRED FIELD
-  quantityBoxes: boxes,
-  quantityLoose: loose,
-  itemsPerBox: it.itemsPerBox,
-  totalItems,
-  unitPrice: it.unitPrice,
-  lineAmount,
-});
+        product: new Types.ObjectId(it.productId),
+        warehouse: new Types.ObjectId(it.warehouseId),
+        productName: product.name, // ✅ REQUIRED FIELD
+        quantityBoxes: boxes,
+        quantityLoose: loose,
+        itemsPerBox: it.itemsPerBox,
+        totalItems,
+        unitPrice: baseUnitPrice,
+        lineAmount,
+        taxPercent: 0,
+      });
 
 
       // ---------- INVENTORY UPDATE ----------

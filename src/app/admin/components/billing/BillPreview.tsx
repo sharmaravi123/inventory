@@ -317,9 +317,9 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                       </>
                     )}
 
-                    <div className="text-[10px] text-slate-600">
+                    {/* <div className="text-[10px] text-slate-600">
                       ({l.totalPieces} pcs)
-                    </div>
+                    </div> */}
                   </td>
 
 

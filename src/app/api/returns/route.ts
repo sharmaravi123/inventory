@@ -15,7 +15,8 @@ type ReturnItemResponse = {
   quantityLoose: number;
   itemsPerBox: number;
   totalItems: number;
-  unitPrice?: number;
+  unitPrice?: number;      // GST INCLUDED
+  taxPercent?: number;     // 👈 ADD THIS
   lineAmount?: number;
 };
 
@@ -32,7 +33,7 @@ type BillReturnLean = Omit<BillReturnDocument, "bill"> & {
 
 type ReturnRecordResponse = {
   _id: string;
-  billId: string;
+  billId?: string;
   invoiceNumber?: string;
   customerInfo: BillReturnDocument["customerInfo"];
   reason?: string;
@@ -48,7 +49,12 @@ export async function GET(_req: NextRequest) {
   try {
     await dbConnect();
 
-    const docs = await BillReturn.find()
+    const docs = await BillReturn.find({
+      $or: [
+        { bill: { $ne: null } },
+        { bill: null }
+      ]
+    })
       .populate({
         path: "bill",            // must match schema field
         select: "invoiceNumber",
@@ -64,7 +70,7 @@ export async function GET(_req: NextRequest) {
 
       return {
         _id: doc._id.toString(),
-        billId: bill?._id?.toString() ?? "",
+        billId: bill?._id?.toString() || undefined,
         invoiceNumber: bill?.invoiceNumber,
         customerInfo: doc.customerInfo,
         reason: doc.reason,
@@ -81,6 +87,7 @@ export async function GET(_req: NextRequest) {
           totalItems: it.totalItems,
           unitPrice: it.unitPrice,
           lineAmount: it.lineAmount,
+          taxPercent: it.taxPercent,
         })),
       };
     });
