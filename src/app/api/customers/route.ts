@@ -6,6 +6,56 @@ type CustomersResponse = {
   customers: CustomerDocument[];
 };
 
+export async function POST(req: NextRequest) {
+  try {
+    await dbConnect();
+
+    const body = await req.json();
+
+    const { name, phone, shopName, address, gstNumber } = body;
+
+    if (!name?.trim()) {
+      return NextResponse.json(
+        { error: "Customer name is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!phone?.trim()) {
+      return NextResponse.json(
+        { error: "Customer phone is required" },
+        { status: 400 }
+      );
+    }
+
+    // 🔁 UPSERT (same logic as billing)
+    const customer = await CustomerModel.findOneAndUpdate(
+      { phone },
+      {
+        $set: {
+          name,
+          phone,
+          shopName,
+          address,
+          gstNumber,
+        },
+      },
+      { new: true, upsert: true }
+    );
+
+    return NextResponse.json(
+      { customer },
+      { status: 201 }
+    );
+  } catch (e: any) {
+    console.error("CUSTOMER CREATE ERROR:", e);
+    return NextResponse.json(
+      { error: e.message || "Failed to create customer" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function GET(
   req: NextRequest
 ): Promise<NextResponse<CustomersResponse | { error: string }>> {
