@@ -4,6 +4,7 @@ import React, { useEffect, useMemo } from "react";
 import { Bill, BillItemForClient } from "@/store/billingApi";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { fetchProducts, ProductType } from "@/store/productSlice";
+import { useRouter } from "next/navigation";
 
 type BillPreviewProps = {
   bill?: Bill;
@@ -157,7 +158,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
   const sgst = (bill.totalTax ?? 0) / 2;
 
   const handlePrint = () => window.print();
-
+  const router = useRouter();
 
 
   return (
@@ -208,7 +209,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
             </button> */}
 
             <button
-              onClick={() => window.close()}
+              onClick={() => router.back()}
               className="rounded-md bg-red-600 px-4 py-1.5 text-white font-medium shadow hover:bg-red-700 transition"
             >
               ✖ Close

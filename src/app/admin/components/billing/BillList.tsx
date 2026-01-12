@@ -3,6 +3,7 @@
 import React from "react";
 import { Bill } from "@/store/billingApi";
 import { Driver } from "@/store/driverSlice";
+import { useRouter } from "next/navigation";
 
 type BillListProps = {
   bills: Bill[];
@@ -189,7 +190,7 @@ export default function BillList({
                 : "bg-rose-100 text-rose-700";
 
           const driverName = getDriverNameForBill(bill, drivers);
-
+          const router = useRouter();
           return (
             <div
               key={bill._id}
@@ -198,7 +199,7 @@ export default function BillList({
               onClick={(e) => {
                 e.stopPropagation();
                 console.log("PRINT BILL ID:", bill._id);
-                window.open(`/print/bill/${bill._id}`, "_blank");
+                router.push(`/print/bill/${bill._id}`);
               }}
 
               onKeyDown={(e) => {
