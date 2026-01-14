@@ -14,6 +14,7 @@ import {
   fetchProducts,
   type ProductType,
 } from "@/store/productSlice";
+import { fetchCompanyProfile } from "@/store/companyProfileSlice";
 
 const COLORS = [
   "var(--color-primary)",
@@ -82,6 +83,12 @@ export default function InventoryDistribution() {
   }, [products]);
 
   const hasData = chartData.length > 0;
+const companyProfile = useSelector(
+  (state: RootState) => state.companyProfile.data
+);
+useEffect(() => {
+  dispatch(fetchCompanyProfile());
+}, [dispatch]);
 
   return (
     <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-6 w-full max-w-md">
@@ -122,7 +129,7 @@ export default function InventoryDistribution() {
       </div>
 
       <div className="text-xs text-gray-400 mt-4 text-center">
-        Made with 💙 JMK TRADERS
+        Made with 💙  {companyProfile?.name || "—"} 
       </div>
     </div>
   );

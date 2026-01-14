@@ -83,7 +83,6 @@ export default function BillList({
       "Payment Status",
       "Driver",
     ];
-
     const rows: string[] = [];
     rows.push(header.map((h) => formatCsvValue(h)).join(","));
 
@@ -136,6 +135,7 @@ export default function BillList({
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+  const router = useRouter();
 
   return (
     <div className="rounded-xl bg-[color:var(--color-white)] p-4 shadow-sm">
@@ -190,7 +190,6 @@ export default function BillList({
                 : "bg-rose-100 text-rose-700";
 
           const driverName = getDriverNameForBill(bill, drivers);
-          const router = useRouter();
           return (
             <div
               key={bill._id}

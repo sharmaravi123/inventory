@@ -1,16 +1,37 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Search, User } from "lucide-react";
+import { useSelector } from "react-redux";
+import type { RootState } from "@/store/store";
+import { useAppDispatch } from "@/store/hooks";
+import { fetchCompanyProfile } from "@/store/companyProfileSlice";
 
 const Topbar: React.FC = () => {
+  const dispatch = useAppDispatch();
+
+  const companyProfile = useSelector(
+    (state: RootState) => state.companyProfile.data
+  );
+
+  useEffect(() => {
+    if (!companyProfile) {
+      dispatch(fetchCompanyProfile());
+    }
+  }, [companyProfile, dispatch]);
+
+  const companyName = companyProfile?.name ?? "—";
+  
   return (
     <header className="w-full sticky top-0 z-50 bg-[var(--color-white)] border-b border-[var(--border-color)] shadow-sm">
       <div className="flex flex-wrap items-center justify-between px-6 py-3">
         <div className="flex items-center gap-2">
           <User />
-          <h1 className="text-lg font-bold text-[#1E0E62]">
-            JMK  <span className="text-[var(--color-primary)]">TRADERS</span>
+          <h1 className="text-lg font-bold text-[#1E0E62] truncate">
+            {companyName.split(" ")[0]}{" "}
+            <span className="text-[var(--color-primary)]">
+              {companyName.split(" ").slice(1).join(" ") || ""}
+            </span>
           </h1>
         </div>
 

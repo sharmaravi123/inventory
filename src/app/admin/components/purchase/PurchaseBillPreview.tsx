@@ -113,6 +113,7 @@ export default function PurchaseBillPreview({
     }, [onClose]);
 
     if (!bill) return null;
+    const subtotalWithoutTax = bill.grandTotal - bill.totalTax;
 
     const cgst = bill.totalTax / 2;
     const sgst = bill.totalTax / 2;
@@ -204,7 +205,7 @@ export default function PurchaseBillPreview({
                                             <div className="text-[10px]">({totalPieces} pcs)</div>
                                         </td>
                                         <td className="border p-1">{it.purchasePrice.toFixed(2)}</td>
-                                        <td className="border p-1">{it.taxPercent}%</td>
+                                        <td className="border p-1 "> <span>{it.taxPercent}% </span><br /> <span > {cgst + sgst} </span></td>
                                         <td className="border p-1">{lineAmount.toFixed(2)}</td>
                                     </tr>
                                 );
@@ -219,7 +220,7 @@ export default function PurchaseBillPreview({
                             <div>{numberToINRWords(bill.grandTotal)}</div>
                         </div>
                         <div className="border p-2">
-                            <div className="flex justify-between"><span>Sub Total</span><span>{bill.totalBeforeTax.toFixed(2)}</span></div>
+                            <div className="flex justify-between"><span>Sub Total</span><span>{subtotalWithoutTax.toFixed(2)}</span></div>
                             <div className="flex justify-between"><span>CGST</span><span>{cgst.toFixed(2)}</span></div>
                             <div className="flex justify-between"><span>SGST</span><span>{sgst.toFixed(2)}</span></div>
                             <div className="flex justify-between border-t border-black font-bold pt-1">

@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useListBillsQuery } from "@/store/billingApi";
 import { useRouter } from "next/navigation";
-
+import { fetchCompanyProfile } from "@/store/companyProfileSlice";
+import { useSelector } from "react-redux";
+import type { RootState } from "@/store/store";
+import { useAppDispatch } from "@/store/hooks";
 const statusColors: Record<string, string> = {
   Paid: "bg-[var(--color-success)] text-white",
   "Partially Paid": "bg-[var(--color-warning)] text-black",
@@ -14,6 +17,13 @@ export default function RecentOrders() {
   const { data, isLoading } = useListBillsQuery({ search: "" });
   const bills = data?.bills ?? [];
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const companyProfile = useSelector(
+    (state: RootState) => state.companyProfile.data
+  );
+  useEffect(() => {
+    dispatch(fetchCompanyProfile());
+  }, [dispatch]);
   // Latest 5 sorted by created or billDate
   const recentOrders = useMemo(() => {
     return bills
@@ -98,7 +108,7 @@ export default function RecentOrders() {
       )}
 
       <div className="text-xs text-gray-400 mt-4 text-center">
-        Made with 💙 JMK TRADERS
+        Made with 💙 {companyProfile?.name}
       </div>
     </div>
   );

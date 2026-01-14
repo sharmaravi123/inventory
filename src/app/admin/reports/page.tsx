@@ -726,7 +726,7 @@ export default function ReportsPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* GST SUMMARY */}
-        <div className="grid gap-4 md:grid-cols-3">
+        {/* <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="text-[11px] text-slate-500">Total GST</p>
             <p className="mt-2 text-xl font-semibold text-slate-900">
@@ -745,7 +745,7 @@ export default function ReportsPage() {
               {formatCurrency(gstReport.sgst)}
             </p>
           </div>
-        </div>
+        </div> */}
 
         {/* INVENTORY REPORT */}
         <div className="grid gap-4 md:grid-cols-3">
@@ -1002,7 +1002,7 @@ export default function ReportsPage() {
             <span>Top 5 customers in selected period.</span>
             <button
               type="button"
-              onClick={() => router.push("/admin/orders")}
+              onClick={() => router.push("/admin/payment")}
               className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
             >
               View all customers (orders)
