@@ -26,7 +26,7 @@ const ProductSchema = new Schema<IProduct>(
     description: { type: String, default: null },
     taxPercent: { type: Number, default: 0 },
     perBoxItem: { type: Number, default: 1 },
-    hsnCode: { type: String, default: null, trim: true }, 
+    hsnCode: { type: String, default: null, trim: true , required : true}, 
     createdByAdminId: { type: String, default: null },
     createdByWarehouseId: { type: String, default: null },
   },
