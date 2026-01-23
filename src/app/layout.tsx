@@ -13,6 +13,12 @@ export const metadata = {
   themeColor: "#1A73E8",
 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js");
+    });
+  }
+
   return (
     <html lang="en">
       <meta name="theme-color" content="#1A73E8" />
