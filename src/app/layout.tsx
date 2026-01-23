@@ -12,7 +12,6 @@ export const metadata = {
   manifest: "/manifest.json",
   themeColor: "#1A73E8",
 }; 
-// updated
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   if (typeof window !== "undefined" && "serviceWorker" in navigator) {
     window.addEventListener("load", function () {
