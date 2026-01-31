@@ -63,17 +63,12 @@ export default function AdminPurchaseManager() {
     // const token = useSelector((s: RootState) => s.auth?.adminToken);
     // console.log(token, 'hi')
    useEffect(() => {
-    const loadData = async () => {
-        await Promise.all([
-            dispatch(fetchDealers()),
-            dispatch(fetchProducts()),
-            dispatch(fetchWarehouses()),
-            dispatch(fetchPurchases())
-        ]);
-    };
+    dispatch(fetchDealers());
+    dispatch(fetchProducts());
+    dispatch(fetchWarehouses());
+    dispatch(fetchPurchases());
+}, [dispatch]);
 
-    loadData();
-}, []);
 
     useEffect(() => {
         if (open && items.length === 0) {
