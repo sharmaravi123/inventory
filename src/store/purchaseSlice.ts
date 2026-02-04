@@ -19,17 +19,17 @@ const initialState: PurchaseState = {
 };
 
 const getToken = () =>
-  typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  typeof window !== "undefined" ? localStorage.getItem("adminToken") : null;
 
 export const fetchPurchases = createAsyncThunk<Purchase[]>(
   "purchase/fetch",
   async () => {
-    const token = localStorage.getItem("token");
-
-    const res = await fetch(`/api/purchase}`, {
+    
+    console.log(getToken)
+    const res = await fetch(`/api/purchase?_=${Date.now()}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${getToken}`,
       },
       cache: "no-store",
     });

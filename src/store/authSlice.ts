@@ -39,11 +39,15 @@ export const adminLogin = createAsyncThunk<
   { rejectValue: string }
 >("auth/adminLogin", async (data, { rejectWithValue }) => {
   try {
-    const res = await axios.post("/api/admin/login", data, {
-      withCredentials: true,
-    });
+    const res = await axios.post("/api/admin/login", data);
 
     const admin = res.data.admin as AdminLoginData;
+    const token = res.data.admin?.token;
+
+    if (token && typeof window !== "undefined") {
+      localStorage.setItem("adminToken", token);
+    }
+console.log(res.data);
 
     return { role: "admin" as const, admin };
   } catch (err) {
@@ -51,6 +55,7 @@ export const adminLogin = createAsyncThunk<
     return rejectWithValue(error.response?.data?.error || "Login failed");
   }
 });
+
 
 export const userLogin = createAsyncThunk<
   { role: "user"; user: LoginUser },

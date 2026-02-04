@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import Purchase from "@/models/PurchaseOrder";
-import Dealer from "@/models/Dealer";
+
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     await dbConnect();
 
-    const { id } = params;
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "Invalid ID" },
-        { status: 400 }
-      );
-    }
+    const { id } = await context.params;
 
     const purchase = await Purchase.findById(id)
       .populate("dealerId", "name phone address gstin")
@@ -32,12 +25,11 @@ export async function GET(
     }
 
     return NextResponse.json(purchase, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error("PURCHASE FETCH ERROR:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch purchase" },
+      { error: "Failed to fetch purchase" },
       { status: 500 }
     );
   }
 }
-

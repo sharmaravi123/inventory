@@ -11,34 +11,26 @@ import Warehouse from "@/models/Warehouse";
 
 /* ================= GET ================= */
 export async function GET(req: NextRequest) {
-  console.log("🔍 Starting GET /api/purchase");
   try {
-    console.log("🔍 Checking token...");
+    await dbConnect();
     const authHeader = req.headers.get("authorization");
     const token = authHeader?.split(" ")[1];
+
     if (!token) {
-      console.log("❌ No token provided");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    console.log("✅ Token found");
 
-    console.log("🔍 Connecting to DB...");
-    await dbConnect();
-    console.log("✅ DB connected");
-
-    console.log("🔍 Fetching purchases...");
     const purchases = await Purchase.find()
       .populate("dealerId", "name phone address gstin")
       .populate("items.productId", "name perBoxItem")
       .sort({ createdAt: -1 })
       .lean();
-    console.log(`✅ Fetched ${purchases.length} purchases`);
 
     return NextResponse.json(purchases);
   } catch (err: any) {
-    console.error("❌ GET PURCHASE ERROR:", err.message, err.stack);
+    console.error("GET PURCHASE ERROR:", err);
     return NextResponse.json(
-      { error: err.message || "Internal Server Error" },
+      { error: err.message },
       { status: 500 }
     );
   }
