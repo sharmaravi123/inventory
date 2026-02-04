@@ -7,11 +7,11 @@ import Product, { IProduct } from "@/models/Product";
 import Purchase from "@/models/PurchaseOrder";
 import { cookies } from "next/headers";
 /* ================= GET ================= */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await dbConnect();
-    const cookieStore = await cookies();
-    const token = cookieStore.get("adminToken")?.value;
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.split(" ")[1];
 
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -25,12 +25,14 @@ export async function GET() {
 
     return NextResponse.json(purchases);
   } catch (err: any) {
-    // log to platform log (Vercel dashboard)
-    console.error("ERROR GET /api/purchase:", err);
-    // return error details temporarily (remove in prod!)
-    return NextResponse.json({ error: err?.message || "Unknown", stack: err?.stack }, { status: 500 });
+    console.error("GET PURCHASE ERROR:", err);
+    return NextResponse.json(
+      { error: err.message },
+      { status: 500 }
+    );
   }
 }
+
 
 
 
@@ -38,7 +40,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   await dbConnect();
 
-  const { dealerId, warehouseId, items, purchaseDate  } = await req.json();
+  const { dealerId, warehouseId, items, purchaseDate } = await req.json();
 
   let subTotal = 0;
   let taxTotal = 0;
@@ -116,7 +118,7 @@ export async function POST(req: NextRequest) {
     subTotal,
     taxTotal,
     grandTotal: subTotal + taxTotal,
-     createdAt: purchaseDate ? new Date(purchaseDate) : new Date(),
+    createdAt: purchaseDate ? new Date(purchaseDate) : new Date(),
   });
 
   /* 🔥 RETURN POPULATED DATA */

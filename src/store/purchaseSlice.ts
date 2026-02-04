@@ -24,9 +24,13 @@ const getToken = () =>
 export const fetchPurchases = createAsyncThunk<Purchase[]>(
   "purchase/fetch",
   async () => {
+    const token = localStorage.getItem("token");
+
     const res = await fetch(`/api/purchase?_=${Date.now()}`, {
       method: "GET",
-      credentials: "include",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       cache: "no-store",
     });
 
@@ -39,6 +43,7 @@ export const fetchPurchases = createAsyncThunk<Purchase[]>(
     return Array.isArray(data) ? data : [];
   }
 );
+
 
 
 export const createPurchase = createAsyncThunk<Purchase, any>(
