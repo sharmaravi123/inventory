@@ -4,12 +4,19 @@ import Purchase from "@/models/PurchaseOrder";
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     await dbConnect();
 
-    const { id } = await context.params;
+    const { id } = params;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid ID" },
+        { status: 400 }
+      );
+    }
 
     const purchase = await Purchase.findById(id)
       .populate("dealerId", "name phone address gstin")
@@ -25,11 +32,12 @@ export async function GET(
     }
 
     return NextResponse.json(purchase, { status: 200 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("PURCHASE FETCH ERROR:", error);
     return NextResponse.json(
-      { error: "Failed to fetch purchase" },
+      { error: error.message || "Failed to fetch purchase" },
       { status: 500 }
     );
   }
 }
+
