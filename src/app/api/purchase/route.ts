@@ -8,22 +8,30 @@ import Purchase from "@/models/PurchaseOrder";
 import { cookies } from "next/headers";
 /* ================= GET ================= */
 export async function GET() {
-  await dbConnect();
-  const cookieStore = await cookies();
-  const token = cookieStore.get("adminToken")?.value;
+  try {
+    await dbConnect();
+    const cookieStore = await cookies();
+    const token = cookieStore.get("adminToken")?.value;
 
-  if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const purchases = await Purchase.find()
+      .populate("dealerId", "name phone address gstin")
+      .populate("items.productId", "name perBoxItem")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return NextResponse.json(purchases);
+  } catch (err: any) {
+    // log to platform log (Vercel dashboard)
+    console.error("ERROR GET /api/purchase:", err);
+    // return error details temporarily (remove in prod!)
+    return NextResponse.json({ error: err?.message || "Unknown", stack: err?.stack }, { status: 500 });
   }
-
-  const purchases = await Purchase.find()
-    .populate("dealerId", "name phone address gstin")
-    .populate("items.productId", "name perBoxItem")
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return NextResponse.json(purchases);
 }
+
 
 
 /* ================= POST ================= */
