@@ -5,6 +5,8 @@ import dbConnect from "@/lib/mongodb";
 import Stock from "@/models/Stock";
 import Product, { IProduct } from "@/models/Product";
 import Purchase from "@/models/PurchaseOrder";
+import "@/models/Dealer";
+import "@/models/Warehouse";
 import { cookies } from "next/headers";
 import Dealer from "@/models/Dealer";
 import Warehouse from "@/models/Warehouse";
