@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
     subTotal,
     taxTotal,
     grandTotal: subTotal + taxTotal,
-    createdAt: purchaseDate ? new Date(purchaseDate) : new Date(),
+    purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
   });
 
   /* 🔥 RETURN POPULATED DATA */

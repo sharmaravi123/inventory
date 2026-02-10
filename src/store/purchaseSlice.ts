@@ -6,6 +6,7 @@ export interface Purchase {
   items: any[];
   grandTotal: number;
   createdAt: string;
+  purchaseDate?: string;
 }
 
 interface PurchaseState {
@@ -58,6 +59,28 @@ export const createPurchase = createAsyncThunk<Purchase, any>(
   }
 );
 
+export const updatePurchase = createAsyncThunk<
+  Purchase,
+  { id: string; payload: any }
+>("purchase/update", async ({ id, payload }) => {
+  const res = await fetch(`/api/purchase/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data?.error || "Failed to update purchase");
+  }
+
+  return data;
+});
+
 const purchaseSlice = createSlice({
   name: "purchase",
   initialState,
@@ -72,6 +95,9 @@ const purchaseSlice = createSlice({
         state.list = action.payload;
       })
       .addCase(createPurchase.fulfilled, (state) => {
+        state.loading = false;
+      })
+      .addCase(updatePurchase.fulfilled, (state) => {
         state.loading = false;
       });
 

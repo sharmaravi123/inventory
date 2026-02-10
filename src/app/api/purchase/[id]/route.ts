@@ -4,6 +4,8 @@ import Purchase from "@/models/PurchaseOrder";
 import "@/models/Dealer";
 import "@/models/Warehouse";
 import "@/models/Product";
+import Product, { IProduct } from "@/models/Product";
+import Stock from "@/models/Stock";
 
 export async function GET(
   req: NextRequest,
@@ -32,6 +34,164 @@ export async function GET(
     console.error("PURCHASE FETCH ERROR:", error);
     return NextResponse.json(
       { error: "Failed to fetch purchase" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    await dbConnect();
+
+    const { id } = await context.params;
+    const { dealerId, warehouseId, items, purchaseDate } =
+      await req.json();
+
+    if (!dealerId || !warehouseId || !Array.isArray(items)) {
+      return NextResponse.json(
+        { error: "Invalid payload" },
+        { status: 400 }
+      );
+    }
+
+    const existing = await Purchase.findById(id).lean();
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Purchase not found" },
+        { status: 404 }
+      );
+    }
+
+    // Revert old stock
+    for (const oldItem of existing.items ?? []) {
+      const oldItemAny = oldItem as {
+        productId?: unknown;
+        boxes?: number;
+        looseItems?: number;
+        perBoxItem?: number;
+      };
+      const productId = String(oldItemAny.productId);
+      const oldWarehouseId = String(existing.warehouseId);
+      const product = (await Product.findById(productId)
+        .lean()
+        .exec()) as IProduct | null;
+      const perBox =
+        typeof oldItemAny.perBoxItem === "number" &&
+        oldItemAny.perBoxItem > 0
+          ? oldItemAny.perBoxItem
+          : product?.perBoxItem ?? 1;
+
+      const stock = await Stock.findOne({
+        productId,
+        warehouseId: oldWarehouseId,
+      });
+
+      if (!stock) {
+        // If stock record is missing, skip revert to avoid hard-fail.
+        continue;
+      }
+
+      let newBoxes = stock.boxes - (oldItemAny.boxes ?? 0);
+      let newLoose = stock.looseItems - (oldItemAny.looseItems ?? 0);
+
+      if (newBoxes < 0) newBoxes = 0;
+      if (newLoose < 0) newLoose = 0;
+
+      stock.boxes = newBoxes;
+      stock.looseItems = newLoose;
+      stock.totalItems = newBoxes * perBox + newLoose;
+      await stock.save();
+    }
+
+    // Build new computed items + apply stock
+    let subTotal = 0;
+    let taxTotal = 0;
+    const computedItems = [];
+
+    for (const item of items) {
+      const product = (await Product.findById(item.productId)
+        .lean()
+        .exec()) as IProduct | null;
+
+      if (!product) {
+        throw new Error("Product not found");
+      }
+
+      const perBox =
+        typeof product.perBoxItem === "number" &&
+        product.perBoxItem > 0
+          ? product.perBoxItem
+          : 1;
+
+      const totalQty = item.boxes * perBox + item.looseItems;
+      const baseAmount = totalQty * item.purchasePrice;
+      const taxAmount = (baseAmount * item.taxPercent) / 100;
+      const totalAmount = baseAmount + taxAmount;
+
+      subTotal += baseAmount;
+      taxTotal += taxAmount;
+
+      computedItems.push({
+        productId: item.productId,
+        boxes: item.boxes,
+        looseItems: item.looseItems,
+        perBoxItem: perBox,
+        purchasePrice: item.purchasePrice,
+        taxPercent: item.taxPercent,
+        taxAmount,
+        totalAmount,
+        totalQty,
+      });
+
+      const stock = await Stock.findOne({
+        productId: item.productId,
+        warehouseId,
+      });
+
+      if (stock) {
+        stock.boxes += item.boxes;
+        stock.looseItems += item.looseItems;
+        stock.totalItems = stock.boxes * perBox + stock.looseItems;
+        await stock.save();
+      } else {
+        await Stock.create({
+          productId: item.productId,
+          warehouseId,
+          boxes: item.boxes,
+          looseItems: item.looseItems,
+          totalItems: totalQty,
+        });
+      }
+    }
+
+    const updated = await Purchase.findByIdAndUpdate(
+      id,
+      {
+        dealerId,
+        warehouseId,
+        items: computedItems,
+        subTotal,
+        taxTotal,
+        grandTotal: subTotal + taxTotal,
+        purchaseDate: purchaseDate
+          ? new Date(purchaseDate)
+          : existing.purchaseDate ?? existing.createdAt,
+      },
+      { new: true }
+    )
+      .populate("dealerId", "name phone address gstin")
+      .populate("warehouseId", "name")
+      .populate("items.productId", "name hsnCode perBoxItem")
+      .lean();
+
+    return NextResponse.json(updated, { status: 200 });
+  } catch (error: any) {
+    console.error("PURCHASE UPDATE ERROR:", error);
+    return NextResponse.json(
+      { error: error?.message || "Failed to update purchase" },
       { status: 500 }
     );
   }

@@ -26,7 +26,14 @@ type DateFilter = "all" | "thisMonth" | "lastMonth" | "custom";
 
 export default function OrdersPage() {
   const dispatch = useDispatch<AppDispatch>();
-  const { data, isLoading, refetch } = useListBillsQuery({ search: "" });
+  const { data, isLoading, refetch } = useListBillsQuery(
+    { search: "" },
+    {
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    }
+  );
   const bills = data?.bills ?? [];
 
   const drivers = useSelector((s: RootState) => s.driver.items);

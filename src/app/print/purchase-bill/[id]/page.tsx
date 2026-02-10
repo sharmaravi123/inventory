@@ -71,7 +71,7 @@ export default function PrintPurchaseBillPage() {
 
         setBill({
           invoiceNumber: `PUR-${data._id.slice(-6)}`,
-          purchaseDate: data.createdAt,
+          purchaseDate: data.purchaseDate ?? data.createdAt,
 
           dealer: {
             name: data.dealerId?.name,

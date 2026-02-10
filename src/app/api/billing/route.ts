@@ -6,6 +6,9 @@ import Stock from "@/models/Stock";
 import { Types } from "mongoose";
 import { getNextInvoiceNumber } from "@/models/InvoiceCounter";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export type BillingItemInput = {
   stockId: string;
   productId: string;
@@ -282,5 +285,8 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   await dbConnect();
   const bills = await BillModel.find().sort({ createdAt: -1 });
-  return NextResponse.json({ bills });
+  return NextResponse.json(
+    { bills },
+    { headers: { "Cache-Control": "no-store, max-age=0" } }
+  );
 }

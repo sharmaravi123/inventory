@@ -19,6 +19,7 @@ export interface IPurchase extends Document {
   subTotal: number;
   taxTotal: number;
   grandTotal: number;
+  purchaseDate?: Date;
   createdAt: Date;
 }
 
@@ -42,6 +43,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     subTotal: Number,
     taxTotal: Number,
     grandTotal: Number,
+    purchaseDate: { type: Date, default: null },
   },
   { timestamps: true }
 );

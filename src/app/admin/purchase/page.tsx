@@ -9,7 +9,11 @@ import Select from "react-select";
 import { createDealer, fetchDealers } from "@/store/dealerSlice";
 import { fetchProducts } from "@/store/productSlice";
 import { fetchWarehouses } from "@/store/warehouseSlice";
-import { fetchPurchases, createPurchase } from "@/store/purchaseSlice";
+import {
+    fetchPurchases,
+    createPurchase,
+    updatePurchase,
+} from "@/store/purchaseSlice";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 
@@ -49,6 +53,7 @@ export default function AdminPurchaseManager() {
     const [items, setItems] = useState<PurchaseItem[]>([]);
     const [open, setOpen] = useState<boolean>(false);
     const [purchaseDate, setPurchaseDate] = useState<string>("");
+    const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
 
     const [filterType, setFilterType] = useState<DateFilter>("thisMonth");
     const [fromDate, setFromDate] = useState<string>("");
@@ -141,7 +146,7 @@ export default function AdminPurchaseManager() {
 
     const filteredPurchases = useMemo(() => {
         return purchases.filter((p: any) => {
-            const d = new Date(p.createdAt);
+            const d = new Date(p.purchaseDate ?? p.createdAt);
             const now = new Date();
 
             // Date filtering
@@ -218,6 +223,24 @@ export default function AdminPurchaseManager() {
         });
     };
 
+    const resetForm = () => {
+        setDealerId("");
+        setWarehouseId("");
+        setItems([]);
+        setPurchaseDate("");
+        setEditingPurchaseId(null);
+    };
+
+    const buildConfirmHtml = (cleanedItems: PurchaseItem[]) => {
+        const lines = cleanedItems.map((it) => {
+            const product = getProductById(it.productId);
+            const name = product?.name || "Unknown Product";
+            return `<li><b>${name}</b> — Boxes: ${it.boxes}, Loose: ${it.looseItems}</li>`;
+        });
+
+        return `<div style="text-align:left;"><p>Selected items:</p><ul>${lines.join("")}</ul></div>`;
+    };
+
     const savePurchase = async (): Promise<void> => {
         const cleanedItems = items.filter((it) => it.productId);
         if (!dealerId || !warehouseId || cleanedItems.length === 0) {
@@ -226,16 +249,40 @@ export default function AdminPurchaseManager() {
         }
 
         try {
-            await dispatch(createPurchase({ dealerId, warehouseId, items: cleanedItems, purchaseDate })).unwrap();
+            const confirm = await Swal.fire({
+                title: editingPurchaseId ? "Confirm Update" : "Confirm Purchase",
+                html: buildConfirmHtml(cleanedItems),
+                icon: "question",
+                showCancelButton: true,
+                confirmButtonText: editingPurchaseId ? "Update" : "Save",
+                cancelButtonText: "Cancel",
+            });
+
+            if (!confirm.isConfirmed) return;
+
+            if (editingPurchaseId) {
+                await dispatch(
+                    updatePurchase({
+                        id: editingPurchaseId,
+                        payload: { dealerId, warehouseId, items: cleanedItems, purchaseDate },
+                    })
+                ).unwrap();
+            } else {
+                await dispatch(createPurchase({ dealerId, warehouseId, items: cleanedItems, purchaseDate })).unwrap();
+            }
             await dispatch(fetchPurchases()).unwrap();
-            setItems([]);
-            setDealerId("");
-            setWarehouseId("");
-            setPurchaseDate("");
             setOpen(false);
-            Swal.fire("Success", "Purchase created successfully", "success");
-        } catch (error) {
-            Swal.fire("Error", "Failed to create purchase", "error");
+            resetForm();
+            Swal.fire("Success", editingPurchaseId ? "Purchase updated successfully" : "Purchase created successfully", "success");
+        } catch (error: any) {
+            const msg =
+                (error && typeof error === "object" && "message" in error && error.message)
+                    ? String(error.message)
+                    : editingPurchaseId
+                        ? "Failed to update purchase"
+                        : "Failed to create purchase";
+
+            Swal.fire("Error", msg, "error");
         }
     };
 
@@ -254,6 +301,33 @@ export default function AdminPurchaseManager() {
         return dealers.find((d: any) => d?._id === dealerRef) || null;
     }, [dealers]);
     const router = useRouter();
+
+    const loadPurchaseForEdit = (purchase: any) => {
+        setEditingPurchaseId(purchase._id);
+        setDealerId(
+            typeof purchase.dealerId === "string"
+                ? purchase.dealerId
+                : purchase.dealerId?._id || ""
+        );
+        setWarehouseId(
+            typeof purchase.warehouseId === "string"
+                ? purchase.warehouseId
+                : purchase.warehouseId?._id || ""
+        );
+        const dateSource = purchase.purchaseDate ?? purchase.createdAt;
+        setPurchaseDate(new Date(dateSource).toISOString().slice(0, 10));
+
+        const mappedItems: PurchaseItem[] = (purchase.items || []).map((it: any) => ({
+            productId: typeof it.productId === "string" ? it.productId : it.productId?._id || "",
+            boxes: it.boxes ?? 0,
+            looseItems: it.looseItems ?? 0,
+            purchasePrice: it.purchasePrice ?? 0,
+            taxPercent: it.taxPercent ?? 0,
+        }));
+
+        setItems(mappedItems.length ? mappedItems : [{ productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, taxPercent: 0 }]);
+        setOpen(true);
+    };
 
     const buildGSTPurchaseReport = useCallback(() => {
         const rows: any[] = [];
@@ -283,7 +357,7 @@ export default function AdminPurchaseManager() {
 
                 rows.push({
                     Invoice_No: `PUR-${purchase._id.slice(-6)}`,
-                    Invoice_Date: new Date(purchase.createdAt).toLocaleDateString("en-IN"),
+                    Invoice_Date: new Date(purchase.purchaseDate ?? purchase.createdAt).toLocaleDateString("en-IN"),
                     Supplier_Name: dealer?.name || "",
                     Supplier_GSTIN: dealer?.gstin || "",
                     State: dealerState,
@@ -344,7 +418,10 @@ export default function AdminPurchaseManager() {
                         </p>
                     </div>
                     <button
-                        onClick={() => setOpen(true)}
+                        onClick={() => {
+                            resetForm();
+                            setOpen(true);
+                        }}
                         className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
                     >
                         <Plus className="h-4 w-4" />
@@ -509,18 +586,26 @@ export default function AdminPurchaseManager() {
                                                     </span>
                                                 </td>
                                                 <td className="px-2 py-3 text-center text-sm font-medium text-slate-900">
-                                                    {new Date(purchase.createdAt).toLocaleDateString("en-IN")}
+                                                    {new Date(purchase.purchaseDate ?? purchase.createdAt).toLocaleDateString("en-IN")}
                                                 </td>
                                                 <td className="px-2 py-3 text-center text-sm font-medium text-slate-900">
                                                     PUR-{purchase._id.slice(-6)}
                                                 </td>
                                                 <td className="px-2 py-3 text-center">
-                                                    <button
-                                                        onClick={() => router.push(`/print/purchase-bill/${purchase._id}`)}
-                                                        className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-                                                    >
-                                                        🖨 Print
-                                                    </button>
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <button
+                                                            onClick={() => loadPurchaseForEdit(purchase)}
+                                                            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-blue-500 hover:text-blue-600"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => router.push(`/print/purchase-bill/${purchase._id}`)}
+                                                            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                                                        >
+                                                            🖨 Print
+                                                        </button>
+                                                    </div>
                                                 </td>
 
                                             </tr>
@@ -629,11 +714,18 @@ export default function AdminPurchaseManager() {
                                 <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 text-white">
                                     <div className="flex justify-between items-center">
                                         <div>
-                                            <h2 className="text-2xl font-bold">New Purchase Order</h2>
-                                            <p className="text-slate-300">Create new inventory purchase</p>
+                                            <h2 className="text-2xl font-bold">
+                                                {editingPurchaseId ? "Edit Purchase Order" : "New Purchase Order"}
+                                            </h2>
+                                            <p className="text-slate-300">
+                                                {editingPurchaseId ? "Update existing inventory purchase" : "Create new inventory purchase"}
+                                            </p>
                                         </div>
                                         <button
-                                            onClick={() => setOpen(false)}
+                                            onClick={() => {
+                                                setOpen(false);
+                                                resetForm();
+                                            }}
                                             className="p-2 hover:bg-white/20 rounded-xl transition-colors"
                                         >
                                             <X className="w-6 h-6" />
@@ -809,7 +901,10 @@ export default function AdminPurchaseManager() {
                                     <div className="flex flex-col sm:flex-row gap-4 pt-3 border-t border-slate-200">
                                         <button
                                             type="button"
-                                            onClick={() => setOpen(false)}
+                                            onClick={() => {
+                                                setOpen(false);
+                                                resetForm();
+                                            }}
                                             className="flex-1 px-3 py-3 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors"
                                         >
                                             Cancel
@@ -820,7 +915,7 @@ export default function AdminPurchaseManager() {
                                             disabled={!dealerId || !warehouseId || items.filter((it) => it.productId).length === 0}
                                             className="flex-1 px-3 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all focus:outline-none focus:ring-4 focus:ring-blue-500"
                                         >
-                                            Save Purchase
+                                            {editingPurchaseId ? "Update Purchase" : "Save Purchase"}
                                         </button>
                                     </div>
                                 </div>
