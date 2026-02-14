@@ -10,6 +10,8 @@ export interface IPurchaseItem extends Document {
   looseItems: number;
 
   purchasePrice: number;
+  discountPercent: number;
+  discountAmount: number;
   taxPercent: number;
   taxAmount: number;
   totalAmount: number;
@@ -24,6 +26,8 @@ const PurchaseItemSchema = new Schema<IPurchaseItem>({
   looseItems: Number,
 
   purchasePrice: Number,
+  discountPercent: { type: Number, default: 0 },
+  discountAmount: { type: Number, default: 0 },
   taxPercent: Number,
   taxAmount: Number,
   totalAmount: Number,

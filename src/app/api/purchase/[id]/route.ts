@@ -127,11 +127,17 @@ export async function PUT(
           : 1;
 
       const totalQty = item.boxes * perBox + item.looseItems;
-      const baseAmount = totalQty * item.purchasePrice;
-      const taxAmount = (baseAmount * item.taxPercent) / 100;
-      const totalAmount = baseAmount + taxAmount;
+      const grossAmount = totalQty * Number(item.purchasePrice || 0);
+      const discountPercent = Math.max(
+        0,
+        Math.min(100, Number(item.discountPercent || 0))
+      );
+      const discountAmount = (grossAmount * discountPercent) / 100;
+      const taxableAmount = grossAmount - discountAmount;
+      const taxAmount = (taxableAmount * Number(item.taxPercent || 0)) / 100;
+      const totalAmount = taxableAmount + taxAmount;
 
-      subTotal += baseAmount;
+      subTotal += taxableAmount;
       taxTotal += taxAmount;
 
       computedItems.push({
@@ -140,6 +146,10 @@ export async function PUT(
         looseItems: item.looseItems,
         perBoxItem: perBox,
         purchasePrice: item.purchasePrice,
+        discountPercent,
+        grossAmount,
+        discountAmount,
+        taxableAmount,
         taxPercent: item.taxPercent,
         taxAmount,
         totalAmount,

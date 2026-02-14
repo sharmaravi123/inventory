@@ -22,6 +22,7 @@ type PurchaseItem = {
     boxes: number;
     looseItems: number;
     purchasePrice: number;
+    discountPercent: number;
     taxPercent: number;
 };
 
@@ -107,7 +108,7 @@ export default function AdminPurchaseManager() {
     useEffect(() => {
         if (open && items.length === 0) {
             setItems([
-                { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, taxPercent: 0 }
+                { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 0, taxPercent: 0 }
             ]);
         }
     }, [open]);
@@ -136,17 +137,27 @@ export default function AdminPurchaseManager() {
 
     const calcItem = useCallback((it: any, perBox: number) => {
         const totalPieces = it.boxes * perBox + it.looseItems;
-        const totalAmount = totalPieces * it.purchasePrice;
-        const taxAmount = it.taxPercent > 0
-            ? (totalAmount * it.taxPercent) / (100 + it.taxPercent)
-            : 0;
-        const baseAmount = totalAmount - taxAmount;
+        const grossAmount = totalPieces * Number(it.purchasePrice || 0);
+        const discountPercent = Math.max(0, Math.min(100, Number(it.discountPercent ?? 0)));
+        const discountAmount = typeof it.discountAmount === "number"
+            ? it.discountAmount
+            : (grossAmount * discountPercent) / 100;
+        const taxableAmount = Math.max(0, grossAmount - discountAmount);
+        const taxAmount = typeof it.taxAmount === "number"
+            ? it.taxAmount
+            : (taxableAmount * Number(it.taxPercent || 0)) / 100;
+        const finalAmount = typeof it.totalAmount === "number"
+            ? it.totalAmount
+            : taxableAmount + taxAmount;
 
         return {
             totalPieces,
-            baseAmount,
+            grossAmount,
+            discountPercent,
+            discountAmount,
+            taxableAmount,
             taxAmount,
-            finalAmount: totalAmount,
+            finalAmount,
         };
     }, []);
 
@@ -154,10 +165,26 @@ export default function AdminPurchaseManager() {
         return items.reduce((sum, it) => {
             const pid = typeof it.productId === "string" ? it.productId : it.productId?._id;
             const perBox = getProductById(pid || "")?.perBoxItem ?? 1;
-            const qty = it.boxes * perBox + it.looseItems;
-            return sum + qty * it.purchasePrice;
+            return sum + calcItem(it, perBox).finalAmount;
         }, 0);
-    }, [getProductById]);
+    }, [calcItem, getProductById]);
+
+    const calcPurchaseDiscount = useCallback((lineItems: any[]): { discountAmount: number; discountPercent: number } => {
+        let gross = 0;
+        let discount = 0;
+        lineItems.forEach((it) => {
+            const pid = typeof it.productId === "string" ? it.productId : it.productId?._id;
+            const perBox = getProductById(pid || "")?.perBoxItem ?? 1;
+            const calc = calcItem(it, perBox);
+            gross += calc.grossAmount;
+            discount += calc.discountAmount;
+        });
+
+        return {
+            discountAmount: discount,
+            discountPercent: gross > 0 ? (discount * 100) / gross : 0,
+        };
+    }, [calcItem, getProductById]);
 
     const filteredPurchases = useMemo(() => {
         return purchases.filter((p: any) => {
@@ -191,7 +218,7 @@ export default function AdminPurchaseManager() {
     }, [purchases, filterType, fromDate, toDate, searchTerm, getDealerById, getProductById]);
 
     const addItem = (): void => {
-        setItems((prev) => [...prev, { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, taxPercent: 0 }]);
+        setItems((prev) => [...prev, { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 0, taxPercent: 0 }]);
     };
 
     const removeItem = (index: number): void => {
@@ -221,6 +248,7 @@ export default function AdminPurchaseManager() {
                     boxes: 0,
                     looseItems: 0,
                     purchasePrice: 0,
+                    discountPercent: 0,
                     taxPercent: 0
                 });
             }
@@ -250,7 +278,7 @@ export default function AdminPurchaseManager() {
         const lines = cleanedItems.map((it) => {
             const product = getProductById(it.productId);
             const name = product?.name || "Unknown Product";
-            return `<li><b>${name}</b> — Boxes: ${it.boxes}, Loose: ${it.looseItems}</li>`;
+            return `<li><b>${name}</b> - Boxes: ${it.boxes}, Loose: ${it.looseItems}, Discount: ${it.discountPercent || 0}%</li>`;
         });
 
         return `<div style="text-align:left;"><p>Selected items:</p><ul>${lines.join("")}</ul></div>`;
@@ -337,10 +365,11 @@ export default function AdminPurchaseManager() {
             boxes: it.boxes ?? 0,
             looseItems: it.looseItems ?? 0,
             purchasePrice: it.purchasePrice ?? 0,
+            discountPercent: it.discountPercent ?? 0,
             taxPercent: it.taxPercent ?? 0,
         }));
 
-        setItems(mappedItems.length ? mappedItems : [{ productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, taxPercent: 0 }]);
+        setItems(mappedItems.length ? mappedItems : [{ productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 0, taxPercent: 0 }]);
         setOpen(true);
     };
 
@@ -368,16 +397,10 @@ export default function AdminPurchaseManager() {
 
                 const product = getProductById(pid || "");
                 const perBox = product?.perBoxItem ?? 1;
-                const qty = it.boxes * perBox + it.looseItems;
-
-                const grossTotal = qty * it.purchasePrice;
-
-                const taxAmount =
-                    it.taxPercent > 0
-                        ? (grossTotal * it.taxPercent) / (100 + it.taxPercent)
-                        : 0;
-
-                const taxableValue = grossTotal - taxAmount;
+                const calc = calcItem(it, perBox);
+                const grossTotal = calc.grossAmount;
+                const taxAmount = calc.taxAmount;
+                const taxableValue = calc.taxableAmount;
 
                 const companyState = (company?.gstin || "").slice(0, 2);
                 const dealerState = (dealer?.gstin || "").slice(0, 2);
@@ -395,6 +418,8 @@ export default function AdminPurchaseManager() {
                     "GSTIN/UIN": dealer?.gstin || "",
 
                     "Gross Total": grossTotal.toFixed(2),
+                    "Discount %": calc.discountPercent.toFixed(2),
+                    "Discount Amount": calc.discountAmount.toFixed(2),
                     "Tax Rate": isIntraState ? it.taxPercent : `IGST ${it.taxPercent}`,
 
                     Purchase: taxableValue.toFixed(2),
@@ -414,7 +439,7 @@ export default function AdminPurchaseManager() {
         });
 
         return rows;
-    }, [filteredPurchases, getProductById, resolveDealer, company, formatDateShort]);
+    }, [filteredPurchases, getProductById, resolveDealer, company, formatDateShort, calcItem]);
 
     const getFiscalYearLabel = (dt: Date) => {
         const year = dt.getFullYear();
@@ -635,7 +660,7 @@ export default function AdminPurchaseManager() {
                         >
                             <ChevronLeft className="w-5 h-5" />
                         </button>
-                        <span className="font-medium text-sm text-slate-700">Horizontal scroll →</span>
+                        <span className="font-medium text-sm text-slate-700">Horizontal scroll {"->"}</span>
                         <button
                             onClick={() => scrollTable('right')}
                             className="p-2 rounded-lg bg-white border shadow-sm hover:bg-slate-50 transition-colors"
@@ -662,6 +687,7 @@ export default function AdminPurchaseManager() {
                                     const dealer = resolveDealer(purchase.dealerId);
                                     const warehouse = getWarehouseById(purchase.warehouseId || "");
                                     const totalAmount = calcPurchaseTotal(purchase.items || []);
+                                    const discountSummary = calcPurchaseDiscount(purchase.items || []);
 
                                     return (
                                         <React.Fragment key={purchase._id}>
@@ -677,7 +703,7 @@ export default function AdminPurchaseManager() {
                                                     </div>
                                                 </td>
                                                 <td className="px-2 py-3 text-sm text-slate-700 max-w-xs truncate">
-                                                    {dealer?.address || "—"}
+                                                    {dealer?.address || "N/A"}
                                                 </td>
                                                 <td className="px-2 py-3 text-center">
                                                     <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
@@ -702,7 +728,7 @@ export default function AdminPurchaseManager() {
                                                             onClick={() => router.push(`/print/purchase-bill/${purchase._id}`)}
                                                             className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                                                         >
-                                                            🖨 Print
+                                                            Print
                                                         </button>
                                                     </div>
                                                 </td>
@@ -711,14 +737,16 @@ export default function AdminPurchaseManager() {
                                             {/* updated */}
                                             {/* DETAILS ROW - FULL PRODUCT BREAKDOWN */}
                                             <tr className="bg-slate-50/50">
-                                                <td colSpan={4} className="p-0">
+                                                <td colSpan={6} className="p-0">
                                                     <div className="border-t border-slate-200">
-                                                        <div className="grid grid-cols-7 gap-4 p-6 bg-slate-50 text-xs font-medium uppercase tracking-wide">
+                                                        <div className="grid grid-cols-9 gap-4 p-6 bg-slate-50 text-xs font-medium uppercase tracking-wide">
                                                             <div>Product</div>
                                                             <div className="text-center">Boxes</div>
                                                             <div className="text-center">Loose</div>
                                                             <div className="text-center">Per Box</div>
                                                             <div className="text-center">Qty</div>
+                                                            <div className="text-center">Discount %</div>
+                                                            <div className="text-right">Discount Amt</div>
                                                             <div className="text-center">Tax</div>
                                                             <div className="text-right">Amount</div>
                                                         </div>
@@ -730,7 +758,7 @@ export default function AdminPurchaseManager() {
                                                             const calc = calcItem(it, perBox);
 
                                                             return (
-                                                                <div key={`${purchase._id}-${pid}`} className="grid grid-cols-7 gap-4 p-4 border-t bg-white text-sm hover:bg-slate-50">
+                                                                <div key={`${purchase._id}-${pid}`} className="grid grid-cols-9 gap-4 p-4 border-t bg-white text-sm hover:bg-slate-50">
                                                                     <div className="font-medium text-slate-900">
                                                                         {product?.name || "N/A"}
                                                                     </div>
@@ -746,6 +774,12 @@ export default function AdminPurchaseManager() {
                                                                     <div className="text-center font-bold text-xl text-indigo-600">
                                                                         {calc.totalPieces}
                                                                     </div>
+                                                                    <div className="text-center font-semibold text-amber-700">
+                                                                        {calc.discountPercent.toFixed(2)}%
+                                                                    </div>
+                                                                    <div className="text-right font-mono text-rose-600">
+                                                                        {currency.format(calc.discountAmount)}
+                                                                    </div>
                                                                     <div className="text-center">
                                                                         <div className="text-xs text-slate-500">{it.taxPercent}%</div>
                                                                         <div className="font-mono text-emerald-600">
@@ -757,7 +791,7 @@ export default function AdminPurchaseManager() {
                                                                             {currency.format(calc.finalAmount)}
                                                                         </div>
                                                                         <div className="text-xs text-slate-500 line-through">
-                                                                            {currency.format(calc.baseAmount)}
+                                                                            {currency.format(calc.grossAmount)}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -765,9 +799,15 @@ export default function AdminPurchaseManager() {
                                                         })}
 
                                                         {/* TOTAL ROW */}
-                                                        <div className="grid grid-cols-7 gap-4 p-6 bg-emerald-50/50 border-t-2 border-emerald-200 mb-4">
+                                                        <div className="grid grid-cols-9 gap-4 p-6 bg-emerald-50/50 border-t-2 border-emerald-200 mb-4">
                                                             <div className="font-bold text-lg text-slate-900 col-span-5">
                                                                 GRAND TOTAL ({purchase.items?.length || 0} items)
+                                                            </div>
+                                                            <div className="text-center font-bold text-amber-700">
+                                                                {discountSummary.discountPercent.toFixed(2)}%
+                                                            </div>
+                                                            <div className="text-right font-bold text-rose-700">
+                                                                {currency.format(discountSummary.discountAmount)}
                                                             </div>
                                                             <div></div>
                                                             <div className="text-right">
@@ -785,7 +825,7 @@ export default function AdminPurchaseManager() {
 
                                 {filteredPurchases.length === 0 && (
                                     <tr>
-                                        <td colSpan={4} className="py-12 text-center text-sm text-slate-500">
+                                        <td colSpan={6} className="py-12 text-center text-sm text-slate-500">
                                             No purchases match the current filters
                                         </td>
                                     </tr>
@@ -914,7 +954,7 @@ export default function AdminPurchaseManager() {
                                                     </button>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+                                                <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
                                                     <div className="lg:col-span-1">
                                                         <label className="block text-sm font-medium text-slate-700 mb-2">
                                                             Product *
@@ -922,14 +962,14 @@ export default function AdminPurchaseManager() {
                                                         <Select
                                                             options={products.map((product: any) => ({
                                                                 value: product._id,
-                                                                label: `${product.name} - ₹${product.purchasePrice || 0}`
+                                                                label: `${product.name} - Rs ${product.purchasePrice || 0}`
                                                             }))}
                                                             value={
                                                                 item.productId
                                                                     ? {
                                                                         value: item.productId,
                                                                         label: `${products.find((p: any) => p._id === item.productId)?.name
-                                                                            } - ₹${products.find((p: any) => p._id === item.productId)?.purchasePrice || 0
+                                                                            } - Rs ${products.find((p: any) => p._id === item.productId)?.purchasePrice || 0
                                                                             }`,
                                                                     }
                                                                     : null
@@ -986,11 +1026,25 @@ export default function AdminPurchaseManager() {
                                                             className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono text-md"
                                                         />
                                                     </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                            Discount %
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max="100"
+                                                            value={item.discountPercent || ""}
+                                                            onChange={(e) => updateItem(index, "discountPercent", Math.min(100, Number(e.target.value) || 0))}
+                                                            className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono text-md"
+                                                        />
+                                                    </div>
                                                     <div className="lg:col-span-1 text-right pt-4">
                                                         <div className="text-2xl font-bold text-slate-900 mb-1">
                                                             {currency.format(item.purchasePrice)}
                                                         </div>
-                                                        <div className="text-sm text-slate-500">{item.taxPercent}% Tax</div>
+                                                        <div className="text-sm text-slate-500">{item.discountPercent || 0}% Discount</div>
+                                                        <div className="text-xs text-slate-500">{item.taxPercent}% Tax</div>
                                                     </div>
                                                 </div>
                                             </div>

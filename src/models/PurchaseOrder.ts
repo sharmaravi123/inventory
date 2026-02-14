@@ -6,6 +6,10 @@ export interface IPurchaseItem {
   looseItems: number;
   perBoxItem?: number;  // Add this
   purchasePrice: number;
+  discountPercent: number;
+  grossAmount?: number;
+  discountAmount?: number;
+  taxableAmount?: number;
   taxPercent: number;
   taxAmount: number;
   totalAmount: number;
@@ -34,6 +38,10 @@ const PurchaseSchema = new Schema<IPurchase>(
         looseItems: { type: Number, required: true, default: 0 },
         perBoxItem: Number,
         purchasePrice: { type: Number, required: true },
+        discountPercent: { type: Number, required: true, default: 0 },
+        grossAmount: Number,
+        discountAmount: Number,
+        taxableAmount: Number,
         taxPercent: { type: Number, required: true, default: 0 },
         taxAmount: Number,
         totalAmount: Number,

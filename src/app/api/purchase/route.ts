@@ -74,15 +74,17 @@ export async function POST(req: NextRequest) {
     const totalQty =
       item.boxes * perBox + item.looseItems;
 
-    const baseAmount =
-      totalQty * item.purchasePrice;
+    const grossAmount = totalQty * Number(item.purchasePrice || 0);
+    const discountPercent = Math.max(
+      0,
+      Math.min(100, Number(item.discountPercent || 0))
+    );
+    const discountAmount = (grossAmount * discountPercent) / 100;
+    const taxableAmount = grossAmount - discountAmount;
+    const taxAmount = (taxableAmount * Number(item.taxPercent || 0)) / 100;
+    const totalAmount = taxableAmount + taxAmount;
 
-    const taxAmount =
-      (baseAmount * item.taxPercent) / 100;
-
-    const totalAmount = baseAmount + taxAmount;
-
-    subTotal += baseAmount;
+    subTotal += taxableAmount;
     taxTotal += taxAmount;
 
     /* ✅ PUSH FINAL ITEM (WITH PRODUCT SNAPSHOT) */
@@ -92,6 +94,10 @@ export async function POST(req: NextRequest) {
       looseItems: item.looseItems,
       perBoxItem: perBox,
       purchasePrice: item.purchasePrice,
+      discountPercent,
+      grossAmount,
+      discountAmount,
+      taxableAmount,
       taxPercent: item.taxPercent,
       taxAmount,
       totalAmount,
