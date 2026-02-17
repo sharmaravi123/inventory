@@ -219,25 +219,37 @@ export async function POST(req: NextRequest) {
     const pay = validatePayment(body.payment, grand);
     const cust = await upsertCustomer(body.customer);
 
-    for (const it of body.items) {
-      if (it.overridePriceForCustomer) {
-        await CustomerModel.updateOne(
-          { _id: cust._id },
-          { $pull: { customPrices: { product: it.productId } } }
-        );
+    const overrideItems = body.items.filter((it) => it.overridePriceForCustomer);
+    if (overrideItems.length > 0) {
+      const uniqueOverrideItems = [
+        ...new Map(
+          overrideItems.map((it) => [String(it.productId), it])
+        ).values(),
+      ];
 
-        await CustomerModel.updateOne(
-          { _id: cust._id },
+      await CustomerModel.bulkWrite(
+        uniqueOverrideItems.flatMap((it) => [
           {
-            $push: {
-              customPrices: {
-                product: it.productId,
-                price: it.sellingPrice,
+            updateOne: {
+              filter: { _id: cust._id },
+              update: { $pull: { customPrices: { product: it.productId } } },
+            },
+          },
+          {
+            updateOne: {
+              filter: { _id: cust._id },
+              update: {
+                $push: {
+                  customPrices: {
+                    product: it.productId,
+                    price: it.sellingPrice,
+                  },
+                },
               },
             },
-          }
-        );
-      }
+          },
+        ])
+      );
     }
 
     const invoice = await getNextInvoiceNumber();
@@ -284,7 +296,12 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   await dbConnect();
-  const bills = await BillModel.find().sort({ createdAt: -1 });
+  const bills = await BillModel.find()
+    .sort({ createdAt: -1 })
+    .select(
+      "invoiceNumber billDate customerInfo items totalItems totalBeforeTax totalTax grandTotal payment driver vehicleNumber amountCollected balanceAmount status createdAt"
+    )
+    .lean();
   return NextResponse.json(
     { bills },
     { headers: { "Cache-Control": "no-store, max-age=0" } }

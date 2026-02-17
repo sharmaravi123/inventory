@@ -197,7 +197,6 @@ export default function BillList({
               tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
-                console.log("PRINT BILL ID:", bill._id);
                 router.push(`/print/bill/${bill._id}`);
               }}
 

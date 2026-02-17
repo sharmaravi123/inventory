@@ -1,21 +1,14 @@
 // ./src/app/api/user/list/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     await dbConnect();
 
-    // Optional: log model info for debugging
-    try {
-      console.log("Mongoose model keys:", Object.keys(User.schema.paths));
-    } catch (e) {
-      console.log("Could not read schema paths:", e);
-    }
-
-    // ✅ Fetch only users with role "user" (exclude admins)
     const users = await User.find({ role: "user" })
+      .select("-password")
       .populate("warehouses", "name")
       .lean();
 

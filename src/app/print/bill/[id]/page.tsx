@@ -48,8 +48,6 @@ export default function PrintBillPage() {
   if (!bill) {
     return <div style={{ padding: 24 }}>Loading bill…</div>;
   }
-  console.log(bill.items.map(i => i.hsnCode))
-
   return (
     <div style={{ background: "white" }}>
       {/* onClose empty because print page */}

@@ -47,7 +47,6 @@ export const adminLogin = createAsyncThunk<
     if (token && typeof window !== "undefined") {
       localStorage.setItem("adminToken", token);
     }
-console.log(res.data);
 
     return { role: "admin" as const, admin };
   } catch (err) {

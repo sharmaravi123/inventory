@@ -53,7 +53,6 @@ export const addCategory = createAsyncThunk(
     });
     if (!res.ok) {
       const err = await res.json();
-      console.log(err, 'err')
       return rejectWithValue(err.error || "Failed to add category");
     }
     return (await res.json()) as CategoryType;

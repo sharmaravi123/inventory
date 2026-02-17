@@ -15,7 +15,6 @@ import {
     updatePurchase,
 } from "@/store/purchaseSlice";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
 
 type PurchaseItem = {
     productId: string;
@@ -83,10 +82,6 @@ export default function AdminPurchaseManager() {
         gstin: "",
     });
     useEffect(() => {
-        console.log("Redux purchases:", purchases);
-    }, [purchases]);
-
-    useEffect(() => {
         const fetchData = async () => {
             try {
                 await Promise.all([
@@ -123,17 +118,29 @@ export default function AdminPurchaseManager() {
         []
     );
 
-    const getProductById = useCallback((id: string) => {
-        return products.find((p: any) => p?._id === id);
+    const productMap = useMemo(() => {
+        const map = new Map<string, any>();
+        products.forEach((p: any) => {
+            if (p?._id) map.set(p._id, p);
+        });
+        return map;
     }, [products]);
 
-    const getDealerById = useCallback((id: string) => {
-        return dealers.find((d: any) => d?._id === id || d === id);
+    const dealerMap = useMemo(() => {
+        const map = new Map<string, any>();
+        dealers.forEach((d: any) => {
+            if (d?._id) map.set(d._id, d);
+        });
+        return map;
     }, [dealers]);
 
-    const getWarehouseById = useCallback((id: string) => {
-        return warehouses.find((w: any) => w?._id === id);
-    }, [warehouses]);
+    const getProductById = useCallback((id: string) => {
+        return productMap.get(id);
+    }, [productMap]);
+
+    const getDealerById = useCallback((id: string) => {
+        return dealerMap.get(id);
+    }, [dealerMap]);
 
     const calcItem = useCallback((it: any, perBox: number) => {
         const totalPieces = it.boxes * perBox + it.looseItems;
@@ -226,7 +233,7 @@ export default function AdminPurchaseManager() {
     };
 
     const onSelectProduct = (index: number, pid: string): void => {
-        const product = products.find((p: any) => p?._id === pid);
+        const product = productMap.get(pid);
         if (!product) return;
 
         setItems((prev) => {
@@ -485,6 +492,7 @@ export default function AdminPurchaseManager() {
         URL.revokeObjectURL(url);
     };
     const exportPurchaseRegisterExcel = async () => {
+        const XLSX = await import("xlsx");
         let profile = company;
         if (!profile) {
             const res = await fetch("/api/company-profile");
@@ -685,7 +693,6 @@ export default function AdminPurchaseManager() {
                             <tbody className="divide-y divide-slate-100 ">
                                 {filteredPurchases.map((purchase: any) => {
                                     const dealer = resolveDealer(purchase.dealerId);
-                                    const warehouse = getWarehouseById(purchase.warehouseId || "");
                                     const totalAmount = calcPurchaseTotal(purchase.items || []);
                                     const discountSummary = calcPurchaseDiscount(purchase.items || []);
 
@@ -968,8 +975,8 @@ export default function AdminPurchaseManager() {
                                                                 item.productId
                                                                     ? {
                                                                         value: item.productId,
-                                                                        label: `${products.find((p: any) => p._id === item.productId)?.name
-                                                                            } - Rs ${products.find((p: any) => p._id === item.productId)?.purchasePrice || 0
+                                                                        label: `${productMap.get(item.productId)?.name
+                                                                            } - Rs ${productMap.get(item.productId)?.purchasePrice || 0
                                                                             }`,
                                                                     }
                                                                     : null

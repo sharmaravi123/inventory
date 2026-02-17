@@ -4,7 +4,7 @@ import Purchase from "@/models/PurchaseOrder";
 import "@/models/Dealer";
 import "@/models/Warehouse";
 import "@/models/Product";
-import Product, { IProduct } from "@/models/Product";
+import Product from "@/models/Product";
 import Stock from "@/models/Stock";
 
 export async function GET(
@@ -17,6 +17,7 @@ export async function GET(
     const { id } = await context.params;
 
     const purchase = await Purchase.findById(id)
+      .select("dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
       .populate("dealerId", "name phone address gstin")
       .populate("warehouseId", "name")
       .populate("items.productId", "name hsnCode perBoxItem")
@@ -65,8 +66,28 @@ export async function PUT(
       );
     }
 
+    const oldItems = Array.isArray(existing.items) ? existing.items : [];
+    const allProductIds = [
+      ...new Set(
+        [
+          ...oldItems.map((it: { productId?: unknown }) =>
+            String(it?.productId || "")
+          ),
+          ...items.map((it: { productId?: string }) =>
+            String(it?.productId || "")
+          ),
+        ].filter(Boolean)
+      ),
+    ];
+    const products = await Product.find({ _id: { $in: allProductIds } })
+      .select("_id perBoxItem")
+      .lean();
+    const productMap = new Map(
+      products.map((p) => [String((p as { _id: unknown })._id), p])
+    );
+
     // Revert old stock
-    for (const oldItem of existing.items ?? []) {
+    for (const oldItem of oldItems) {
       const oldItemAny = oldItem as {
         productId?: unknown;
         boxes?: number;
@@ -75,9 +96,9 @@ export async function PUT(
       };
       const productId = String(oldItemAny.productId);
       const oldWarehouseId = String(existing.warehouseId);
-      const product = (await Product.findById(productId)
-        .lean()
-        .exec()) as IProduct | null;
+      const product = productMap.get(productId) as
+        | { perBoxItem?: number }
+        | undefined;
       const perBox =
         typeof oldItemAny.perBoxItem === "number" &&
         oldItemAny.perBoxItem > 0
@@ -112,9 +133,9 @@ export async function PUT(
     const computedItems = [];
 
     for (const item of items) {
-      const product = (await Product.findById(item.productId)
-        .lean()
-        .exec()) as IProduct | null;
+      const product = productMap.get(String(item.productId)) as
+        | { perBoxItem?: number }
+        | undefined;
 
       if (!product) {
         throw new Error("Product not found");

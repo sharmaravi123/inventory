@@ -103,6 +103,11 @@ const billSchema = new Schema(
   { timestamps: true }
 );
 
+billSchema.index({ createdAt: -1 });
+billSchema.index({ billDate: -1 });
+billSchema.index({ status: 1, createdAt: -1 });
+billSchema.index({ "customerInfo.phone": 1 });
+
 export type BillItem = InferSchemaType<typeof billItemSchema>;
 export type PaymentInfo = InferSchemaType<typeof paymentSchema>;
 export type CustomerSnapshot = InferSchemaType<typeof customerSnapshotSchema>;

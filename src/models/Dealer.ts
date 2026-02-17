@@ -19,6 +19,8 @@ const DealerSchema = new Schema<IDealer>(
   { timestamps: true }
 );
 
+DealerSchema.index({ createdAt: -1 });
+
 const Dealer: Model<IDealer> =
   mongoose.models.Dealer ||
   mongoose.model<IDealer>("Dealer", DealerSchema);

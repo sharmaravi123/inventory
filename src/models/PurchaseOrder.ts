@@ -56,6 +56,11 @@ const PurchaseSchema = new Schema<IPurchase>(
   { timestamps: true }
 );
 
+PurchaseSchema.index({ createdAt: -1 });
+PurchaseSchema.index({ purchaseDate: -1 });
+PurchaseSchema.index({ dealerId: 1, purchaseDate: -1 });
+PurchaseSchema.index({ warehouseId: 1, createdAt: -1 });
+
 const Purchase: Model<IPurchase> =
   mongoose.models.Purchase || mongoose.model<IPurchase>("Purchase", PurchaseSchema);
 

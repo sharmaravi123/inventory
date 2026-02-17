@@ -26,10 +26,9 @@ export const fetchPurchases = createAsyncThunk<Purchase[]>(
   "purchase/fetch",
   async () => {
     const token = getToken();
-    const res = await fetch(`/api/purchase?_=${Date.now()}`, {
+    const res = await fetch(`/api/purchase`, {
       method: "GET",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      cache: "no-store",
     });
 
     const data = await res.json();

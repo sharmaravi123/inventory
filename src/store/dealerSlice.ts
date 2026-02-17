@@ -28,9 +28,6 @@ export const fetchDealers = createAsyncThunk<Dealer[]>(
         const res = await axios.get("/api/dealers", {
             headers: { Authorization: `Bearer ${getToken()}` },
         });
-        console.log(res.data)
-
-        // 🔴 THIS IS IMPORTANT
         return res.data.dealers;
     }
 );

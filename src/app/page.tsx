@@ -13,7 +13,7 @@ export async function generateMetadata() {
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_BASE_URL}/api/company-profile`,
       {
-        cache: "no-store",
+        next: { revalidate: 300 },
       }
     );
 

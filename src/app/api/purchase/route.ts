@@ -3,13 +3,11 @@ export const revalidate = 0;
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import Stock from "@/models/Stock";
-import Product, { IProduct } from "@/models/Product";
+import Product from "@/models/Product";
 import Purchase from "@/models/PurchaseOrder";
 import "@/models/Dealer";
 import "@/models/Warehouse";
 import { cookies } from "next/headers";
-import Dealer from "@/models/Dealer";
-import Warehouse from "@/models/Warehouse";
 
 /* ================= GET ================= */
 export async function GET(req: NextRequest) {
@@ -29,6 +27,7 @@ export async function GET(req: NextRequest) {
     }
 
     const purchases = await Purchase.find()
+      .select("dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
       .populate("dealerId", "name phone address gstin")
       .populate("items.productId", "name perBoxItem")
       .sort({ createdAt: -1 })
@@ -52,6 +51,19 @@ export async function POST(req: NextRequest) {
   await dbConnect();
 
   const { dealerId, warehouseId, items, purchaseDate } = await req.json();
+  const uniqueProductIds = [
+    ...new Set(
+      (Array.isArray(items) ? items : [])
+        .map((it: { productId?: string }) => String(it?.productId || ""))
+        .filter(Boolean)
+    ),
+  ];
+  const products = await Product.find({ _id: { $in: uniqueProductIds } })
+    .select("_id perBoxItem")
+    .lean();
+  const productMap = new Map(
+    products.map((p) => [String((p as { _id: unknown })._id), p])
+  );
 
   let subTotal = 0;
   let taxTotal = 0;
@@ -60,9 +72,9 @@ export async function POST(req: NextRequest) {
 
   for (const item of items) {
     /* 🔥 PRODUCT FETCH */
-    const product = (await Product.findById(item.productId)
-      .lean()
-      .exec()) as IProduct | null;
+    const product = productMap.get(String(item.productId)) as
+      | { perBoxItem?: number }
+      | undefined;
 
     if (!product) continue;
 

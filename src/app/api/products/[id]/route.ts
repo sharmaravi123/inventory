@@ -85,7 +85,6 @@ export async function PUT(req: NextRequest, context: RouteCtx<{ id: string }>) {
     await dbConnect();
 
     const body = await req.json();
-    console.log("PUT /api/products/:id body:", JSON.stringify(body));
 
     const {
       name,
@@ -150,8 +149,6 @@ export async function PUT(req: NextRequest, context: RouteCtx<{ id: string }>) {
       }
       setObj.perBoxItem = perBox;
     }
-
-    console.log("PUT /api/products/:id setObj:", JSON.stringify(setObj));
 
     if (Object.keys(setObj).length === 0) {
       return NextResponse.json(
