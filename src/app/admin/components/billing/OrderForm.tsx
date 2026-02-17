@@ -233,7 +233,7 @@ export default function OrderForm({
                       onChange={(e) =>
                         setCustomerSearch(e.target.value)
                       }
-                      placeholder="Type name or phone..."
+                      placeholder="Type name, shop name or phone..."
                       className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     />
                     {customerSearchResult?.customers?.length &&
@@ -252,6 +252,9 @@ export default function OrderForm({
                               <div className="flex items-center justify-between gap-3">
                                 <div>
                                   <div className="font-medium text-slate-900">
+                                    {cust.shopName || cust.name}
+                                  </div>
+                                  <div className="text-xs text-slate-600">
                                     {cust.name}
                                   </div>
                                   <div className="text-xs text-slate-500">
@@ -260,7 +263,7 @@ export default function OrderForm({
                                 </div>
                                 {cust.shopName && (
                                   <div className="text-[11px] text-slate-500">
-                                    {cust.shopName}
+                                    Shop
                                   </div>
                                 )}
                               </div>

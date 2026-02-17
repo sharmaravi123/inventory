@@ -17,7 +17,7 @@ const customerSchema = new Schema(
   {
     name: { type: String, required: true },
     shopName: { type: String },
-    phone: { type: String, required: true },
+    phone: { type: String },
     address: { type: String, required: true },
     gstNumber: { type: String },
     customPrices: { type: [CustomerPriceSchema], default: [] }, // <-- NEW
@@ -25,7 +25,7 @@ const customerSchema = new Schema(
   { timestamps: true }
 );
 
-customerSchema.index({ phone: 1 }, { unique: true });
+customerSchema.index({ phone: 1 }, { unique: true, sparse: true });
 customerSchema.index({ name: 1 });
 customerSchema.index({ shopName: 1 });
 

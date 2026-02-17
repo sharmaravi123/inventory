@@ -15,8 +15,6 @@ import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "@/store/store";
 import { fetchDrivers } from "@/store/driverSlice";
 import { Search, Calendar } from "lucide-react";
-import { fetchProducts, ProductType } from "@/store/productSlice";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import Swal from "sweetalert2";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
 
@@ -92,42 +90,7 @@ export default function OrdersPage() {
     [filterType, fromDate, toDate]
   );
 
-  function extractProductId(
-    product: string | { _id?: string } | undefined
-  ): string | undefined {
-    if (!product) return undefined;
-
-    if (typeof product === "string") return product;
-
-    if (typeof product === "object" && product._id) {
-      return product._id;
-    }
-
-    return undefined;
-  }
-  /* 🔹 PRODUCTS — MUST BE FIRST */
-  const products = useAppSelector(
-    (state) => state.product.products as ProductType[]
-  );
-  useEffect(() => {
-    if (products.length === 0) {
-      dispatch(fetchProducts());
-    }
-  }, [products.length, dispatch]);
-  /* 🔹 HSN RESOLVER */
-  const getHsnCode = (
-    product: string | { _id?: string } | undefined
-  ): string => {
-    const productId = extractProductId(product);
-    if (!productId) return "-";
-
-    const found = products.find(
-      (p) => p._id === productId || p.id === productId
-    );
-
-    return found?.hsnCode ?? "-";
-  };
-  /* ================= FILTERED BILLS ================= */
+    /* ================= FILTERED BILLS ================= */
 
   const filteredBills = useMemo(() => {
     return bills.filter((b) => {
@@ -147,7 +110,6 @@ export default function OrdersPage() {
     let taxable = 0,
       cgst = 0,
       sgst = 0,
-      igst = 0,
       total = 0;
 
     filteredBills.forEach((b) => {
@@ -163,8 +125,8 @@ export default function OrdersPage() {
       taxable,
       cgst,
       sgst,
-      igst,
-      gst: cgst + sgst + igst,
+      igst: 0,
+      gst: cgst + sgst,
       total,
     };
   }, [filteredBills]);
@@ -184,113 +146,96 @@ export default function OrdersPage() {
       return;
     }
 
-    /* ================= REPORT INFO ================= */
+    const formatDateShort = (dt: Date): string => {
+      const day = String(dt.getDate()).padStart(2, "0");
+      const month = dt.toLocaleString("en-IN", { month: "short" });
+      const year = String(dt.getFullYear()).slice(-2);
+      return `${day}-${month}-${year}`;
+    };
 
-    const reportInfo = [
-      {
-        Field: "Business Name",
-        Value: companyProfile?.name ?? "",
-      },
-      {
-        Field: "GSTIN",
-        Value: companyProfile?.gstin ?? "",
-      },
-      {
-        Field: "Report Period",
-        Value:
-          filterType === "custom"
-            ? `${fromDate} to ${toDate}`
-            : filterType === "thisMonth"
-              ? "This Month"
-              : filterType === "lastMonth"
-                ? "Last Month"
-                : "All Time",
-      },
-      {
-        Field: "State & Place of Supply",
-        Value: "Madhya Pradesh (23)",
-      },
-    ];
+    const reportPeriod =
+      filterType === "custom" && fromDate && toDate
+        ? `${formatDateShort(new Date(fromDate))} to ${formatDateShort(new Date(toDate))}`
+        : filterType === "thisMonth"
+          ? "This Month"
+          : filterType === "lastMonth"
+            ? "Last Month"
+            : "All Time";
 
-    /* ================= SALES ROWS ================= */
+    const companyState = (companyProfile?.gstin || "").slice(0, 2);
 
-    const salesRows: any[] = [];
+    const salesRows = filteredBills.map((bill) => {
+      const customerGstin = bill.customerInfo.gstNumber || "";
+      const customerState = customerGstin.slice(0, 2);
+      const isIntraState =
+        companyState && customerState
+          ? companyState === customerState
+          : true;
 
-    let totalTaxable = 0;
-    let totalCGST = 0;
-    let totalSGST = 0;
-    let totalIGST = 0;
-    let totalGST = 0;
-    let totalSales = 0;
+      const totalTax = Number(bill.totalTax ?? 0);
+      const grossTotal = Number(bill.grandTotal ?? 0);
+      const salesAmount = Number(bill.totalBeforeTax ?? 0);
 
-    filteredBills.forEach((bill) => {
-      const invoiceTaxable = bill.totalBeforeTax ?? 0;
-      const invoiceGST = bill.totalTax ?? 0;
-      const invoiceTotal = bill.grandTotal ?? 0;
+      const cgst = isIntraState ? totalTax / 2 : 0;
+      const sgst = isIntraState ? totalTax / 2 : 0;
+      const igst = isIntraState ? 0 : totalTax;
 
-      const cgst = invoiceGST / 2;
-      const sgst = invoiceGST / 2;
+      const roundValue = grossTotal - (salesAmount + cgst + sgst + igst);
 
-      totalTaxable += invoiceTaxable;
-      totalCGST += cgst;
-      totalSGST += sgst;
-      totalGST += invoiceGST;
-      totalSales += invoiceTotal;
+      const uniqueRates = Array.from(
+        new Set(
+          bill.items
+            .map((item) => Number(item.taxPercent ?? 0))
+            .filter((rate) => Number.isFinite(rate))
+            .map((rate) => rate.toFixed(2).replace(/\.00$/, ""))
+        )
+      );
 
-      bill.items.forEach((item) => {
-        const qty =
-          (item.quantityBoxes ?? 0) * (item.itemsPerBox ?? 1) +
-          (item.quantityLoose ?? 0);
-
-        const taxableValue =
-          qty * (item.sellingPrice ?? 0);
-
-        salesRows.push({
-          Invoice_No: bill.invoiceNumber,
-          Invoice_Date: new Date(bill.billDate).toLocaleDateString("en-IN"),
-          Customer_Name: bill.customerInfo.name,
-          Customer_GSTIN: bill.customerInfo.gstNumber ?? "",
-          Invoice_Type: bill.customerInfo.gstNumber ? "B2B" : "B2C",
-          Place_of_Supply: "23",
-          Product_Name: item.productName,
-          HSN: getHsnCode(item.product),
-          Quantity: qty,
-          Rate: item.sellingPrice ?? 0,
-          Taxable_Value: taxableValue.toFixed(2),
-          CGST_Amount: (cgst / bill.items.length).toFixed(2),
-          SGST_Amount: (sgst / bill.items.length).toFixed(2),
-          IGST_Amount: "0.00",
-          Total_GST: (invoiceGST / bill.items.length).toFixed(2),
-          Invoice_Total: invoiceTotal.toFixed(2),
-        });
-      });
+      return {
+        Date: formatDateShort(new Date(bill.billDate)),
+        Particulars: bill.customerInfo.shopName || bill.customerInfo.name || "",
+        "Voucher Type": "Sales",
+        "Voucher No.": bill.invoiceNumber || "",
+        "Voucher Ref. No.": "",
+        "GSTIN/UIN": customerGstin,
+        "Gross Total": grossTotal.toFixed(2),
+        "Tax Rate": uniqueRates.join(", "),
+        Sales: salesAmount.toFixed(2),
+        "CGST OUTPUT @ 9% SALES": cgst.toFixed(2),
+        "SGST OUTPUT @ 9% SALES": sgst.toFixed(2),
+        Round: roundValue.toFixed(2),
+        "IGST-OUTPUT@18% SALE": igst.toFixed(2),
+        "CGST INPUT@ 9% PUR": "0.00",
+      };
     });
 
-    /* ================= SUMMARY ================= */
+    const worksheet = XLSX.utils.aoa_to_sheet([]);
+    const workbook = XLSX.utils.book_new();
 
-    const summary = [
-      { Metric: "Total Invoices", Value: filteredBills.length },
-      { Metric: "Total Taxable Sales", Value: totalTaxable.toFixed(2) },
-      { Metric: "Total CGST", Value: totalCGST.toFixed(2) },
-      { Metric: "Total SGST", Value: totalSGST.toFixed(2) },
-      { Metric: "Total IGST", Value: totalIGST.toFixed(2) },
-      { Metric: "Total GST", Value: totalGST.toFixed(2) },
-      { Metric: "Total Sales Value", Value: totalSales.toFixed(2) },
-    ];
+    XLSX.utils.sheet_add_aoa(
+      worksheet,
+      [
+        [companyProfile?.name || ""],
+        [companyProfile?.addressLine1 || ""],
+        [companyProfile?.addressLine2 || ""],
+        [`M-${companyProfile?.phone || ""}`],
+        [`Contact : ${companyProfile?.phone || ""}`],
+        [`GSTIN : ${companyProfile?.gstin || ""}`],
+        [`Date : ${reportPeriod}`],
+        [],
+        ["Sales Register"],
+        [],
+      ],
+      { origin: "A1" }
+    );
 
-    /* ================= EXCEL BUILD ================= */
+    XLSX.utils.sheet_add_json(worksheet, salesRows, {
+      skipHeader: false,
+      origin: "A11",
+    });
 
-    const wb = XLSX.utils.book_new();
-
-    const infoSheet = XLSX.utils.json_to_sheet(reportInfo);
-    const salesSheet = XLSX.utils.json_to_sheet(salesRows);
-    const summarySheet = XLSX.utils.json_to_sheet(summary);
-
-    XLSX.utils.book_append_sheet(wb, infoSheet, "Report Info");
-    XLSX.utils.book_append_sheet(wb, salesSheet, "GST Sales");
-    XLSX.utils.book_append_sheet(wb, summarySheet, "GST Summary");
-
-    XLSX.writeFile(wb, "GST_Sales_Report_MP.xlsx");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Register");
+    XLSX.writeFile(workbook, "Sales-Register.xlsx");
   };
 
 
@@ -390,3 +335,4 @@ export default function OrdersPage() {
     </div>
   );
 }
+

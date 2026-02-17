@@ -21,6 +21,7 @@ type BillPreviewProps = {
 
 type EnhancedLine = BillItemForClient & {
   totalPieces: number;
+  grossAmount: number;
   discountAmount: number;
 };
 
@@ -79,6 +80,7 @@ function numberToINRWords(amount: number): string {
 
 export default function BillPreview({ bill, onClose }: BillPreviewProps) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const invoiceRef = useRef<HTMLDivElement>(null);
   const companyProfile = useAppSelector(
     (state) => state.companyProfile.data
@@ -161,6 +163,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
       return {
         ...l,
         totalPieces,
+        grossAmount: base,
         discountAmount: discount,
         lineTotal: base - discount,
       };
@@ -170,11 +173,13 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
   if (!bill) return null;
 
   const discountTotal = lines.reduce((s, l) => s + l.discountAmount, 0);
+  const grossTotal = lines.reduce((s, l) => s + l.grossAmount, 0);
+  const discountPercentOverall =
+    grossTotal > 0 ? (discountTotal * 100) / grossTotal : 0;
   const cgst = (bill.totalTax ?? 0) / 2;
   const sgst = (bill.totalTax ?? 0) / 2;
 
   const handlePrint = () => window.print();
-  const router = useRouter();
   const generatePDF = async () => {
     if (!invoiceRef.current) return;
     const canvas = await html2canvas(invoiceRef.current, { scale: 2, useCORS: true });
@@ -397,7 +402,11 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                     {l.taxPercent?.toFixed(2)}%
                   </td>
                   <td className="border border-black p-1">
-                    {l.discountAmount.toFixed(2)}
+                    {l.discountType === "PERCENT"
+                      ? `${(l.discountValue ?? 0).toFixed(2)}% (${l.discountAmount.toFixed(2)})`
+                      : l.discountType === "CASH"
+                        ? `Cash (${l.discountAmount.toFixed(2)})`
+                        : `0.00`}
                   </td>
                   <td className="border border-black p-1">
                     {l.lineTotal?.toFixed(2)}
@@ -420,7 +429,9 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
               </div>
               <div className="flex justify-between">
                 <span>Discount</span>
-                <span>{discountTotal.toFixed(2)}</span>
+                <span>
+                  {discountTotal.toFixed(2)} 
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>CGST</span>

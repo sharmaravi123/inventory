@@ -395,8 +395,19 @@ export default function AdminPurchaseManager() {
             const date = new Date(
                 purchase.purchaseDate ?? purchase.createdAt
             );
+            const companyState = (company?.gstin || "").slice(0, 2);
+            const dealerState = (dealer?.gstin || "").slice(0, 2);
+            const isIntraState =
+                companyState && dealerState
+                    ? companyState === dealerState
+                    : true;
 
-            purchase.items?.forEach((it: any) => {
+            let grossTotal = 0;
+            let purchaseAmount = 0;
+            let totalTax = 0;
+            let lineTotal = 0;
+
+            (purchase.items || []).forEach((it: any) => {
                 const pid =
                     typeof it.productId === "string"
                         ? it.productId
@@ -405,43 +416,37 @@ export default function AdminPurchaseManager() {
                 const product = getProductById(pid || "");
                 const perBox = product?.perBoxItem ?? 1;
                 const calc = calcItem(it, perBox);
-                const grossTotal = calc.grossAmount;
-                const taxAmount = calc.taxAmount;
-                const taxableValue = calc.taxableAmount;
 
-                const companyState = (company?.gstin || "").slice(0, 2);
-                const dealerState = (dealer?.gstin || "").slice(0, 2);
-                const isIntraState =
-                    companyState && dealerState
-                        ? companyState === dealerState
-                        : true;
+                grossTotal += calc.grossAmount;
+                purchaseAmount += calc.taxableAmount;
+                totalTax += calc.taxAmount;
+                lineTotal += calc.finalAmount;
+            });
 
-                rows.push({
-                    Date: formatDateShort(date),
-                    Particulars: dealer?.name || "",
-                    "Voucher Type": "Purchase",
-                    "Voucher No.": `PUR-${purchase._id.slice(-6)}`,
-                    "Voucher Ref. No.": "",
-                    "GSTIN/UIN": dealer?.gstin || "",
+            const invoiceNumber =
+                purchase.invoiceNumber ||
+                purchase.purchaseNumber ||
+                `PUR-${String(purchase._id || "").slice(-6)}`;
 
-                    "Gross Total": grossTotal.toFixed(2),
-                    "Discount %": calc.discountPercent.toFixed(2),
-                    "Discount Amount": calc.discountAmount.toFixed(2),
-                    "Tax Rate": isIntraState ? it.taxPercent : `IGST ${it.taxPercent}`,
+            const effectiveGrossTotal =
+                typeof purchase.grandTotal === "number"
+                    ? purchase.grandTotal
+                    : lineTotal;
+            const roundValue =
+                effectiveGrossTotal - (purchaseAmount + totalTax);
 
-                    Purchase: taxableValue.toFixed(2),
-
-                    "CGST INPUT @ 9% PURCHASE":
-                        isIntraState ? (taxAmount / 2).toFixed(2) : "",
-
-                    "SGST INPUT @ 9% PURCHASE":
-                        isIntraState ? (taxAmount / 2).toFixed(2) : "",
-
-                    Round: "0.00",
-
-                    "IGST INPUT @18% PURCHASE":
-                        !isIntraState ? taxAmount.toFixed(2) : "",
-                });
+            rows.push({
+                Date: formatDateShort(date),
+                Particulars: dealer?.name || "",
+                "Voucher Type": "Purchase",
+                "Supplier Invoice No.": invoiceNumber,
+                "GSTIN/UIN": dealer?.gstin || "",
+                "Gross Total": effectiveGrossTotal.toFixed(2),
+                "Purchase Account": purchaseAmount.toFixed(2),
+                "SGST INPUT @ 9% PUR": isIntraState ? (totalTax / 2).toFixed(2) : "0.00",
+                "CGST INPUT @ 9% PUR": isIntraState ? (totalTax / 2).toFixed(2) : "0.00",
+                Round: roundValue.toFixed(2),
+                "IGST-INPUT@18 % PUR": !isIntraState ? totalTax.toFixed(2) : "0.00",
             });
         });
 
@@ -516,9 +521,9 @@ export default function AdminPurchaseManager() {
                 [`M-${profile?.phone || ""}`],
                 [`Contact : ${profile?.phone || ""}`],
                 [`GSTIN : ${profile?.gstin || ""}`],
+                [`Date : ${dateRangeLabel}`],
                 [],
                 ["Purchase Register"],
-                [dateRangeLabel],
                 [],
             ],
             { origin: "A1" }

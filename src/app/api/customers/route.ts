@@ -11,8 +11,9 @@ export async function POST(req: NextRequest) {
     await dbConnect();
 
     const body = await req.json();
-
     const { name, phone, shopName, address, gstNumber } = body;
+    const normalizedPhone =
+      typeof phone === "string" ? phone.trim() : "";
 
     if (!name?.trim()) {
       return NextResponse.json(
@@ -21,36 +22,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!phone?.trim()) {
-      return NextResponse.json(
-        { error: "Customer phone is required" },
-        { status: 400 }
-      );
-    }
+    const payload = {
+      name,
+      phone: normalizedPhone || undefined,
+      shopName,
+      address,
+      gstNumber,
+    };
 
-    // 🔁 UPSERT (same logic as billing)
-    const customer = await CustomerModel.findOneAndUpdate(
-      { phone },
-      {
-        $set: {
-          name,
-          phone,
-          shopName,
-          address,
-          gstNumber,
-        },
-      },
-      { new: true, upsert: true }
-    );
+    let customer;
+    if (normalizedPhone) {
+      customer = await CustomerModel.findOneAndUpdate(
+        { phone: normalizedPhone },
+        { $set: payload },
+        { new: true, upsert: true }
+      );
+    } else {
+      customer = await CustomerModel.create(payload);
+    }
 
     return NextResponse.json(
       { customer },
       { status: 201 }
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message =
+      e instanceof Error ? e.message : "Failed to create customer";
     console.error("CUSTOMER CREATE ERROR:", e);
     return NextResponse.json(
-      { error: e.message || "Failed to create customer" },
+      { error: message },
       { status: 500 }
     );
   }

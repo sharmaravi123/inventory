@@ -293,6 +293,7 @@ export default function BillingAdminPage() {
         address: doc.address ?? "",
         gstNumber: doc.gstNumber ?? "",
       });
+      setCustomerSearch(doc.shopName?.trim() || doc.name);
 
       const priceMap = Object.fromEntries(
         (doc.customPrices ?? [])
@@ -368,6 +369,107 @@ export default function BillingAdminPage() {
     };
   }, [items]);
 
+  const formatMoney = useCallback((value: number) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number.isFinite(value) ? value : 0);
+  }, []);
+
+  const escapeHtml = useCallback((value: unknown) => {
+    const text = String(value ?? "");
+    return text
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }, []);
+
+  const buildBillConfirmHtml = useCallback(
+    (
+      mode: "create" | "edit",
+      validItems: BillFormItemState[],
+      summaryTotals: Totals
+    ) => {
+      const rows = validItems
+        .map((it, idx) => {
+          const p = it.selectedProduct;
+          if (!p) return "";
+
+          const totalPieces = it.quantityBoxes * p.itemsPerBox + it.quantityLoose;
+          const baseTotal = totalPieces * p.sellingPrice;
+
+          let discountAmount = 0;
+          if (it.discountType === "PERCENT") {
+            discountAmount = (baseTotal * it.discountValue) / 100;
+          } else if (it.discountType === "CASH") {
+            discountAmount = it.discountValue;
+          }
+          discountAmount = Math.min(discountAmount, baseTotal);
+
+          const lineTotal = Math.max(0, baseTotal - discountAmount);
+
+          return `
+            <tr>
+              <td style="border:1px solid #e2e8f0;padding:6px;">${idx + 1}</td>
+              <td style="border:1px solid #e2e8f0;padding:6px;">${escapeHtml(p.productName)}</td>
+              <td style="border:1px solid #e2e8f0;padding:6px;text-align:right;">${it.quantityBoxes}</td>
+              <td style="border:1px solid #e2e8f0;padding:6px;text-align:right;">${it.quantityLoose}</td>
+              <td style="border:1px solid #e2e8f0;padding:6px;text-align:right;">${totalPieces}</td>
+              <td style="border:1px solid #e2e8f0;padding:6px;text-align:right;">${formatMoney(p.sellingPrice)}</td>
+              <td style="border:1px solid #e2e8f0;padding:6px;text-align:right;">${it.discountType === "NONE" ? "-" : `${escapeHtml(it.discountType)} (${escapeHtml(it.discountValue)})`}</td>
+              <td style="border:1px solid #e2e8f0;padding:6px;text-align:right;">${formatMoney(lineTotal)}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const paymentMode = payment.mode || "CASH";
+      const billTypeLabel = mode === "edit" ? "Update Bill" : "Create Bill";
+
+      return `
+        <div style="text-align:left;font-size:13px;">
+          <p><b>Action:</b> ${billTypeLabel}</p>
+          <p><b>Customer:</b> ${escapeHtml(customer.name || "-")} (${escapeHtml(customer.phone || "-")})</p>
+          <p><b>Shop:</b> ${escapeHtml(customer.shopName || "-")}</p>
+          <p><b>Date:</b> ${escapeHtml(billDate)}</p>
+          <p><b>Payment Mode:</b> ${escapeHtml(paymentMode)}</p>
+          <p><b>Payment Split:</b> Cash ${formatMoney(Number(payment.cashAmount || 0))}, UPI ${formatMoney(Number(payment.upiAmount || 0))}, Card ${formatMoney(Number(payment.cardAmount || 0))}</p>
+
+          <div style="max-height:260px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th style="border:1px solid #e2e8f0;padding:6px;">#</th>
+                  <th style="border:1px solid #e2e8f0;padding:6px;">Product</th>
+                  <th style="border:1px solid #e2e8f0;padding:6px;">Boxes</th>
+                  <th style="border:1px solid #e2e8f0;padding:6px;">Loose</th>
+                  <th style="border:1px solid #e2e8f0;padding:6px;">Pieces</th>
+                  <th style="border:1px solid #e2e8f0;padding:6px;">Rate</th>
+                  <th style="border:1px solid #e2e8f0;padding:6px;">Discount</th>
+                  <th style="border:1px solid #e2e8f0;padding:6px;">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:10px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">
+            <p><b>Total Pieces:</b> ${summaryTotals.totalItemsCount}</p>
+            <p><b>Before Tax:</b> ${formatMoney(summaryTotals.totalBeforeTax)}</p>
+            <p><b>Tax:</b> ${formatMoney(summaryTotals.totalTax)}</p>
+            <p><b>Discount:</b> ${formatMoney(summaryTotals.discountTotal)}</p>
+            <p><b>Grand Total:</b> ${formatMoney(summaryTotals.grandTotal)}</p>
+          </div>
+        </div>
+      `;
+    },
+    [billDate, customer.name, customer.phone, customer.shopName, escapeHtml, formatMoney, payment.cardAmount, payment.cashAmount, payment.mode, payment.upiAmount]
+  );
+
 
   const createBill = async () => {
     if (!customer.name || !customer.phone)
@@ -421,6 +523,18 @@ export default function BillingAdminPage() {
       payment,
     };
 
+    const confirm = await Swal.fire({
+      title: "Confirm Bill",
+      html: buildBillConfirmHtml("create", valid, totals),
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Create Bill",
+      cancelButtonText: "Cancel",
+      width: 900,
+    });
+
+    if (!confirm.isConfirmed) return;
+
     dispatch(clearBillingError());
     try {
       await dispatch(submitBill(payload)).unwrap();
@@ -433,7 +547,7 @@ export default function BillingAdminPage() {
       });
       resetForm();
       setShowForm(false);
-      refetch();
+      await refetch();
     } catch {
       Swal.fire({
         icon: "warning",
@@ -492,6 +606,18 @@ export default function BillingAdminPage() {
       }),
       payment,
     };
+
+    const confirm = await Swal.fire({
+      title: "Confirm Bill Update",
+      html: buildBillConfirmHtml("edit", validItems, totals),
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Update Bill",
+      cancelButtonText: "Cancel",
+      width: 900,
+    });
+
+    if (!confirm.isConfirmed) return;
 
     const res = await fetch(`/api/billing/${billForEdit._id}`, {
       method: "PUT",
@@ -586,6 +712,7 @@ export default function BillingAdminPage() {
 
   const resetForm = () => {
     setCustomer(initialCustomer);
+    setCustomerSearch("");
     setItems([emptyItem()]);
     setPayment(initialPayment);
     setSelectedCustomerId("");

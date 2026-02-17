@@ -227,6 +227,7 @@ export default function BillingWarehousePage({
         address: doc.address,
         gstNumber: doc.gstNumber ?? "",
       });
+      setCustomerSearch((doc.shopName ?? "").trim() || doc.name);
     },
     [customerSearchResult]
   );

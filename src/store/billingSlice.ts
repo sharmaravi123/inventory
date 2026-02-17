@@ -31,6 +31,16 @@ export const submitBill = createAsyncThunk<
       const result = await dispatch(
         billingApi.endpoints.createBill.initiate(payload)
       ).unwrap();
+
+      // Keep list in sync immediately after create, so UI updates without manual reload.
+      dispatch(billingApi.util.invalidateTags(["BillList"]));
+      dispatch(
+        billingApi.endpoints.listBills.initiate(
+          { search: "" },
+          { subscribe: false, forceRefetch: true }
+        )
+      );
+
       return result.bill.invoiceNumber;
     } catch (err) {
       let message = "Failed to create bill";

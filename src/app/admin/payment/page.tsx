@@ -185,7 +185,11 @@ export default function PaymentsDashboardPage() {
 
     for (const bill of bills) {
       const info = bill.customerInfo || {};
-      const cid = info.phone || info.name || `unknown-${bill._id}`;
+      const cid =
+        info.phone ||
+        info.customer ||
+        info.name ||
+        `unknown-${bill._id}`;
 
       if (!customerMap.has(cid)) {
         customerMap.set(cid, {
@@ -278,7 +282,7 @@ export default function PaymentsDashboardPage() {
 
     // Add all customers even without bills
     for (const cust of allCustomers) {
-      const cid = cust.phone;
+      const cid = cust.phone || cust._id || cust.name;
       if (!cid) continue;
 
       if (!map.has(cid)) {
@@ -286,7 +290,7 @@ export default function PaymentsDashboardPage() {
           customerId: cid,
           name: cust.name || "Unknown",
           shopName: cust.shopName || "",
-          phone: cust.phone,
+          phone: cust.phone || "-",
           bills: [],
           totalOrders: 0,
           totalBilled: 0,
@@ -303,7 +307,7 @@ export default function PaymentsDashboardPage() {
     // Merge bills
     for (const bill of bills) {
       const info = bill.customerInfo || {};
-      const cid = info.phone;
+      const cid = info.phone || info.customer || info.name;
       if (!cid) continue;
 
       if (!map.has(cid)) {
@@ -1134,7 +1138,7 @@ export default function PaymentsDashboardPage() {
                 />
 
                 <input
-                  placeholder="Phone number *"
+                  placeholder="Phone number (optional)"
                   value={newCustomer.phone}
                   onChange={(e) =>
                     setNewCustomer({
@@ -1191,9 +1195,9 @@ export default function PaymentsDashboardPage() {
                   Cancel
                 </button>
                 <button
-                  disabled={addingCustomer || !newCustomer.name || !newCustomer.phone}
+                  disabled={addingCustomer || !newCustomer.name}
                   onClick={async () => {
-                    if (!newCustomer.name || !newCustomer.phone) return;
+                    if (!newCustomer.name) return;
 
                     setAddingCustomer(true);
                     try {

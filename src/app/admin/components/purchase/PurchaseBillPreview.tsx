@@ -349,7 +349,7 @@ export default function PurchaseBillPreview({
                         </div>
                         <div className="border p-2">
                             <div className="flex justify-between"><span>Gross Total</span><span>{totalGross.toFixed(2)}</span></div>
-                            <div className="flex justify-between"><span>Total Discount %</span><span>{totalDiscountPercent.toFixed(2)}%</span></div>
+                            {/* <div className="flex justify-between"><span>Total Discount %</span><span>{totalDiscountPercent.toFixed(2)}%</span></div> */}
                             <div className="flex justify-between"><span>Total Discount</span><span>{totalDiscountAmount.toFixed(2)}</span></div>
                             <div className="flex justify-between"><span>Sub Total</span><span>{subtotalWithoutTax.toFixed(2)}</span></div>
                             <div className="flex justify-between"><span>CGST</span><span>{cgst.toFixed(2)}</span></div>
