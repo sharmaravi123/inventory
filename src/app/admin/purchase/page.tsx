@@ -974,15 +974,15 @@ export default function AdminPurchaseManager() {
                                                         <Select
                                                             options={products.map((product: any) => ({
                                                                 value: product._id,
-                                                                label: `${product.name} - Rs ${product.purchasePrice || 0}`
+                                                                label: product.name,
+                                                                price: Number(product.purchasePrice || 0),
                                                             }))}
                                                             value={
                                                                 item.productId
                                                                     ? {
                                                                         value: item.productId,
-                                                                        label: `${productMap.get(item.productId)?.name
-                                                                            } - Rs ${productMap.get(item.productId)?.purchasePrice || 0
-                                                                            }`,
+                                                                        label: `${productMap.get(item.productId)?.name || ""}`,
+                                                                        price: Number(productMap.get(item.productId)?.purchasePrice || 0),
                                                                     }
                                                                     : null
                                                             }
@@ -993,22 +993,105 @@ export default function AdminPurchaseManager() {
                                                             }}
                                                             placeholder="Search & select product..."
                                                             isSearchable
+                                                            isClearable
+                                                            noOptionsMessage={() => "No product found"}
+                                                            menuPlacement="auto"
+                                                            menuPosition="fixed"
+                                                            maxMenuHeight={280}
+                                                            menuShouldScrollIntoView={false}
+                                                            menuPortalTarget={
+                                                                typeof window !== "undefined"
+                                                                    ? document.body
+                                                                    : null
+                                                            }
                                                             className="text-sm"
+                                                            classNamePrefix="purchase-product-select"
+                                                            formatOptionLabel={(option: any, meta: any) => {
+                                                                const priceText = `Rs ${Number(option.price || 0).toLocaleString("en-IN")}`;
+                                                                if (meta.context === "value") {
+                                                                    return (
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <span className="truncate font-medium text-slate-900">{option.label}</span>
+                                                                            <span className="text-xs font-semibold text-blue-700">{priceText}</span>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <div className="flex items-center justify-between gap-2 py-0.5">
+                                                                        <span className="truncate text-slate-800">{option.label}</span>
+                                                                        <span className="text-xs font-semibold text-slate-600">{priceText}</span>
+                                                                    </div>
+                                                                );
+                                                            }}
                                                             styles={{
-                                                                control: (base) => ({
+                                                                control: (base, state) => ({
                                                                     ...base,
-                                                                    padding: "6px",
+                                                                    minHeight: "44px",
+                                                                    padding: "2px 6px",
                                                                     borderRadius: "12px",
-                                                                    borderColor: "#e2e8f0",
-                                                                    boxShadow: "none",
+                                                                    borderColor: state.isFocused ? "#3b82f6" : "#e2e8f0",
+                                                                    boxShadow: state.isFocused ? "0 0 0 3px rgba(59,130,246,0.15)" : "none",
+                                                                    backgroundColor: "#fff",
                                                                     "&:hover": {
                                                                         borderColor: "#3b82f6",
                                                                     },
+                                                                }),
+                                                                valueContainer: (base) => ({
+                                                                    ...base,
+                                                                    padding: "2px 8px",
+                                                                }),
+                                                                placeholder: (base) => ({
+                                                                    ...base,
+                                                                    color: "#94a3b8",
+                                                                    fontSize: "13px",
+                                                                }),
+                                                                singleValue: (base) => ({
+                                                                    ...base,
+                                                                    color: "#0f172a",
+                                                                    fontWeight: 500,
+                                                                }),
+                                                                option: (base, state) => ({
+                                                                    ...base,
+                                                                    fontSize: "13px",
+                                                                    backgroundColor: state.isSelected
+                                                                        ? "#dbeafe"
+                                                                        : state.isFocused
+                                                                            ? "#f1f5f9"
+                                                                            : "#fff",
+                                                                    color: "#0f172a",
+                                                                    cursor: "pointer",
+                                                                    borderBottom: "1px solid #f1f5f9",
                                                                 }),
                                                                 menu: (base) => ({
                                                                     ...base,
                                                                     borderRadius: "12px",
                                                                     overflow: "hidden",
+                                                                    zIndex: 9999,
+                                                                    border: "1px solid #e2e8f0",
+                                                                    boxShadow: "0 12px 28px rgba(15, 23, 42, 0.14)",
+                                                                }),
+                                                                menuList: (base) => ({
+                                                                    ...base,
+                                                                    maxHeight: 280,
+                                                                    paddingTop: 0,
+                                                                    paddingBottom: 0,
+                                                                }),
+                                                                indicatorSeparator: () => ({
+                                                                    display: "none",
+                                                                }),
+                                                                dropdownIndicator: (base) => ({
+                                                                    ...base,
+                                                                    color: "#64748b",
+                                                                    ":hover": { color: "#334155" },
+                                                                }),
+                                                                clearIndicator: (base) => ({
+                                                                    ...base,
+                                                                    color: "#94a3b8",
+                                                                    ":hover": { color: "#ef4444" },
+                                                                }),
+                                                                menuPortal: (base) => ({
+                                                                    ...base,
+                                                                    zIndex: 9999,
                                                                 }),
                                                             }}
                                                         />
