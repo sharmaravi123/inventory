@@ -209,9 +209,9 @@ export default function PurchaseCreditDebitPage() {
 
   const balanceText = useMemo(() => {
     const balance = Number(ledger.summary.balance || 0);
-    if (balance === 0) return "Month settled: purchase aur payment equal hain.";
-    if (balance > 0) return `Pending payable: ${currency.format(balance)} dealer ko aur dena hai.`;
-    return `Advance paid: ${currency.format(Math.abs(balance))} aapne extra pay kar diya hai.`;
+    if (balance === 0) return "Month settled: purchases and payments are balanced.";
+    if (balance > 0) return `Outstanding payable: ${currency.format(balance)} remains payable to the dealer.`;
+    return `Advance paid: ${currency.format(Math.abs(balance))} has been paid in excess to the dealer.`;
   }, [ledger.summary.balance]);
 
   return (
