@@ -8,6 +8,12 @@ import Purchase from "@/models/PurchaseOrder";
 import "@/models/Dealer";
 import "@/models/Warehouse";
 import { cookies } from "next/headers";
+import mongoose from "mongoose";
+
+type PurchaseDocWithNumbers = {
+  invoiceNumber?: string;
+  purchaseNumber?: string;
+};
 
 /* ================= GET ================= */
 export async function GET(req: NextRequest) {
@@ -27,17 +33,23 @@ export async function GET(req: NextRequest) {
     }
 
     const purchases = await Purchase.find()
-      .select("dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
+      .select("invoiceNumber purchaseNumber dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
       .populate("dealerId", "name phone address gstin")
       .populate("items.productId", "name perBoxItem")
       .sort({ createdAt: -1 })
       .lean();
 
-    return NextResponse.json(purchases);
-  } catch (err: any) {
+    const normalized = purchases.map((p) => ({
+      ...p,
+      invoiceNumber: String((p as PurchaseDocWithNumbers)?.invoiceNumber || (p as PurchaseDocWithNumbers)?.purchaseNumber || "").trim(),
+    }));
+
+    return NextResponse.json(normalized);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to fetch purchases";
     console.error("GET PURCHASE ERROR:", err);
     return NextResponse.json(
-      { error: err.message },
+      { error: message },
       { status: 500 }
     );
   }
@@ -50,7 +62,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   await dbConnect();
 
-  const { dealerId, warehouseId, items, purchaseDate } = await req.json();
+  const { dealerId, warehouseId, items, purchaseDate, invoiceNumber, purchaseNumber } = await req.json();
+  const normalizedInvoiceNumber = String(invoiceNumber || purchaseNumber || "").trim();
+  if (!normalizedInvoiceNumber) {
+    return NextResponse.json({ error: "Invoice number is required" }, { status: 400 });
+  }
   const uniqueProductIds = [
     ...new Set(
       (Array.isArray(items) ? items : [])
@@ -141,6 +157,8 @@ export async function POST(req: NextRequest) {
 
   /* ✅ CREATE PURCHASE */
   const purchase = await Purchase.create({
+    invoiceNumber: normalizedInvoiceNumber,
+    purchaseNumber: normalizedInvoiceNumber,
     dealerId,
     warehouseId,
     items: computedItems,
@@ -150,11 +168,22 @@ export async function POST(req: NextRequest) {
     purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
   });
 
+  // Ensure invoice is persisted even if schema cache is stale in dev server.
+  await Purchase.collection.updateOne(
+    { _id: new mongoose.Types.ObjectId(String(purchase._id)) },
+    { $set: { invoiceNumber: normalizedInvoiceNumber, purchaseNumber: normalizedInvoiceNumber } }
+  );
+
   /* 🔥 RETURN POPULATED DATA */
   const populated = await Purchase.findById(purchase._id)
     .populate("dealerId", "name phone")
     .populate("items.productId", "name")
     .lean();
 
-  return NextResponse.json(populated, { status: 201 });
+  const normalized = {
+    ...(populated as Record<string, unknown>),
+    invoiceNumber: String((populated as PurchaseDocWithNumbers | null)?.invoiceNumber || (populated as PurchaseDocWithNumbers | null)?.purchaseNumber || "").trim(),
+  };
+
+  return NextResponse.json(normalized, { status: 201 });
 }

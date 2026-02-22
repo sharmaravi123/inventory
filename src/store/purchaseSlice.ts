@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 export interface Purchase {
   _id: string;
+  invoiceNumber?: string;
   dealerId?: { name: string; phone: string; address: string };
   items: any[];
   grandTotal: number;
@@ -54,7 +55,11 @@ export const createPurchase = createAsyncThunk<Purchase, any>(
       },
       body: JSON.stringify(payload),
     });
-    return await res.json();
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.error || "Failed to create purchase");
+    }
+    return data;
   }
 );
 

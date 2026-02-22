@@ -53,6 +53,7 @@ export default function AdminPurchaseManager() {
     const [items, setItems] = useState<PurchaseItem[]>([]);
     const [open, setOpen] = useState<boolean>(false);
     const [purchaseDate, setPurchaseDate] = useState<string>("");
+    const [purchaseInvoiceNumber, setPurchaseInvoiceNumber] = useState<string>("");
     const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
 
     const [filterType, setFilterType] = useState<DateFilter>("thisMonth");
@@ -278,6 +279,7 @@ export default function AdminPurchaseManager() {
         setWarehouseId("");
         setItems([]);
         setPurchaseDate("");
+        setPurchaseInvoiceNumber("");
         setEditingPurchaseId(null);
     };
 
@@ -293,7 +295,7 @@ export default function AdminPurchaseManager() {
 
     const savePurchase = async (): Promise<void> => {
         const cleanedItems = items.filter((it) => it.productId);
-        if (!dealerId || !warehouseId || cleanedItems.length === 0) {
+        if (!dealerId || !warehouseId || !purchaseInvoiceNumber.trim() || cleanedItems.length === 0) {
             Swal.fire("Validation Error", "Please fill all required fields", "warning");
             return;
         }
@@ -314,11 +316,25 @@ export default function AdminPurchaseManager() {
                 await dispatch(
                     updatePurchase({
                         id: editingPurchaseId,
-                        payload: { dealerId, warehouseId, items: cleanedItems, purchaseDate },
+                        payload: {
+                            invoiceNumber: purchaseInvoiceNumber.trim(),
+                            dealerId,
+                            warehouseId,
+                            items: cleanedItems,
+                            purchaseDate,
+                        },
                     })
                 ).unwrap();
             } else {
-                await dispatch(createPurchase({ dealerId, warehouseId, items: cleanedItems, purchaseDate })).unwrap();
+                await dispatch(
+                    createPurchase({
+                        invoiceNumber: purchaseInvoiceNumber.trim(),
+                        dealerId,
+                        warehouseId,
+                        items: cleanedItems,
+                        purchaseDate,
+                    })
+                ).unwrap();
             }
             await dispatch(fetchPurchases()).unwrap();
             setOpen(false);
@@ -366,6 +382,7 @@ export default function AdminPurchaseManager() {
         );
         const dateSource = purchase.purchaseDate ?? purchase.createdAt;
         setPurchaseDate(new Date(dateSource).toISOString().slice(0, 10));
+        setPurchaseInvoiceNumber(purchase.invoiceNumber || purchase.purchaseNumber || "");
 
         const mappedItems: PurchaseItem[] = (purchase.items || []).map((it: any) => ({
             productId: typeof it.productId === "string" ? it.productId : it.productId?._id || "",
@@ -426,7 +443,7 @@ export default function AdminPurchaseManager() {
             const invoiceNumber =
                 purchase.invoiceNumber ||
                 purchase.purchaseNumber ||
-                `PUR-${String(purchase._id || "").slice(-6)}`;
+                "-";
 
             const effectiveGrossTotal =
                 typeof purchase.grandTotal === "number"
@@ -690,7 +707,7 @@ export default function AdminPurchaseManager() {
                                     <th className="px-2 py-3 text-left">Address</th>
                                     <th className="px-2 py-3 text-center">Items</th>
                                     <th className="px-2 py-3 text-center">Date</th>
-                                    <th className="px-2 py-3 text-center">PUR No</th>
+                                    <th className="px-2 py-3 text-center">Invoice No</th>
                                     <th className="px-2 py-3 text-center">Action</th>
 
                                 </tr>
@@ -726,7 +743,7 @@ export default function AdminPurchaseManager() {
                                                     {new Date(purchase.purchaseDate ?? purchase.createdAt).toLocaleDateString("en-IN")}
                                                 </td>
                                                 <td className="px-2 py-3 text-center text-sm font-medium text-slate-900">
-                                                    PUR-{purchase._id.slice(-6)}
+                                                    {purchase.invoiceNumber || purchase.purchaseNumber || "-"}
                                                 </td>
                                                 <td className="px-2 py-3 text-center">
                                                     <div className="flex items-center justify-center gap-2">
@@ -885,7 +902,7 @@ export default function AdminPurchaseManager() {
                                 </div>
 
                                 <div className="p-3 max-h-[70vh] overflow-y-auto">
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-3">
+                                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-3">
                                         <div className="flex gap-2">
                                             <select
                                                 value={dealerId}
@@ -926,6 +943,18 @@ export default function AdminPurchaseManager() {
                                                     </option>
                                                 ))}
                                             </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-slate-700 mb-3">
+                                                Supplier Invoice No *
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={purchaseInvoiceNumber}
+                                                onChange={(e) => setPurchaseInvoiceNumber(e.target.value)}
+                                                placeholder="Enter supplier invoice number"
+                                                className="w-full p-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                            />
                                         </div>
                                         <div>
                                             <label className="block text-sm font-semibold text-slate-700 mb-3">
@@ -1160,7 +1189,7 @@ export default function AdminPurchaseManager() {
                                         <button
                                             type="button"
                                             onClick={savePurchase}
-                                            disabled={!dealerId || !warehouseId || items.filter((it) => it.productId).length === 0}
+                                            disabled={!dealerId || !warehouseId || !purchaseInvoiceNumber.trim() || items.filter((it) => it.productId).length === 0}
                                             className="flex-1 px-3 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all focus:outline-none focus:ring-4 focus:ring-blue-500"
                                         >
                                             {editingPurchaseId ? "Update Purchase" : "Save Purchase"}

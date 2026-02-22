@@ -6,6 +6,12 @@ import "@/models/Warehouse";
 import "@/models/Product";
 import Product from "@/models/Product";
 import Stock from "@/models/Stock";
+import mongoose from "mongoose";
+
+type PurchaseDocWithNumbers = {
+  invoiceNumber?: string;
+  purchaseNumber?: string;
+};
 
 export async function GET(
   req: NextRequest,
@@ -17,7 +23,7 @@ export async function GET(
     const { id } = await context.params;
 
     const purchase = await Purchase.findById(id)
-      .select("dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
+      .select("invoiceNumber purchaseNumber dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
       .populate("dealerId", "name phone address gstin")
       .populate("warehouseId", "name")
       .populate("items.productId", "name hsnCode perBoxItem")
@@ -30,7 +36,12 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(purchase, { status: 200 });
+    const normalized = {
+      ...(purchase as Record<string, unknown>),
+      invoiceNumber: String((purchase as PurchaseDocWithNumbers | null)?.invoiceNumber || (purchase as PurchaseDocWithNumbers | null)?.purchaseNumber || "").trim(),
+    };
+
+    return NextResponse.json(normalized, { status: 200 });
   } catch (error) {
     console.error("PURCHASE FETCH ERROR:", error);
     return NextResponse.json(
@@ -48,10 +59,11 @@ export async function PUT(
     await dbConnect();
 
     const { id } = await context.params;
-    const { dealerId, warehouseId, items, purchaseDate } =
+    const { dealerId, warehouseId, items, purchaseDate, invoiceNumber, purchaseNumber } =
       await req.json();
+    const normalizedInvoiceNumber = String(invoiceNumber || purchaseNumber || "").trim();
 
-    if (!dealerId || !warehouseId || !Array.isArray(items)) {
+    if (!dealerId || !warehouseId || !Array.isArray(items) || !normalizedInvoiceNumber) {
       return NextResponse.json(
         { error: "Invalid payload" },
         { status: 400 }
@@ -198,9 +210,11 @@ export async function PUT(
       }
     }
 
-    const updated = await Purchase.findByIdAndUpdate(
+    await Purchase.findByIdAndUpdate(
       id,
       {
+        invoiceNumber: normalizedInvoiceNumber,
+        purchaseNumber: normalizedInvoiceNumber,
         dealerId,
         warehouseId,
         items: computedItems,
@@ -212,17 +226,32 @@ export async function PUT(
           : existing.purchaseDate ?? existing.createdAt,
       },
       { new: true }
-    )
+    ).lean();
+
+    // Ensure invoice is persisted even if schema cache is stale in dev server.
+    await Purchase.collection.updateOne(
+      { _id: new mongoose.Types.ObjectId(String(id)) },
+      { $set: { invoiceNumber: normalizedInvoiceNumber, purchaseNumber: normalizedInvoiceNumber } }
+    );
+
+    const refreshed = await Purchase.findById(id)
+      .select("invoiceNumber purchaseNumber dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
       .populate("dealerId", "name phone address gstin")
       .populate("warehouseId", "name")
       .populate("items.productId", "name hsnCode perBoxItem")
       .lean();
 
-    return NextResponse.json(updated, { status: 200 });
-  } catch (error: any) {
+    const normalized = {
+      ...(refreshed as Record<string, unknown>),
+      invoiceNumber: String((refreshed as PurchaseDocWithNumbers | null)?.invoiceNumber || (refreshed as PurchaseDocWithNumbers | null)?.purchaseNumber || "").trim(),
+    };
+
+    return NextResponse.json(normalized, { status: 200 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update purchase";
     console.error("PURCHASE UPDATE ERROR:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to update purchase" },
+      { error: message },
       { status: 500 }
     );
   }

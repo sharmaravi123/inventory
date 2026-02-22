@@ -17,6 +17,8 @@ export interface IPurchaseItem {
 }
 
 export interface IPurchase extends Document {
+  invoiceNumber: string;
+  purchaseNumber?: string;
   dealerId: mongoose.Types.ObjectId;
   warehouseId: mongoose.Types.ObjectId;
   items: IPurchaseItem[];
@@ -29,6 +31,8 @@ export interface IPurchase extends Document {
 
 const PurchaseSchema = new Schema<IPurchase>(
   {
+    invoiceNumber: { type: String, required: true, trim: true },
+    purchaseNumber: { type: String, trim: true, default: "" },
     dealerId: { type: Schema.Types.ObjectId, ref: "Dealer", required: true },
     warehouseId: { type: Schema.Types.ObjectId, ref: "Warehouse", required: true },
     items: [
@@ -57,6 +61,7 @@ const PurchaseSchema = new Schema<IPurchase>(
 );
 
 PurchaseSchema.index({ createdAt: -1 });
+PurchaseSchema.index({ invoiceNumber: 1 });
 PurchaseSchema.index({ purchaseDate: -1 });
 PurchaseSchema.index({ dealerId: 1, purchaseDate: -1 });
 PurchaseSchema.index({ warehouseId: 1, createdAt: -1 });

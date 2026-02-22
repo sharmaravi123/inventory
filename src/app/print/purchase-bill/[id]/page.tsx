@@ -96,7 +96,7 @@ export default function PrintPurchaseBillPage() {
         =============================== */
 
         setBill({
-          invoiceNumber: `PUR-${data._id.slice(-6)}`,
+          invoiceNumber: data.invoiceNumber || data.purchaseNumber || "-",
           purchaseDate: data.purchaseDate ?? data.createdAt,
 
           dealer: {
