@@ -36,18 +36,18 @@ export default function PrintPurchaseBillPage() {
         const items = data.items.map((it: any) => {
           const perBox = it.productId?.perBoxItem ?? 1;
           const totalPieces = it.boxes * perBox + it.looseItems;
-          const grossAmount = totalPieces * it.purchasePrice;
+          const taxPercent = Math.max(0, Number(it.taxPercent ?? 5));
+          const pricePerPieceWithTax = Number(it.purchasePrice || 0);
+          const pricePerPieceWithoutTax =
+            taxPercent > 0
+              ? pricePerPieceWithTax / (1 + taxPercent / 100)
+              : pricePerPieceWithTax;
+          const grossAmount = totalPieces * pricePerPieceWithoutTax;
           const discountPercent = Number(it.discountPercent ?? 0);
-          const discountAmount = typeof it.discountAmount === "number"
-            ? it.discountAmount
-            : (grossAmount * discountPercent) / 100;
+          const discountAmount = (grossAmount * discountPercent) / 100;
           const taxableAmount = Math.max(0, grossAmount - discountAmount);
-          const taxAmount = typeof it.taxAmount === "number"
-            ? it.taxAmount
-            : (taxableAmount * Number(it.taxPercent ?? 0)) / 100;
-          const lineAmount = typeof it.totalAmount === "number"
-            ? it.totalAmount
-            : taxableAmount + taxAmount;
+          const taxAmount = (taxableAmount * taxPercent) / 100;
+          const lineAmount = taxableAmount + taxAmount;
 
           return {
             productName: it.productId?.name ?? "N/A",
@@ -58,7 +58,7 @@ export default function PrintPurchaseBillPage() {
             purchasePrice: it.purchasePrice,
             discountPercent,
             discountAmount,
-            taxPercent: it.taxPercent,
+            taxPercent,
             taxAmount,
             grossAmount,
             taxableAmount,

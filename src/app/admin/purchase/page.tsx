@@ -104,7 +104,7 @@ export default function AdminPurchaseManager() {
     useEffect(() => {
         if (open && items.length === 0) {
             setItems([
-                { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 0, taxPercent: 0 }
+                { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 2, taxPercent: 5 }
             ]);
         }
     }, [open]);
@@ -114,7 +114,7 @@ export default function AdminPurchaseManager() {
             style: "currency",
             currency: "INR",
             minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
+            maximumFractionDigits: 2,
         }),
         []
     );
@@ -143,39 +143,44 @@ export default function AdminPurchaseManager() {
         return dealerMap.get(id);
     }, [dealerMap]);
 
+    const normalizeBasePrice = useCallback((value: number) => {
+        if (!Number.isFinite(value) || value < 0) return 0;
+        return Number(value.toFixed(6));
+    }, []);
+
     const calcItem = useCallback((it: any, perBox: number) => {
-        const totalPieces = it.boxes * perBox + it.looseItems;
-        const grossAmount = totalPieces * Number(it.purchasePrice || 0);
+        const totalPieces = Number(it.boxes || 0) * perBox + Number(it.looseItems || 0);
+        const taxPercent = Math.max(0, Number(it.taxPercent || 5));
+        const pricePerPieceWithTax = Number(it.purchasePrice || 0);
+        const pricePerPieceWithoutTax =
+            taxPercent > 0
+                ? pricePerPieceWithTax / (1 + taxPercent / 100)
+                : pricePerPieceWithTax;
+        const perBoxPriceWithoutTax = pricePerPieceWithoutTax * perBox;
+        const grossAmount = totalPieces * pricePerPieceWithoutTax;
         const discountPercent = Math.max(0, Math.min(100, Number(it.discountPercent ?? 0)));
-        const discountAmount = typeof it.discountAmount === "number"
-            ? it.discountAmount
-            : (grossAmount * discountPercent) / 100;
+        const discountAmount = (grossAmount * discountPercent) / 100;
         const taxableAmount = Math.max(0, grossAmount - discountAmount);
-        const taxAmount = typeof it.taxAmount === "number"
-            ? it.taxAmount
-            : (taxableAmount * Number(it.taxPercent || 0)) / 100;
-        const finalAmount = typeof it.totalAmount === "number"
-            ? it.totalAmount
-            : taxableAmount + taxAmount;
+        const taxAmount = (taxableAmount * taxPercent) / 100;
+        const finalAmount = taxableAmount + taxAmount;
+        const cgstAmount = taxAmount / 2;
+        const sgstAmount = taxAmount / 2;
 
         return {
             totalPieces,
+            pricePerPieceWithTax,
+            pricePerPieceWithoutTax,
+            perBoxPriceWithoutTax,
             grossAmount,
             discountPercent,
             discountAmount,
             taxableAmount,
             taxAmount,
+            cgstAmount,
+            sgstAmount,
             finalAmount,
         };
     }, []);
-
-    const calcPurchaseTotal = useCallback((items: any[]): number => {
-        return items.reduce((sum, it) => {
-            const pid = typeof it.productId === "string" ? it.productId : it.productId?._id;
-            const perBox = getProductById(pid || "")?.perBoxItem ?? 1;
-            return sum + calcItem(it, perBox).finalAmount;
-        }, 0);
-    }, [calcItem, getProductById]);
 
     const calcPurchaseDiscount = useCallback((lineItems: any[]): { discountAmount: number; discountPercent: number } => {
         let gross = 0;
@@ -191,6 +196,26 @@ export default function AdminPurchaseManager() {
         return {
             discountAmount: discount,
             discountPercent: gross > 0 ? (discount * 100) / gross : 0,
+        };
+    }, [calcItem, getProductById]);
+
+    const calcPurchaseTotals = useCallback((lineItems: any[]) => {
+        let taxableAmount = 0;
+        let gstAmount = 0;
+        lineItems.forEach((it) => {
+            const pid = typeof it.productId === "string" ? it.productId : it.productId?._id;
+            const perBox = getProductById(pid || "")?.perBoxItem ?? 1;
+            const calc = calcItem(it, perBox);
+            taxableAmount += calc.taxableAmount;
+            gstAmount += calc.taxAmount;
+        });
+
+        return {
+            taxableAmount,
+            cgstAmount: gstAmount / 2,
+            sgstAmount: gstAmount / 2,
+            gstAmount,
+            grandTotal: taxableAmount + gstAmount,
         };
     }, [calcItem, getProductById]);
 
@@ -226,7 +251,7 @@ export default function AdminPurchaseManager() {
     }, [purchases, filterType, fromDate, toDate, searchTerm, getDealerById, getProductById]);
 
     const addItem = (): void => {
-        setItems((prev) => [...prev, { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 0, taxPercent: 0 }]);
+        setItems((prev) => [...prev, { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 2, taxPercent: 5 }]);
     };
 
     const removeItem = (index: number): void => {
@@ -243,8 +268,8 @@ export default function AdminPurchaseManager() {
             copy[index] = {
                 ...copy[index],
                 productId: pid,
-                purchasePrice: product.purchasePrice || 0,
-                taxPercent: product.taxPercent || 0
+                purchasePrice: normalizeBasePrice(Number(product.purchasePrice || 0)),
+                taxPercent: product.taxPercent || 5
             };
 
             const isLastRow = index === prev.length - 1;
@@ -256,8 +281,8 @@ export default function AdminPurchaseManager() {
                     boxes: 0,
                     looseItems: 0,
                     purchasePrice: 0,
-                    discountPercent: 0,
-                    taxPercent: 0
+                    discountPercent: 2,
+                    taxPercent: 5
                 });
             }
 
@@ -389,11 +414,11 @@ export default function AdminPurchaseManager() {
             boxes: it.boxes ?? 0,
             looseItems: it.looseItems ?? 0,
             purchasePrice: it.purchasePrice ?? 0,
-            discountPercent: it.discountPercent ?? 0,
-            taxPercent: it.taxPercent ?? 0,
+            discountPercent: it.discountPercent ?? 2,
+            taxPercent: it.taxPercent ?? 5,
         }));
 
-        setItems(mappedItems.length ? mappedItems : [{ productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 0, taxPercent: 0 }]);
+        setItems(mappedItems.length ? mappedItems : [{ productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 2, taxPercent: 5 }]);
         setOpen(true);
     };
 
@@ -715,8 +740,8 @@ export default function AdminPurchaseManager() {
                             <tbody className="divide-y divide-slate-100 ">
                                 {filteredPurchases.map((purchase: any) => {
                                     const dealer = resolveDealer(purchase.dealerId);
-                                    const totalAmount = calcPurchaseTotal(purchase.items || []);
                                     const discountSummary = calcPurchaseDiscount(purchase.items || []);
+                                    const taxSummary = calcPurchaseTotals(purchase.items || []);
 
                                     return (
                                         <React.Fragment key={purchase._id}>
@@ -768,15 +793,17 @@ export default function AdminPurchaseManager() {
                                             <tr className="bg-slate-50/50">
                                                 <td colSpan={6} className="p-0">
                                                     <div className="border-t border-slate-200">
-                                                        <div className="grid grid-cols-9 gap-4 p-6 bg-slate-50 text-xs font-medium uppercase tracking-wide">
+                                                        <div className="grid grid-cols-11 gap-4 p-6 bg-slate-50 text-xs font-medium uppercase tracking-wide">
                                                             <div>Product</div>
                                                             <div className="text-center">Boxes</div>
                                                             <div className="text-center">Loose</div>
-                                                            <div className="text-center">Per Box</div>
-                                                            <div className="text-center">Qty</div>
+                                                            <div className="text-center">Per Box Qty</div>
+                                                            <div className="text-center">Total Pieces</div>
+                                                            <div className="text-right">Per Box Price (Excl GST)</div>
                                                             <div className="text-center">Discount %</div>
                                                             <div className="text-right">Discount Amt</div>
-                                                            <div className="text-center">Tax</div>
+                                                            <div className="text-right">CGST</div>
+                                                            <div className="text-right">SGST</div>
                                                             <div className="text-right">Amount</div>
                                                         </div>
 
@@ -787,7 +814,7 @@ export default function AdminPurchaseManager() {
                                                             const calc = calcItem(it, perBox);
 
                                                             return (
-                                                                <div key={`${purchase._id}-${pid}`} className="grid grid-cols-9 gap-4 p-4 border-t bg-white text-sm hover:bg-slate-50">
+                                                                <div key={`${purchase._id}-${pid}-${itemIndex}`} className="grid grid-cols-11 gap-4 p-4 border-t bg-white text-sm hover:bg-slate-50">
                                                                     <div className="font-medium text-slate-900">
                                                                         {product?.name || "N/A"}
                                                                     </div>
@@ -803,24 +830,27 @@ export default function AdminPurchaseManager() {
                                                                     <div className="text-center font-bold text-xl text-indigo-600">
                                                                         {calc.totalPieces}
                                                                     </div>
+                                                                    <div className="text-right font-mono text-blue-700">
+                                                                        {currency.format(calc.perBoxPriceWithoutTax)}
+                                                                    </div>
                                                                     <div className="text-center font-semibold text-amber-700">
                                                                         {calc.discountPercent.toFixed(2)}%
                                                                     </div>
                                                                     <div className="text-right font-mono text-rose-600">
                                                                         {currency.format(calc.discountAmount)}
                                                                     </div>
-                                                                    <div className="text-center">
-                                                                        <div className="text-xs text-slate-500">{it.taxPercent}%</div>
-                                                                        <div className="font-mono text-emerald-600">
-                                                                            {currency.format(calc.taxAmount)}
-                                                                        </div>
+                                                                    <div className="text-right font-mono text-emerald-700">
+                                                                        {currency.format(calc.cgstAmount)}
+                                                                    </div>
+                                                                    <div className="text-right font-mono text-emerald-700">
+                                                                        {currency.format(calc.sgstAmount)}
                                                                     </div>
                                                                     <div className="text-right">
                                                                         <div className="text-lg font-black text-slate-900">
                                                                             {currency.format(calc.finalAmount)}
                                                                         </div>
                                                                         <div className="text-xs text-slate-500 line-through">
-                                                                            {currency.format(calc.grossAmount)}
+                                                                            {currency.format(calc.grossAmount + calc.taxAmount)}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -828,8 +858,8 @@ export default function AdminPurchaseManager() {
                                                         })}
 
                                                         {/* TOTAL ROW */}
-                                                        <div className="grid grid-cols-9 gap-4 p-6 bg-emerald-50/50 border-t-2 border-emerald-200 mb-4">
-                                                            <div className="font-bold text-lg text-slate-900 col-span-5">
+                                                        <div className="grid grid-cols-11 gap-4 p-6 bg-emerald-50/50 border-t-2 border-emerald-200 mb-4">
+                                                            <div className="font-bold text-lg text-slate-900 col-span-6">
                                                                 GRAND TOTAL ({purchase.items?.length || 0} items)
                                                             </div>
                                                             <div className="text-center font-bold text-amber-700">
@@ -838,11 +868,17 @@ export default function AdminPurchaseManager() {
                                                             <div className="text-right font-bold text-rose-700">
                                                                 {currency.format(discountSummary.discountAmount)}
                                                             </div>
-                                                            <div></div>
+                                                            <div className="text-right font-bold text-emerald-700">
+                                                                {currency.format(taxSummary.cgstAmount)}
+                                                            </div>
+                                                            <div className="text-right font-bold text-emerald-700">
+                                                                {currency.format(taxSummary.sgstAmount)}
+                                                            </div>
                                                             <div className="text-right">
                                                                 <div className="text-2xl font-black text-emerald-700 tracking-wide">
-                                                                    {currency.format(totalAmount)}
+                                                                    {currency.format(taxSummary.grandTotal)}
                                                                 </div>
+                                                                <div className="text-xs text-slate-500">Taxable: {currency.format(taxSummary.taxableAmount)}</div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -901,7 +937,7 @@ export default function AdminPurchaseManager() {
                                     </div>
                                 </div>
 
-                                <div className="p-3 max-h-[70vh] overflow-y-auto">
+                                <div className="p-3 max-h-[70vh] overflow-y-auto overflow-x-hidden">
                                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-3">
                                         <div className="flex gap-2">
                                             <select
@@ -971,7 +1007,7 @@ export default function AdminPurchaseManager() {
 
                                     <div className="space-y-4 mb-4">
                                         <div className="flex justify-between items-center pb-4 border-b border-slate-200">
-                                            <h3 className="text-xl font-semibold text-slate-900">Purchase Items</h3>
+                                            <h3 className="text-base font-semibold text-slate-900">Purchase Items</h3>
                                             <button
                                                 type="button"
                                                 onClick={addItem}
@@ -983,21 +1019,21 @@ export default function AdminPurchaseManager() {
                                         </div>
 
                                         {items.map((item, index) => (
-                                            <div key={`item-${index}`} className="border border-slate-200 rounded-xl p-3 hover:shadow-md transition-all">
+                                            <div key={`item-${index}`} className="border border-slate-200 rounded-xl p-2.5 hover:shadow-md transition-all">
                                                 <div className="flex justify-between items-start mb-4">
-                                                    <h4 className="font-semibold text-lg text-slate-900">Item {index + 1}</h4>
+                                                    <h4 className="font-semibold text-sm text-slate-900">Item {index + 1}</h4>
                                                     <button
                                                         type="button"
                                                         onClick={() => removeItem(index)}
-                                                        className="text-red-500 hover:text-red-700 font-medium"
+                                                        className="text-xs text-red-500 hover:text-red-700 font-medium"
                                                     >
                                                         Remove
                                                     </button>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
                                                     <div className="lg:col-span-1">
-                                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                        <label className="block text-xs font-medium text-slate-700 mb-1">
                                                             Product *
                                                         </label>
                                                         <Select
@@ -1033,22 +1069,22 @@ export default function AdminPurchaseManager() {
                                                                     ? document.body
                                                                     : null
                                                             }
-                                                            className="text-sm"
+                                                            className="text-xs min-w-0"
                                                             classNamePrefix="purchase-product-select"
                                                             formatOptionLabel={(option: any, meta: any) => {
                                                                 const priceText = `Rs ${Number(option.price || 0).toLocaleString("en-IN")}`;
                                                                 if (meta.context === "value") {
                                                                     return (
-                                                                        <div className="flex items-center justify-between gap-2">
+                                                                        <div className="flex min-w-0 items-center justify-between gap-2">
                                                                             <span className="truncate font-medium text-slate-900">{option.label}</span>
-                                                                            <span className="text-xs font-semibold text-blue-700">{priceText}</span>
+                                                                            <span className="shrink-0 text-[11px] font-semibold text-blue-700">{priceText}</span>
                                                                         </div>
                                                                     );
                                                                 }
                                                                 return (
-                                                                    <div className="flex items-center justify-between gap-2 py-0.5">
+                                                                    <div className="flex min-w-0 items-center justify-between gap-2 py-0.5">
                                                                         <span className="truncate text-slate-800">{option.label}</span>
-                                                                        <span className="text-xs font-semibold text-slate-600">{priceText}</span>
+                                                                        <span className="shrink-0 text-[11px] font-semibold text-slate-600">{priceText}</span>
                                                                     </div>
                                                                 );
                                                             }}
@@ -1127,7 +1163,7 @@ export default function AdminPurchaseManager() {
 
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                        <label className="block text-xs font-medium text-slate-700 mb-1">
                                                             Boxes
                                                         </label>
                                                         <input
@@ -1135,11 +1171,11 @@ export default function AdminPurchaseManager() {
                                                             min="0"
                                                             value={item.boxes || ""}
                                                             onChange={(e) => updateItem(index, "boxes", Number(e.target.value) || 0)}
-                                                            className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono text-md"
+                                                            className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono text-sm"
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                        <label className="block text-xs font-medium text-slate-700 mb-1">
                                                             Loose Items
                                                         </label>
                                                         <input
@@ -1147,11 +1183,11 @@ export default function AdminPurchaseManager() {
                                                             min="0"
                                                             value={item.looseItems || ""}
                                                             onChange={(e) => updateItem(index, "looseItems", Number(e.target.value) || 0)}
-                                                            className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono text-md"
+                                                            className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono text-sm"
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                        <label className="block text-xs font-medium text-slate-700 mb-1">
                                                             Discount %
                                                         </label>
                                                         <input
@@ -1160,15 +1196,43 @@ export default function AdminPurchaseManager() {
                                                             max="100"
                                                             value={item.discountPercent || ""}
                                                             onChange={(e) => updateItem(index, "discountPercent", Math.min(100, Number(e.target.value) || 0))}
-                                                            className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono text-md"
+                                                            className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono text-sm"
                                                         />
                                                     </div>
-                                                    <div className="lg:col-span-1 text-right pt-4">
-                                                        <div className="text-2xl font-bold text-slate-900 mb-1">
-                                                            {currency.format(item.purchasePrice)}
-                                                        </div>
-                                                        <div className="text-sm text-slate-500">{item.discountPercent || 0}% Discount</div>
-                                                        <div className="text-xs text-slate-500">{item.taxPercent}% Tax</div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                                                            Price / Piece (Incl GST)
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.000001"
+                                                            value={item.purchasePrice || ""}
+                                                            onChange={(e) => updateItem(index, "purchasePrice", normalizeBasePrice(Number(e.target.value) || 0))}
+                                                            className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center font-mono text-sm"
+                                                        />
+                                                    </div>
+                                                    <div className="lg:col-span-1 text-left xl:text-right pt-1">
+                                                        {(() => {
+                                                            const perBox = productMap.get(item.productId)?.perBoxItem ?? 1;
+                                                            const c = calcItem(item, perBox);
+                                                            return (
+                                                        <>
+                                                            <div className="text-[11px] text-slate-600 break-words">
+                                                                Boxes: {item.boxes || 0} | Loose: {item.looseItems || 0} | Total pieces: {c.totalPieces}
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-600 break-words">
+                                                                Per box price (excl GST): {currency.format(c.perBoxPriceWithoutTax)} | Discount: {currency.format(c.discountAmount)} | Taxable: {currency.format(c.taxableAmount)}
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-600 break-words">
+                                                                CGST: {currency.format(c.cgstAmount)} | SGST: {currency.format(c.sgstAmount)} | Total: {currency.format(c.finalAmount)}
+                                                            </div>
+                                                            <div className="text-[10px] text-slate-500">
+                                                                Piece price se GST remove, discount apply, phir GST add
+                                                            </div>
+                                                        </>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
                                             </div>

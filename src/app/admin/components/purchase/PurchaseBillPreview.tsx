@@ -131,7 +131,10 @@ export default function PurchaseBillPreview({
     const subtotalWithoutTax = bill.totalBeforeTax;
     const totalGross = bill.totalGross ?? bill.items.reduce((s, it) => {
         const qty = it.boxes * it.perBoxItem + it.looseItems;
-        return s + qty * it.purchasePrice;
+        const taxPercent = Math.max(0, Number(it.taxPercent || 5));
+        const pricePerPieceWithoutTax =
+            taxPercent > 0 ? Number(it.purchasePrice || 0) / (1 + taxPercent / 100) : Number(it.purchasePrice || 0);
+        return s + qty * pricePerPieceWithoutTax;
     }, 0);
     const totalDiscountAmount = bill.totalDiscountAmount ?? bill.items.reduce((s, it) => s + Number(it.discountAmount ?? 0), 0);
     const totalDiscountPercent = bill.totalDiscountPercent ?? (totalGross > 0 ? (totalDiscountAmount * 100) / totalGross : 0);
@@ -305,20 +308,17 @@ export default function PurchaseBillPreview({
                                 const totalPieces = it.boxes * it.perBoxItem + it.looseItems;
                                 const grossAmount = typeof it.grossAmount === "number"
                                     ? it.grossAmount
-                                    : totalPieces * it.purchasePrice;
+                                    : totalPieces * (
+                                        Math.max(0, Number(it.taxPercent || 5)) > 0
+                                            ? Number(it.purchasePrice || 0) / (1 + Math.max(0, Number(it.taxPercent || 5)) / 100)
+                                            : Number(it.purchasePrice || 0)
+                                    );
                                 const discountPercent = Number(it.discountPercent ?? 0);
-                                const discountAmount = typeof it.discountAmount === "number"
-                                    ? it.discountAmount
-                                    : (grossAmount * discountPercent) / 100;
-                                const taxableAmount = typeof it.taxableAmount === "number"
-                                    ? it.taxableAmount
-                                    : Math.max(0, grossAmount - discountAmount);
-                                const taxAmount = typeof it.taxAmount === "number"
-                                    ? it.taxAmount
-                                    : (taxableAmount * Number(it.taxPercent || 0)) / 100;
-                                const lineAmount = typeof it.lineAmount === "number"
-                                    ? it.lineAmount
-                                    : taxableAmount + taxAmount;
+                                const discountAmount = (grossAmount * discountPercent) / 100;
+                                const taxableAmount = Math.max(0, grossAmount - discountAmount);
+                                const taxPercent = Math.max(0, Number(it.taxPercent || 5));
+                                const taxAmount = (taxableAmount * taxPercent) / 100;
+                                const lineAmount = taxableAmount + taxAmount;
 
                                 return (
                                     <tr key={i}>
@@ -330,7 +330,7 @@ export default function PurchaseBillPreview({
                                             {it.looseItems > 0 && `${it.looseItems} loose`}
                                             <div className="text-[10px]">({totalPieces} pcs)</div>
                                         </td>
-                                        <td className="border p-1">{it.purchasePrice.toFixed(2)}</td>
+                                        <td className="border p-1">{(grossAmount / Math.max(totalPieces, 1)).toFixed(2)}</td>
                                         <td className="border p-1">{discountPercent.toFixed(2)}%</td>
                                         <td className="border p-1">{discountAmount.toFixed(2)}</td>
                                         <td className="border p-1">{it.taxPercent}%</td>
