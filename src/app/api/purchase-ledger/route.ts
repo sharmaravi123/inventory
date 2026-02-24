@@ -3,6 +3,7 @@ export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import mongoose from "mongoose";
 import dbConnect from "@/lib/mongodb";
 import Purchase from "@/models/PurchaseOrder";
 import PurchaseDealerPayment from "@/models/PurchaseDealerPayment";
@@ -23,6 +24,10 @@ type PaymentDocRow = {
   amount?: number;
   paymentMode?: "CASH" | "UPI" | "CARD";
   note?: string;
+};
+
+type AmountAggregate = {
+  total?: number;
 };
 
 function parseMonthRange(month: string | null) {
@@ -60,28 +65,61 @@ export async function GET(req: NextRequest) {
     if (!dealerId) {
       return NextResponse.json({ error: "dealerId is required" }, { status: 400 });
     }
+    if (!mongoose.Types.ObjectId.isValid(dealerId)) {
+      return NextResponse.json({ error: "Invalid dealerId" }, { status: 400 });
+    }
+    const dealerObjectId = new mongoose.Types.ObjectId(dealerId);
 
     const { month, start, end } = parseMonthRange(url.searchParams.get("month"));
 
     const purchaseDateFilter = {
       $or: [
         { purchaseDate: { $gte: start, $lte: end } },
-        { purchaseDate: null, createdAt: { $gte: start, $lte: end } },
+        {
+          $and: [
+            {
+              $or: [{ purchaseDate: null }, { purchaseDate: { $exists: false } }],
+            },
+            { createdAt: { $gte: start, $lte: end } },
+          ],
+        },
       ],
     };
 
-    const [purchasesRaw, paymentsRaw] = await Promise.all([
-      Purchase.find({ dealerId, ...purchaseDateFilter })
+    const purchaseBeforeFilter = {
+      $or: [
+        { purchaseDate: { $lt: start } },
+        {
+          $and: [
+            {
+              $or: [{ purchaseDate: null }, { purchaseDate: { $exists: false } }],
+            },
+            { createdAt: { $lt: start } },
+          ],
+        },
+      ],
+    };
+
+    const [purchasesRaw, paymentsRaw, purchaseBeforeAgg, paymentBeforeAgg] = await Promise.all([
+      Purchase.find({ dealerId: dealerObjectId, ...purchaseDateFilter })
         .select("invoiceNumber purchaseNumber grandTotal purchaseDate createdAt")
         .sort({ purchaseDate: 1, createdAt: 1 })
         .lean(),
       PurchaseDealerPayment.find({
-        dealerId,
+        dealerId: dealerObjectId,
         paymentDate: { $gte: start, $lte: end },
       })
         .select("amount paymentMode paymentDate note createdAt")
         .sort({ paymentDate: 1, createdAt: 1 })
         .lean(),
+      Purchase.aggregate([
+        { $match: { dealerId: dealerObjectId, ...purchaseBeforeFilter } },
+        { $group: { _id: null, total: { $sum: { $ifNull: ["$grandTotal", 0] } } } },
+      ]),
+      PurchaseDealerPayment.aggregate([
+        { $match: { dealerId: dealerObjectId, paymentDate: { $lt: start } } },
+        { $group: { _id: null, total: { $sum: { $ifNull: ["$amount", 0] } } } },
+      ]),
     ]);
 
     const purchases = (purchasesRaw as PurchaseRow[]).map((p) => ({
@@ -109,6 +147,12 @@ export async function GET(req: NextRequest) {
 
     const totalPurchase = purchases.reduce((sum, row) => sum + row.amount, 0);
     const totalPaid = payments.reduce((sum, row) => sum + row.amount, 0);
+    const openingPurchase = Number((purchaseBeforeAgg as AmountAggregate[])[0]?.total || 0);
+    const openingPaid = Number((paymentBeforeAgg as AmountAggregate[])[0]?.total || 0);
+    const openingBalance = openingPurchase - openingPaid;
+    const monthBalance = totalPurchase - totalPaid;
+    const closingBalance = openingBalance + monthBalance;
+    const totalPayable = openingBalance + totalPurchase;
 
     return NextResponse.json(
       {
@@ -117,9 +161,13 @@ export async function GET(req: NextRequest) {
         entries,
         payments,
         summary: {
+          openingBalance,
           totalPurchase,
           totalPaid,
-          balance: totalPurchase - totalPaid,
+          monthBalance,
+          totalPayable,
+          balance: closingBalance,
+          closingBalance,
         },
       },
       { status: 200 }

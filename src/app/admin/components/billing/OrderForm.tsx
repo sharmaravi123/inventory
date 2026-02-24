@@ -297,6 +297,7 @@ export default function OrderForm({
                   </label>
                   <input
                     type="tel"
+                    required
                     value={customer.phone}
                     onChange={(e) =>
                       setCustomer({

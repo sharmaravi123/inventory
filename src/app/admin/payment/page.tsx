@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   IndianRupee,
@@ -30,6 +30,7 @@ type DateFilterType = "all" | "thisMonth" | "lastMonth" | "custom";
 
 type CustomerAgg = {
   customerId: string;
+  dbId?: string;
   name: string;
   shopName?: string;
   phone: string;
@@ -42,6 +43,15 @@ type CustomerAgg = {
   periodBilled: number;
   periodPaid: number;
   periodDue: number;
+};
+
+type CustomerRow = {
+  _id: string;
+  name: string;
+  phone?: string;
+  shopName?: string;
+  address?: string;
+  gstNumber?: string;
 };
 
 /* =============== SAFE HELPERS =============== */
@@ -118,6 +128,7 @@ export default function PaymentsDashboardPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
 
   const [newCustomer, setNewCustomer] = useState({
     name: "",
@@ -256,26 +267,24 @@ export default function PaymentsDashboardPage() {
 
   /* =============== CUSTOMERS =============== */
 
-  const [allCustomers, setAllCustomers] = useState<any[]>([]);
+  const [allCustomers, setAllCustomers] = useState<CustomerRow[]>([]);
+
+  const loadCustomers = useCallback(async () => {
+    try {
+      const r = await fetch("/api/customers", { cache: "no-store" });
+      if (!r.ok) {
+        throw new Error("Failed to load customers");
+      }
+      const d = await r.json();
+      setAllCustomers((d.customers ?? []) as CustomerRow[]);
+    } catch {
+      setAllCustomers([]);
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/customers")
-      .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled) {
-          setAllCustomers(d.customers ?? []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAllCustomers([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void loadCustomers();
+  }, [loadCustomers]);
 
   const customersAggregated = useMemo(() => {
     const map = new Map<string, CustomerAgg>();
@@ -288,6 +297,7 @@ export default function PaymentsDashboardPage() {
       if (!map.has(cid)) {
         map.set(cid, {
           customerId: cid,
+          dbId: cust._id,
           name: cust.name || "Unknown",
           shopName: cust.shopName || "",
           phone: cust.phone || "-",
@@ -313,6 +323,7 @@ export default function PaymentsDashboardPage() {
       if (!map.has(cid)) {
         map.set(cid, {
           customerId: cid,
+          dbId: info.customer || undefined,
           name: info.name || "Unknown",
           shopName: info.shopName || "",
           phone: cid,
@@ -432,6 +443,46 @@ export default function PaymentsDashboardPage() {
     setSelectedCustomerId(customerId);
     setPaymentSplit({ cashAmount: 0, upiAmount: 0, cardAmount: 0 });
     setError("");
+  };
+
+  const resetCustomerDialog = () => {
+    setEditingCustomerId(null);
+    setNewCustomer({
+      name: "",
+      phone: "",
+      shopName: "",
+      address: "",
+      gstNumber: "",
+    });
+  };
+
+  const openAddCustomerDialog = () => {
+    resetCustomerDialog();
+    setShowAddCustomer(true);
+  };
+
+  const openEditCustomerDialog = (customer: CustomerAgg) => {
+    setEditingCustomerId(customer.dbId || null);
+    setNewCustomer({
+      name: customer.name || "",
+      phone: customer.phone === "-" ? "" : customer.phone || "",
+      shopName: customer.shopName || "",
+      address: "",
+      gstNumber: "",
+    });
+    if (customer.dbId) {
+      const source = allCustomers.find((c) => c._id === customer.dbId);
+      if (source) {
+        setNewCustomer({
+          name: source.name || customer.name || "",
+          phone: source.phone || "",
+          shopName: source.shopName || "",
+          address: source.address || "",
+          gstNumber: source.gstNumber || "",
+        });
+      }
+    }
+    setShowAddCustomer(true);
   };
 
   const handleClosePayment = () => {
@@ -570,7 +621,7 @@ export default function PaymentsDashboardPage() {
               Refresh
             </button>
             <button
-              onClick={() => setShowAddCustomer(true)}
+              onClick={openAddCustomerDialog}
               className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:bg-blue-700"
             >
               + Add Customer
@@ -761,6 +812,13 @@ export default function PaymentsDashboardPage() {
                     Collect
                     <ChevronRight className="h-3.5 w-3.5" />
                   </button>
+                  <button
+                    onClick={() => openEditCustomerDialog(c)}
+                    disabled={!c.dbId}
+                    className="ml-2 inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Edit
+                  </button>
                 </div>
               </div>
             ))}
@@ -826,13 +884,22 @@ export default function PaymentsDashboardPage() {
                       </span>
                     </td>
                     <td className="py-3 pl-2 pr-6 text-center">
-                      <button
-                        onClick={() => handleOpenPayment(c.customerId)}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
-                      >
-                        Collect
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          onClick={() => handleOpenPayment(c.customerId)}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+                        >
+                          Collect
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => openEditCustomerDialog(c)}
+                          disabled={!c.dbId}
+                          className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1121,7 +1188,7 @@ export default function PaymentsDashboardPage() {
             />
             <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
               <h3 className="mb-4 text-lg font-bold text-slate-900">
-                Add new customer
+                {editingCustomerId ? "Edit customer" : "Add new customer"}
               </h3>
 
               <div className="space-y-3">
@@ -1189,7 +1256,10 @@ export default function PaymentsDashboardPage() {
 
               <div className="mt-5 flex justify-end gap-2">
                 <button
-                  onClick={() => setShowAddCustomer(false)}
+                  onClick={() => {
+                    setShowAddCustomer(false);
+                    resetCustomerDialog();
+                  }}
                   className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel
@@ -1201,29 +1271,43 @@ export default function PaymentsDashboardPage() {
 
                     setAddingCustomer(true);
                     try {
-                      await fetch("/api/customers", {
-                        method: "POST",
+                      const res = await fetch("/api/customers", {
+                        method: editingCustomerId ? "PUT" : "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(newCustomer),
+                        body: JSON.stringify(
+                          editingCustomerId
+                            ? { ...newCustomer, _id: editingCustomerId }
+                            : newCustomer
+                        ),
                       });
+                      if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(
+                          err?.error || "Failed to save customer"
+                        );
+                      }
 
                       setShowAddCustomer(false);
-                      setNewCustomer({
-                        name: "",
-                        phone: "",
-                        shopName: "",
-                        address: "",
-                        gstNumber: "",
-                      });
-
-                      refetch();
+                      resetCustomerDialog();
+                      await loadCustomers();
+                      await refetch();
+                    } catch (e: unknown) {
+                      setError(
+                        e instanceof Error
+                          ? e.message
+                          : "Failed to save customer"
+                      );
                     } finally {
                       setAddingCustomer(false);
                     }
                   }}
                   className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                 >
-                  {addingCustomer ? "Saving..." : "Save customer"}
+                  {addingCustomer
+                    ? "Saving..."
+                    : editingCustomerId
+                    ? "Update customer"
+                    : "Save customer"}
                 </button>
               </div>
             </div>

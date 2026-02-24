@@ -48,9 +48,13 @@ type LedgerResponse = {
   entries: LedgerEntry[];
   payments: PaymentRow[];
   summary: {
+    openingBalance?: number;
     totalPurchase: number;
     totalPaid: number;
+    monthBalance?: number;
+    totalPayable?: number;
     balance: number;
+    closingBalance?: number;
   };
 };
 
@@ -59,13 +63,15 @@ type LedgerSummary = LedgerResponse["summary"];
 type DisplayLedgerRow = {
   key: string;
   id: string;
-  type: "PURCHASE" | "PAYMENT";
+  type: "OPENING" | "PURCHASE" | "PAYMENT";
   dateText: string;
   entryText: string;
   byText: string;
   referenceText: string;
   debitText: string;
   creditText: string;
+  debitClassName?: string;
+  creditClassName?: string;
 };
 
 const currency = new Intl.NumberFormat("en-IN", {
@@ -101,10 +107,33 @@ function formatMonthLabel(month: string) {
   const year = Number(yearText);
   const monthIndex = Number(monthText);
   if (!year || !monthIndex) return month;
-  return new Date(year, monthIndex - 1, 1).toLocaleDateString("en-IN", {
-    month: "long",
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+  return `${monthNames[monthIndex - 1]} ${year}`;
+}
+
+function formatDateDDMMYYYY(dateValue?: string | Date | null) {
+  if (!dateValue) return "-";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
-  });
+    timeZone: "Asia/Kolkata",
+  }).format(date);
 }
 
 function previousMonthValue(month: string) {
@@ -139,7 +168,7 @@ function LedgerTable({
             <th className="px-4 py-3 text-left">Reference</th>
             <th className="px-4 py-3 text-right">Debit</th>
             <th className="px-4 py-3 text-right">Credit</th>
-            <th className="px-4 py-3 text-center">Action</th>
+            {allowEdit && <th className="px-4 py-3 text-center">Action</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -151,7 +180,9 @@ function LedgerTable({
                   className={`rounded-full px-2 py-1 text-xs font-semibold ${
                     row.type === "PURCHASE"
                       ? "bg-amber-100 text-amber-700"
-                      : "bg-emerald-100 text-emerald-700"
+                      : row.type === "PAYMENT"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-100 text-slate-700"
                   }`}
                 >
                   {row.entryText}
@@ -159,26 +190,32 @@ function LedgerTable({
               </td>
               <td className="px-4 py-3 text-slate-700">{row.byText}</td>
               <td className="px-4 py-3 text-slate-700">{row.referenceText}</td>
-              <td className="px-4 py-3 text-right font-semibold text-rose-700">{row.debitText}</td>
-              <td className="px-4 py-3 text-right font-semibold text-emerald-700">{row.creditText}</td>
-              <td className="px-4 py-3 text-center">
-                {allowEdit && row.type === "PAYMENT" ? (
-                  <button
-                    type="button"
-                    onClick={() => onEdit(row.id)}
-                    className="rounded-md border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                  >
-                    Edit
-                  </button>
-                ) : (
-                  <span className="text-xs text-slate-400">-</span>
-                )}
+              <td className={`px-4 py-3 text-right font-semibold ${row.debitClassName || "text-slate-900"}`}>
+                {row.debitText}
               </td>
+              <td className={`px-4 py-3 text-right font-semibold ${row.creditClassName || "text-emerald-700"}`}>
+                {row.creditText}
+              </td>
+              {allowEdit && (
+                <td className="px-4 py-3 text-center">
+                  {row.type === "PAYMENT" ? (
+                    <button
+                      type="button"
+                      onClick={() => onEdit(row.id)}
+                      className="rounded-md border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Edit
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-400">-</span>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
           {!loading && rows.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-4 py-6 text-center text-sm text-slate-500">
+              <td colSpan={allowEdit ? 7 : 6} className="px-4 py-6 text-center text-sm text-slate-500">
                 No ledger data for selected month.
               </td>
             </tr>
@@ -215,7 +252,6 @@ export default function PurchaseCreditDebitPage() {
     totalPaid: 0,
     balance: 0,
   });
-  const [previousLoading, setPreviousLoading] = useState(false);
 
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<string>("");
@@ -240,23 +276,51 @@ export default function PurchaseCreditDebitPage() {
   const monthLabel = useMemo(() => formatMonthLabel(selectedMonth), [selectedMonth]);
   const previousMonth = useMemo(() => previousMonthValue(selectedMonth), [selectedMonth]);
   const previousMonthLabel = useMemo(() => formatMonthLabel(previousMonth), [previousMonth]);
+  const openingBalance = Number(ledger.summary.openingBalance || 0);
+  const totalPurchase = Number(ledger.summary.totalPurchase || 0);
+  const totalPaid = Number(ledger.summary.totalPaid || 0);
+  const totalPayable = Number(ledger.summary.totalPayable || openingBalance + totalPurchase);
+  const closingBalance = Number(ledger.summary.closingBalance ?? ledger.summary.balance ?? 0);
 
   const displayRows = useMemo<DisplayLedgerRow[]>(() => {
-    return ledger.entries.map((row) => {
+    const [yearText, monthText] = selectedMonth.split("-");
+    const openingRow: DisplayLedgerRow = {
+      key: `OPENING-${selectedMonth}`,
+      id: `OPENING-${selectedMonth}`,
+      type: "OPENING",
+      dateText: `01/${monthText}/${yearText}`,
+      entryText: "Opening Balance",
+      byText: "-",
+      referenceText:
+        openingBalance > 0
+          ? `${previousMonthLabel} due brought forward`
+          : openingBalance < 0
+          ? `${previousMonthLabel} advance brought forward`
+          : `${previousMonthLabel} settled`,
+      debitText: openingBalance > 0 ? currency.format(openingBalance) : "-",
+      creditText: openingBalance < 0 ? currency.format(Math.abs(openingBalance)) : "-",
+      debitClassName: "text-slate-900",
+      creditClassName: "text-emerald-700",
+    };
+
+    const mapped = ledger.entries.map((row) => {
       return {
         key: `${row.type}-${row.id}`,
         id: row.id,
         type: row.type,
-        dateText: new Date(row.date).toLocaleDateString("en-IN"),
+        dateText: formatDateDDMMYYYY(row.date),
         entryText: row.type === "PURCHASE" ? "Purchase" : "Payment",
         byText: row.type === "PAYMENT" ? row.paymentMode || "CASH" : "-",
         referenceText:
           row.type === "PURCHASE" ? `Invoice: ${row.invoiceNumber || "-"}` : row.note || "Payment entry",
         debitText: row.type === "PURCHASE" ? currency.format(row.amount || 0) : "-",
         creditText: row.type === "PAYMENT" ? currency.format(row.amount || 0) : "-",
+        debitClassName: "text-slate-900",
+        creditClassName: "text-emerald-700",
       };
     });
-  }, [ledger.entries]);
+    return [openingRow, ...mapped];
+  }, [ledger.entries, openingBalance, previousMonthLabel, selectedMonth]);
 
   const loadDealers = useCallback(async () => {
     try {
@@ -351,7 +415,6 @@ export default function PurchaseCreditDebitPage() {
 
   const loadMonthSummary = useCallback(async (dealerId: string, month: string) => {
     if (!dealerId) return;
-    setPreviousLoading(true);
     try {
       const token = getToken();
       const res = await fetch(`/api/purchase-ledger?dealerId=${dealerId}&month=${month}`, {
@@ -365,8 +428,6 @@ export default function PurchaseCreditDebitPage() {
       );
     } catch {
       setPreviousMonthSummary({ totalPurchase: 0, totalPaid: 0, balance: 0 });
-    } finally {
-      setPreviousLoading(false);
     }
   }, []);
 
@@ -469,34 +530,41 @@ export default function PurchaseCreditDebitPage() {
     }
   };
 
-  const onPrint = () => {
-    const safe = (value: string) =>
-      value
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    const textOrDash = (value?: string) => {
-      const next = (value || "").trim();
-      return next || "-";
-    };
+  const safeHtml = useCallback((value: string) => {
+    return value
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }, []);
 
+  const textOrDash = useCallback((value?: string) => {
+    const next = (value || "").trim();
+    return next || "-";
+  }, []);
+
+  const buildLedgerDocumentHtml = useCallback(() => {
     const rowsHtml = displayRows
       .map((row, idx) => {
+        const debitColor = row.debitText !== "-" ? "#111827" : "#64748b";
+        const creditColor = row.creditText !== "-" ? "#047857" : "#64748b";
         return `<tr>
           <td>${idx + 1}</td>
-          <td>${safe(row.dateText)}</td>
-          <td>${safe(row.entryText)}</td>
-          <td>${safe(row.byText)}</td>
-          <td>${safe(row.referenceText)}</td>
-          <td style="text-align:right;">${safe(row.debitText)}</td>
-          <td style="text-align:right;">${safe(row.creditText)}</td>
+          <td>${safeHtml(row.dateText)}</td>
+          <td>${safeHtml(row.entryText)}</td>
+          <td>${safeHtml(row.byText)}</td>
+          <td>${safeHtml(row.referenceText)}</td>
+          <td style="text-align:right;color:${debitColor};font-weight:700;">${safeHtml(row.debitText)}</td>
+          <td style="text-align:right;color:${creditColor};font-weight:700;">${safeHtml(row.creditText)}</td>
         </tr>`;
       })
       .join("");
 
-    const html = `<!doctype html>
+    const closingLabel = closingBalance > 0 ? "Remaining Payable" : closingBalance < 0 ? "Advance Paid" : "Remaining";
+    const closingColor = closingBalance > 0 ? "#dc2626" : closingBalance < 0 ? "#16a34a" : "#111827";
+
+    return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -511,10 +579,10 @@ export default function PurchaseCreditDebitPage() {
     .party-box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-size: 12px; }
     .party-title { font-weight: 700; margin-bottom: 6px; color: #0f172a; }
     .line { margin: 2px 0; }
-    .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+    .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 12px; }
     .box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; }
     .box .label { font-size: 11px; color: #64748b; text-transform: uppercase; }
-    .box .value { margin-top: 3px; font-size: 17px; font-weight: 700; }
+    .box .value { margin-top: 3px; font-size: 16px; font-weight: 700; color: #0f172a; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th, td { border: 1px solid #cbd5e1; padding: 6px; vertical-align: top; }
     th { background: #f1f5f9; text-align: left; font-size: 11px; text-transform: uppercase; }
@@ -523,38 +591,32 @@ export default function PurchaseCreditDebitPage() {
 </head>
 <body>
   <div class="header">
-    <h2>${safe(companyProfile.name)}</h2>
+    <h2>${safeHtml(companyProfile.name)}</h2>
     <p>Purchase Credit / Debit Ledger</p>
   </div>
-  <div class="meta"><b>Party:</b> ${safe(selectedDealerName)} | <b>Month:</b> ${safe(
-      monthLabel
-    )}</div>
+  <div class="meta"><b>Supplier:</b> ${safeHtml(selectedDealerName)} | <b>Month:</b> ${safeHtml(monthLabel)}</div>
   <div class="party-grid">
     <div class="party-box">
-      <div class="party-title">Company Details</div>
-      <div class="line"><b>Name:</b> ${safe(textOrDash(companyProfile.name))}</div>
-      <div class="line"><b>Address:</b> ${safe(textOrDash(companyAddress))}</div>
-      <div class="line"><b>Phone:</b> ${safe(textOrDash(companyProfile.phone))}</div>
-      <div class="line"><b>GSTIN/UIN:</b> ${safe(textOrDash(companyProfile.gstin))}</div>
+      <div class="party-title">Firm Details</div>
+      <div class="line"><b>Name:</b> ${safeHtml(textOrDash(companyProfile.name))}</div>
+      <div class="line"><b>Address:</b> ${safeHtml(textOrDash(companyAddress))}</div>
+      <div class="line"><b>Phone:</b> ${safeHtml(textOrDash(companyProfile.phone))}</div>
+      <div class="line"><b>GSTIN/UIN:</b> ${safeHtml(textOrDash(companyProfile.gstin))}</div>
     </div>
     <div class="party-box">
       <div class="party-title">Supplier Details</div>
-      <div class="line"><b>Name:</b> ${safe(textOrDash(selectedDealer?.name))}</div>
-      <div class="line"><b>Address:</b> ${safe(textOrDash(selectedDealer?.address))}</div>
-      <div class="line"><b>Phone:</b> ${safe(textOrDash(selectedDealer?.phone))}</div>
-      <div class="line"><b>GSTIN/UIN:</b> ${safe(textOrDash(selectedDealer?.gstin))}</div>
+      <div class="line"><b>Name:</b> ${safeHtml(textOrDash(selectedDealer?.name))}</div>
+      <div class="line"><b>Address:</b> ${safeHtml(textOrDash(selectedDealer?.address))}</div>
+      <div class="line"><b>Phone:</b> ${safeHtml(textOrDash(selectedDealer?.phone))}</div>
+      <div class="line"><b>GSTIN/UIN:</b> ${safeHtml(textOrDash(selectedDealer?.gstin))}</div>
     </div>
   </div>
   <div class="summary">
-    <div class="box"><div class="label">Total Purchase</div><div class="value">${safe(
-      currency.format(ledger.summary.totalPurchase || 0)
-    )}</div></div>
-    <div class="box"><div class="label">Total Paid</div><div class="value">${safe(
-      currency.format(ledger.summary.totalPaid || 0)
-    )}</div></div>
-    <div class="box"><div class="label">Balance</div><div class="value">${safe(
-      currency.format(Math.abs(ledger.summary.balance || 0))
-    )}</div></div>
+    <div class="box"><div class="label">Opening Balance</div><div class="value">${safeHtml(currency.format(Math.abs(openingBalance)))}</div></div>
+    <div class="box"><div class="label">Purchase Amount</div><div class="value">${safeHtml(currency.format(totalPurchase))}</div></div>
+    <div class="box"><div class="label">Given By Me</div><div class="value">${safeHtml(currency.format(totalPaid))}</div></div>
+    <div class="box"><div class="label">Total Payable</div><div class="value">${safeHtml(currency.format(totalPayable))}</div></div>
+    <div class="box"><div class="label">${safeHtml(closingLabel)}</div><div class="value" style="color:${closingColor};">${safeHtml(currency.format(Math.abs(closingBalance)))}</div></div>
   </div>
   <table>
     <thead>
@@ -574,18 +636,11 @@ export default function PurchaseCreditDebitPage() {
   </table>
 </body>
 </html>`;
+  }, [closingBalance, companyAddress, companyProfile.gstin, companyProfile.name, companyProfile.phone, displayRows, monthLabel, openingBalance, safeHtml, selectedDealer?.address, selectedDealer?.gstin, selectedDealer?.name, selectedDealer?.phone, selectedDealerName, textOrDash, totalPaid, totalPayable, totalPurchase]);
 
-    const win = window.open("", "_blank", "noopener,noreferrer,width=1024,height=768");
-    if (!win) return;
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => {
-      win.print();
-      win.close();
-    }, 150);
-  };
+  const onPrint = useCallback(() => {
+    window.print();
+  }, []);
 
   const onDownloadPdf = useCallback(async () => {
     setPdfLoading(true);
@@ -595,82 +650,13 @@ export default function PurchaseCreditDebitPage() {
         import("jspdf"),
       ]);
 
-      const safe = (value: string) =>
-        value
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replaceAll('"', "&quot;")
-          .replaceAll("'", "&#039;");
-      const textOrDash = (value?: string) => {
-        const next = (value || "").trim();
-        return next || "-";
-      };
-
-      const rowsHtml = displayRows
-        .map((row, idx) => {
-          return `<tr>
-            <td>${idx + 1}</td>
-            <td>${safe(row.dateText)}</td>
-            <td>${safe(row.entryText)}</td>
-            <td>${safe(row.byText)}</td>
-            <td>${safe(row.referenceText)}</td>
-            <td style="text-align:right;">${safe(row.debitText)}</td>
-            <td style="text-align:right;">${safe(row.creditText)}</td>
-          </tr>`;
-        })
-        .join("");
-
-      const html = `<div style="font-family:Arial,sans-serif;padding:16px;color:#0f172a;background:#ffffff;">
-        <h2 style="margin:0;font-size:24px;">${safe(companyProfile.name)}</h2>
-        <p style="margin:4px 0 0;font-size:13px;color:#334155;">Purchase Credit / Debit Ledger</p>
-        <p style="margin:10px 0 12px;font-size:13px;"><b>Party:</b> ${safe(
-          selectedDealerName
-        )} | <b>Month:</b> ${safe(monthLabel)}</p>
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;">
-          <div style="border:1px solid #cbd5e1;border-radius:6px;padding:8px;font-size:12px;">
-            <div style="font-weight:700;margin-bottom:6px;">Company Details</div>
-            <div style="margin:2px 0;"><b>Name:</b> ${safe(textOrDash(companyProfile.name))}</div>
-            <div style="margin:2px 0;"><b>Address:</b> ${safe(textOrDash(companyAddress))}</div>
-            <div style="margin:2px 0;"><b>Phone:</b> ${safe(textOrDash(companyProfile.phone))}</div>
-            <div style="margin:2px 0;"><b>GSTIN/UIN:</b> ${safe(textOrDash(companyProfile.gstin))}</div>
-          </div>
-          <div style="border:1px solid #cbd5e1;border-radius:6px;padding:8px;font-size:12px;">
-            <div style="font-weight:700;margin-bottom:6px;">Supplier Details</div>
-            <div style="margin:2px 0;"><b>Name:</b> ${safe(textOrDash(selectedDealer?.name))}</div>
-            <div style="margin:2px 0;"><b>Address:</b> ${safe(textOrDash(selectedDealer?.address))}</div>
-            <div style="margin:2px 0;"><b>Phone:</b> ${safe(textOrDash(selectedDealer?.phone))}</div>
-            <div style="margin:2px 0;"><b>GSTIN/UIN:</b> ${safe(textOrDash(selectedDealer?.gstin))}</div>
-          </div>
-        </div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead>
-            <tr>
-              <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;text-align:left;">S.N.</th>
-              <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;text-align:left;">Date</th>
-              <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;text-align:left;">Entry</th>
-              <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;text-align:left;">By</th>
-              <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;text-align:left;">Reference</th>
-              <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;text-align:right;">Debit</th>
-              <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;text-align:right;">Credit</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${
-              rowsHtml ||
-              `<tr><td colspan="7" style="border:1px solid #cbd5e1;padding:8px;text-align:center;">No ledger data for selected month.</td></tr>`
-            }
-          </tbody>
-        </table>
-      </div>`;
-
       const temp = document.createElement("div");
       temp.style.position = "fixed";
       temp.style.left = "-10000px";
       temp.style.top = "0";
       temp.style.width = "900px";
       temp.style.background = "#fff";
-      temp.innerHTML = html;
+      temp.innerHTML = buildLedgerDocumentHtml();
       document.body.appendChild(temp);
 
       const canvas = await html2canvas(temp, {
@@ -707,10 +693,10 @@ export default function PurchaseCreditDebitPage() {
     } finally {
       setPdfLoading(false);
     }
-  }, [companyAddress, companyProfile.gstin, companyProfile.name, companyProfile.phone, displayRows, monthLabel, selectedDealer?.address, selectedDealer?.gstin, selectedDealer?.name, selectedDealer?.phone, selectedDealerName, selectedMonth]);
+  }, [buildLedgerDocumentHtml, selectedDealerName, selectedMonth]);
 
   const balanceText = useMemo(() => {
-    const balance = Number(ledger.summary.balance || 0);
+    const balance = closingBalance;
     if (balance === 0) return "Month settled: purchases and payments are balanced.";
     if (balance > 0)
       return `Outstanding payable: ${currency.format(
@@ -719,7 +705,7 @@ export default function PurchaseCreditDebitPage() {
     return `Advance paid: ${currency.format(
       Math.abs(balance)
     )} has been paid in excess to the dealer.`;
-  }, [ledger.summary.balance]);
+  }, [closingBalance]);
 
   const previousBalanceText = useMemo(() => {
     const balance = Number(previousMonthSummary.balance || 0);
@@ -730,7 +716,42 @@ export default function PurchaseCreditDebitPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 px-3 py-4 sm:px-6">
-      <div className="mx-auto max-w-7xl space-y-4">
+      <style jsx global>{`
+        @media print {
+          @page { size: A4; margin: 10mm; }
+          .print-hide { display: none !important; }
+          .print-modal-root {
+            position: static !important;
+            inset: auto !important;
+            display: block !important;
+            background: #fff !important;
+            padding: 0 !important;
+          }
+          .print-modal-panel {
+            height: auto !important;
+            max-height: none !important;
+            width: 100% !important;
+            max-width: none !important;
+            overflow: visible !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+          }
+          .print-modal-content {
+            overflow: visible !important;
+            background: #fff !important;
+            padding: 0 !important;
+          }
+          .ledger-print-root {
+            width: 100% !important;
+            max-width: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+        }
+      `}</style>
+      <div className="mx-auto max-w-7xl space-y-4 print-hide">
         <div className="flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Admin</p>
@@ -789,41 +810,45 @@ export default function PurchaseCreditDebitPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-4">
+        <div className="grid gap-4 lg:grid-cols-5">
+          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Opening Balance ({previousMonthLabel})</p>
+            <p
+              className={`mt-1 text-xl font-bold ${
+                openingBalance > 0 ? "text-rose-700" : openingBalance < 0 ? "text-emerald-700" : "text-slate-900"
+              }`}
+            >
+              {currency.format(Math.abs(openingBalance))}
+            </p>
+          </div>
           <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
             <p className="text-xs uppercase tracking-wide text-slate-500">Total Purchase</p>
             <p className="mt-1 text-xl font-bold text-slate-900">
-              {currency.format(ledger.summary.totalPurchase || 0)}
+              {currency.format(totalPurchase)}
             </p>
           </div>
           <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Total Paid</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Given By Me</p>
             <p className="mt-1 text-xl font-bold text-emerald-700">
-              {currency.format(ledger.summary.totalPaid || 0)}
+              {currency.format(totalPaid)}
             </p>
           </div>
           <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Balance</p>
-            <p
-              className={`mt-1 text-xl font-bold ${
-                ledger.summary.balance > 0 ? "text-rose-700" : "text-blue-700"
-              }`}
-            >
-              {currency.format(Math.abs(ledger.summary.balance || 0))}
-            </p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Total (Opening + Purchase)</p>
+            <p className="mt-1 text-xl font-bold text-slate-900">{currency.format(totalPayable)}</p>
           </div>
           <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Last Month Balance</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">
+              {closingBalance > 0 ? "Remaining Payable" : closingBalance < 0 ? "Advance Paid" : "Remaining"}
+            </p>
             <p
               className={`mt-1 text-xl font-bold ${
-                previousMonthSummary.balance > 0 ? "text-rose-700" : "text-blue-700"
+                closingBalance > 0 ? "text-rose-700" : closingBalance < 0 ? "text-emerald-700" : "text-slate-900"
               }`}
             >
-              {previousLoading
-                ? "Loading..."
-                : currency.format(Math.abs(previousMonthSummary.balance || 0))}
+              {currency.format(Math.abs(closingBalance))}
             </p>
-            <p className="mt-1 text-xs text-slate-500">{previousMonthLabel}</p>
+            <p className="mt-1 text-xs text-slate-500">{monthLabel}</p>
           </div>
         </div>
 
@@ -901,9 +926,9 @@ export default function PurchaseCreditDebitPage() {
       </div>
 
       {showPrintPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4">
-          <div className="flex h-full max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <div className="print-modal-root fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4 print:bg-white">
+          <div className="print-modal-panel flex h-full max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="print-hide flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <h3 className="text-base font-bold text-slate-900">Print Preview</h3>
               <div className="flex items-center gap-2">
                 <button
@@ -934,14 +959,14 @@ export default function PurchaseCreditDebitPage() {
               </div>
             </div>
 
-            <div className="overflow-auto bg-slate-100 p-4">
-              <div className="mx-auto w-full max-w-5xl rounded-xl bg-white p-6 text-slate-900 shadow-sm">
+            <div className="print-modal-content overflow-auto bg-slate-100 p-4 print:bg-white print:p-0">
+              <div className="ledger-print-root mx-auto w-full max-w-5xl rounded-xl bg-white p-6 text-slate-900 shadow-sm print:max-w-none print:rounded-none print:p-0 print:shadow-none">
                 <div className="mb-4 border-b border-slate-200 pb-3">
                   <h2 className="text-2xl font-bold">{companyProfile.name}</h2>
                   <p className="text-sm text-slate-600">Purchase Credit / Debit Ledger</p>
                   <div className="mt-2 grid gap-1 text-sm text-slate-700 sm:grid-cols-2">
                     <p>
-                      <span className="font-semibold">Party:</span> {selectedDealerName}
+                      <span className="font-semibold">Supplier:</span> {selectedDealerName}
                     </p>
                     <p>
                       <span className="font-semibold">Month:</span> {monthLabel}
@@ -951,7 +976,7 @@ export default function PurchaseCreditDebitPage() {
 
                 <div className="mb-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-lg border border-slate-200 p-3 text-sm">
-                    <p className="font-semibold text-slate-900">Company Details</p>
+                    <p className="font-semibold text-slate-900">Firm Details</p>
                     <p className="mt-1 text-slate-700">
                       <span className="font-medium">Name:</span> {companyProfile.name || "-"}
                     </p>
@@ -982,23 +1007,43 @@ export default function PurchaseCreditDebitPage() {
                   </div>
                 </div>
 
-                <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <div className="mb-4 grid gap-3 sm:grid-cols-5">
                   <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-xs uppercase text-slate-500">Total Purchase</p>
+                    <p className="text-xs uppercase text-slate-500">Opening Balance</p>
+                    <p
+                      className={`text-lg font-bold ${
+                        openingBalance > 0 ? "text-rose-700" : openingBalance < 0 ? "text-emerald-700" : "text-slate-900"
+                      }`}
+                    >
+                      {currency.format(Math.abs(openingBalance))}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <p className="text-xs uppercase text-slate-500">Purchase Amount</p>
                     <p className="text-lg font-bold text-slate-900">
-                      {currency.format(ledger.summary.totalPurchase || 0)}
+                      {currency.format(totalPurchase)}
                     </p>
                   </div>
                   <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-xs uppercase text-slate-500">Total Paid</p>
+                    <p className="text-xs uppercase text-slate-500">Given By Me</p>
                     <p className="text-lg font-bold text-emerald-700">
-                      {currency.format(ledger.summary.totalPaid || 0)}
+                      {currency.format(totalPaid)}
                     </p>
                   </div>
                   <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-xs uppercase text-slate-500">Balance</p>
-                    <p className="text-lg font-bold text-rose-700">
-                      {currency.format(Math.abs(ledger.summary.balance || 0))}
+                    <p className="text-xs uppercase text-slate-500">Total (Opening + Purchase)</p>
+                    <p className="text-lg font-bold text-slate-900">{currency.format(totalPayable)}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <p className="text-xs uppercase text-slate-500">
+                      {closingBalance > 0 ? "Remaining" : closingBalance < 0 ? "Extra Paid" : "Remaining"}
+                    </p>
+                    <p
+                      className={`text-lg font-bold ${
+                        closingBalance > 0 ? "text-rose-700" : closingBalance < 0 ? "text-emerald-700" : "text-slate-900"
+                      }`}
+                    >
+                      {currency.format(Math.abs(closingBalance))}
                     </p>
                   </div>
                 </div>

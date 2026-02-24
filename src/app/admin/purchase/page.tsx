@@ -791,100 +791,7 @@ export default function AdminPurchaseManager() {
                                             </tr>
                                             {/* updated */}
                                             {/* DETAILS ROW - FULL PRODUCT BREAKDOWN */}
-                                            <tr className="bg-slate-50/50">
-                                                <td colSpan={6} className="p-0">
-                                                    <div className="border-t border-slate-200">
-                                                        <div className="grid grid-cols-11 gap-4 p-6 bg-slate-50 text-xs font-medium uppercase tracking-wide">
-                                                            <div>Product</div>
-                                                            <div className="text-center">Boxes</div>
-                                                            <div className="text-center">Loose</div>
-                                                            <div className="text-center">Per Box Qty</div>
-                                                            <div className="text-center">Total Pieces</div>
-                                                            <div className="text-right">Per Box Price (Excl GST)</div>
-                                                            <div className="text-center">Discount %</div>
-                                                            <div className="text-right">Discount Amt</div>
-                                                            <div className="text-right">CGST</div>
-                                                            <div className="text-right">SGST</div>
-                                                            <div className="text-right">Amount</div>
-                                                        </div>
-
-                                                        {purchase.items?.map((it: any, itemIndex: number) => {
-                                                            const pid = typeof it.productId === "string" ? it.productId : it.productId?._id;
-                                                            const product = getProductById(pid || "");
-                                                            const perBox = product?.perBoxItem ?? 1;
-                                                            const calc = calcItem(it, perBox);
-
-                                                            return (
-                                                                <div key={`${purchase._id}-${pid}-${itemIndex}`} className="grid grid-cols-11 gap-4 p-4 border-t bg-white text-sm hover:bg-slate-50">
-                                                                    <div className="font-medium text-slate-900">
-                                                                        {product?.name || "N/A"}
-                                                                    </div>
-                                                                    <div className="text-center font-mono font-semibold text-slate-900">
-                                                                        {it.boxes}
-                                                                    </div>
-                                                                    <div className="text-center font-mono font-semibold text-slate-900">
-                                                                        {it.looseItems}
-                                                                    </div>
-                                                                    <div className="text-center font-mono text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                                                                        {perBox}
-                                                                    </div>
-                                                                    <div className="text-center font-bold text-xl text-indigo-600">
-                                                                        {calc.totalPieces}
-                                                                    </div>
-                                                                    <div className="text-right font-mono text-blue-700">
-                                                                        {currency.format(calc.perBoxPriceWithoutTax)}
-                                                                    </div>
-                                                                    <div className="text-center font-semibold text-amber-700">
-                                                                        {calc.discountPercent.toFixed(2)}%
-                                                                    </div>
-                                                                    <div className="text-right font-mono text-rose-600">
-                                                                        {currency.format(calc.discountAmount)}
-                                                                    </div>
-                                                                    <div className="text-right font-mono text-emerald-700">
-                                                                        {currency.format(calc.cgstAmount)}
-                                                                    </div>
-                                                                    <div className="text-right font-mono text-emerald-700">
-                                                                        {currency.format(calc.sgstAmount)}
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        <div className="text-lg font-black text-slate-900">
-                                                                            {currency.format(calc.finalAmount)}
-                                                                        </div>
-                                                                        <div className="text-xs text-slate-500 line-through">
-                                                                            {currency.format(calc.grossAmount + calc.taxAmount)}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-
-                                                        {/* TOTAL ROW */}
-                                                        <div className="grid grid-cols-11 gap-4 p-6 bg-emerald-50/50 border-t-2 border-emerald-200 mb-4">
-                                                            <div className="font-bold text-lg text-slate-900 col-span-6">
-                                                                GRAND TOTAL ({purchase.items?.length || 0} items)
-                                                            </div>
-                                                            <div className="text-center font-bold text-amber-700">
-                                                                {discountSummary.discountPercent.toFixed(2)}%
-                                                            </div>
-                                                            <div className="text-right font-bold text-rose-700">
-                                                                {currency.format(discountSummary.discountAmount)}
-                                                            </div>
-                                                            <div className="text-right font-bold text-emerald-700">
-                                                                {currency.format(taxSummary.cgstAmount)}
-                                                            </div>
-                                                            <div className="text-right font-bold text-emerald-700">
-                                                                {currency.format(taxSummary.sgstAmount)}
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <div className="text-2xl font-black text-emerald-700 tracking-wide">
-                                                                    {currency.format(taxSummary.grandTotal)}
-                                                                </div>
-                                                                <div className="text-xs text-slate-500">Taxable: {currency.format(taxSummary.taxableAmount)}</div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                           
                                         </React.Fragment>
                                     );
                                 })}
@@ -1228,9 +1135,7 @@ export default function AdminPurchaseManager() {
                                                             <div className="text-[11px] text-slate-600 break-words">
                                                                 CGST: {currency.format(c.cgstAmount)} | SGST: {currency.format(c.sgstAmount)} | Total: {currency.format(c.finalAmount)}
                                                             </div>
-                                                            <div className="text-[10px] text-slate-500">
-                                                                Piece price se fixed 5% GST remove, discount apply, phir CGST + SGST add
-                                                            </div>
+                                                            
                                                         </>
                                                             );
                                                         })()}

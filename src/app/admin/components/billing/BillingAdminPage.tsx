@@ -472,11 +472,11 @@ export default function BillingAdminPage() {
 
 
   const createBill = async () => {
-    if (!customer.name || !customer.phone)
+    if (!customer.name?.trim() || !customer.phone?.trim())
       return  Swal.fire({
         icon: "warning",
         title: "Customer Required",
-        text: "Please add Customer details",
+        text: "Please add customer name and phone number",
         confirmButtonText: "OK",
       });;
     const valid = items.filter(
@@ -560,6 +560,15 @@ export default function BillingAdminPage() {
 
   const updateBillSubmit = async () => {
     if (!billForEdit) return;
+    if (!customer.name?.trim() || !customer.phone?.trim()) {
+      Swal.fire({
+        icon: "warning",
+        title: "Customer Required",
+        text: "Please add customer name and phone number",
+        confirmButtonText: "OK",
+      });
+      return;
+    }
 
     const validItems = items.filter(
       it => it.selectedProduct && (it.quantityBoxes > 0 || it.quantityLoose > 0)

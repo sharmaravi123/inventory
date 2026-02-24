@@ -43,9 +43,13 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--color-neutral)]">
-      <Topbar />
+      <div className="print-hide">
+        <Topbar />
+      </div>
       <div className="flex flex-1">
-        <Sidebar />
+        <div className="print-hide">
+          <Sidebar />
+        </div>
         <main className="flex-1 p-6 lg:ml-64 overflow-y-auto bg-[var(--color-neutral)]">
           {children}
         </main>
