@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import PurchaseBillPreview from "@/app/admin/components/purchase/PurchaseBillPreview";
 
+const DEFAULT_GST_PERCENT = 5;
+
 export default function PrintPurchaseBillPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -36,12 +38,13 @@ export default function PrintPurchaseBillPage() {
         const items = data.items.map((it: any) => {
           const perBox = it.productId?.perBoxItem ?? 1;
           const totalPieces = it.boxes * perBox + it.looseItems;
-          const taxPercent = Math.max(0, Number(it.taxPercent ?? 5));
+          const taxPercent = DEFAULT_GST_PERCENT;
           const pricePerPieceWithTax = Number(it.purchasePrice || 0);
           const pricePerPieceWithoutTax =
             taxPercent > 0
               ? pricePerPieceWithTax / (1 + taxPercent / 100)
               : pricePerPieceWithTax;
+          const perBoxPriceWithoutTax = pricePerPieceWithoutTax * perBox;
           const grossAmount = totalPieces * pricePerPieceWithoutTax;
           const discountPercent = Number(it.discountPercent ?? 0);
           const discountAmount = (grossAmount * discountPercent) / 100;
@@ -55,7 +58,10 @@ export default function PrintPurchaseBillPage() {
             boxes: it.boxes,
             looseItems: it.looseItems,
             perBoxItem: perBox,
+            totalPieces,
             purchasePrice: it.purchasePrice,
+            pricePerPieceWithoutTax,
+            perBoxPriceWithoutTax,
             discountPercent,
             discountAmount,
             taxPercent,

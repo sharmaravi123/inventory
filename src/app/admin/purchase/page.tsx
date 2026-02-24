@@ -26,6 +26,7 @@ type PurchaseItem = {
 };
 
 type DateFilter = "all" | "thisMonth" | "lastMonth" | "custom";
+const DEFAULT_GST_PERCENT = 5;
 
 export default function AdminPurchaseManager() {
     const dispatch = useDispatch<AppDispatch>();
@@ -150,7 +151,7 @@ export default function AdminPurchaseManager() {
 
     const calcItem = useCallback((it: any, perBox: number) => {
         const totalPieces = Number(it.boxes || 0) * perBox + Number(it.looseItems || 0);
-        const taxPercent = Math.max(0, Number(it.taxPercent || 5));
+        const taxPercent = DEFAULT_GST_PERCENT;
         const pricePerPieceWithTax = Number(it.purchasePrice || 0);
         const pricePerPieceWithoutTax =
             taxPercent > 0
@@ -1228,7 +1229,7 @@ export default function AdminPurchaseManager() {
                                                                 CGST: {currency.format(c.cgstAmount)} | SGST: {currency.format(c.sgstAmount)} | Total: {currency.format(c.finalAmount)}
                                                             </div>
                                                             <div className="text-[10px] text-slate-500">
-                                                                Piece price se GST remove, discount apply, phir GST add
+                                                                Piece price se fixed 5% GST remove, discount apply, phir CGST + SGST add
                                                             </div>
                                                         </>
                                                             );

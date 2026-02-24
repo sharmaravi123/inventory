@@ -7,12 +7,7 @@ export async function POST(req: NextRequest) {
   try {
     await dbConnect();
 
-    const {
-      billId,
-      amountCollected,
-      balanceAmount,
-      payment,
-    } = await req.json();
+    const { billId, payment } = await req.json();
 
     if (!mongoose.Types.ObjectId.isValid(billId)) {
       return NextResponse.json(
@@ -21,29 +16,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const updated = await Bill.findByIdAndUpdate(
-      billId,
-      {
-        $set: {
-          amountCollected,
-          balanceAmount,
-          payment: {
-            cashAmount: payment.cashAmount || 0,
-            upiAmount: payment.upiAmount || 0,
-            cardAmount: payment.cardAmount || 0,
-          },
-          updatedAt: new Date(),
-        },
-      },
-      { new: true }
-    );
-
-    if (!updated) {
+    const bill = await Bill.findById(billId);
+    if (!bill) {
       return NextResponse.json(
         { error: "Bill not found" },
         { status: 404 }
       );
     }
+
+    const cash = Number(payment?.cashAmount || 0);
+    const upi = Number(payment?.upiAmount || 0);
+    const card = Number(payment?.cardAmount || 0);
+    const amountCollected = cash + upi + card;
+    const balanceAmount = Math.max(0, Number(bill.grandTotal || 0) - amountCollected);
+
+    const payload: Record<string, unknown> = {
+      amountCollected,
+      balanceAmount,
+      payment: {
+        mode: String(payment?.mode || bill.payment?.mode || "CASH"),
+        cashAmount: cash,
+        upiAmount: upi,
+        cardAmount: card,
+      },
+      updatedAt: new Date(),
+    };
+
+    if (balanceAmount <= 0.001) {
+      payload.status = "DELIVERED";
+      payload.deliveredAt = new Date();
+    }
+
+    await Bill.findByIdAndUpdate(billId, { $set: payload }, { new: true });
 
     return NextResponse.json({ success: true });
   } catch (e: unknown) {

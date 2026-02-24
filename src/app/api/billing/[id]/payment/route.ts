@@ -47,7 +47,11 @@ export async function PATCH(
     };
 
     bill.amountCollected = collected;
-    bill.balanceAmount = bill.grandTotal - collected;
+    bill.balanceAmount = Math.max(0, bill.grandTotal - collected);
+    if (bill.balanceAmount <= 0.001) {
+      bill.status = "DELIVERED";
+      (bill as typeof bill & { deliveredAt?: Date }).deliveredAt = new Date();
+    }
     bill.updatedAt = new Date();
 
     await bill.save();

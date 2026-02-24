@@ -54,6 +54,8 @@ type LedgerResponse = {
   };
 };
 
+type LedgerSummary = LedgerResponse["summary"];
+
 type DisplayLedgerRow = {
   key: string;
   id: string;
@@ -103,6 +105,16 @@ function formatMonthLabel(month: string) {
     month: "long",
     year: "numeric",
   });
+}
+
+function previousMonthValue(month: string) {
+  const [yearText, monthText] = month.split("-");
+  const year = Number(yearText);
+  const monthIndex = Number(monthText);
+  if (!year || !monthIndex) return monthNow();
+  const value = new Date(year, monthIndex - 1, 1);
+  value.setMonth(value.getMonth() - 1);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function LedgerTable({
@@ -198,6 +210,12 @@ export default function PurchaseCreditDebitPage() {
     payments: [],
     summary: { totalPurchase: 0, totalPaid: 0, balance: 0 },
   });
+  const [previousMonthSummary, setPreviousMonthSummary] = useState<LedgerSummary>({
+    totalPurchase: 0,
+    totalPaid: 0,
+    balance: 0,
+  });
+  const [previousLoading, setPreviousLoading] = useState(false);
 
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<string>("");
@@ -220,6 +238,8 @@ export default function PurchaseCreditDebitPage() {
   }, [companyProfile.addressLine1, companyProfile.addressLine2]);
 
   const monthLabel = useMemo(() => formatMonthLabel(selectedMonth), [selectedMonth]);
+  const previousMonth = useMemo(() => previousMonthValue(selectedMonth), [selectedMonth]);
+  const previousMonthLabel = useMemo(() => formatMonthLabel(previousMonth), [previousMonth]);
 
   const displayRows = useMemo<DisplayLedgerRow[]>(() => {
     return ledger.entries.map((row) => {
@@ -329,6 +349,27 @@ export default function PurchaseCreditDebitPage() {
     []
   );
 
+  const loadMonthSummary = useCallback(async (dealerId: string, month: string) => {
+    if (!dealerId) return;
+    setPreviousLoading(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`/api/purchase-ledger?dealerId=${dealerId}&month=${month}`, {
+        cache: "no-store",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to load previous month summary");
+      setPreviousMonthSummary(
+        data?.summary || { totalPurchase: 0, totalPaid: 0, balance: 0 }
+      );
+    } catch {
+      setPreviousMonthSummary({ totalPurchase: 0, totalPaid: 0, balance: 0 });
+    } finally {
+      setPreviousLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void Promise.all([loadDealers(), loadCompanyProfile()]);
   }, [loadDealers, loadCompanyProfile]);
@@ -337,6 +378,11 @@ export default function PurchaseCreditDebitPage() {
     if (!selectedDealerId) return;
     void loadLedger(selectedDealerId, selectedMonth);
   }, [selectedDealerId, selectedMonth, loadLedger]);
+
+  useEffect(() => {
+    if (!selectedDealerId) return;
+    void loadMonthSummary(selectedDealerId, previousMonth);
+  }, [selectedDealerId, previousMonth, loadMonthSummary]);
 
   useEffect(() => {
     return () => activeLedgerRequestRef.current?.abort();
@@ -675,6 +721,13 @@ export default function PurchaseCreditDebitPage() {
     )} has been paid in excess to the dealer.`;
   }, [ledger.summary.balance]);
 
+  const previousBalanceText = useMemo(() => {
+    const balance = Number(previousMonthSummary.balance || 0);
+    if (balance === 0) return `${previousMonthLabel}: purchases and payments are balanced.`;
+    if (balance > 0) return `${previousMonthLabel}: payable amount ${currency.format(balance)}.`;
+    return `${previousMonthLabel}: advance amount ${currency.format(Math.abs(balance))}.`;
+  }, [previousMonthSummary.balance, previousMonthLabel]);
+
   return (
     <div className="min-h-screen bg-slate-50 px-3 py-4 sm:px-6">
       <div className="mx-auto max-w-7xl space-y-4">
@@ -736,7 +789,7 @@ export default function PurchaseCreditDebitPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-4">
           <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
             <p className="text-xs uppercase tracking-wide text-slate-500">Total Purchase</p>
             <p className="mt-1 text-xl font-bold text-slate-900">
@@ -758,6 +811,19 @@ export default function PurchaseCreditDebitPage() {
             >
               {currency.format(Math.abs(ledger.summary.balance || 0))}
             </p>
+          </div>
+          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Last Month Balance</p>
+            <p
+              className={`mt-1 text-xl font-bold ${
+                previousMonthSummary.balance > 0 ? "text-rose-700" : "text-blue-700"
+              }`}
+            >
+              {previousLoading
+                ? "Loading..."
+                : currency.format(Math.abs(previousMonthSummary.balance || 0))}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">{previousMonthLabel}</p>
           </div>
         </div>
 
@@ -825,7 +891,10 @@ export default function PurchaseCreditDebitPage() {
         <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
           <div className="flex items-start gap-2 text-sm text-slate-700">
             <IndianRupee className="mt-0.5 h-4 w-4 text-slate-500" />
-            <p>{balanceText}</p>
+            <div>
+              <p>{balanceText}</p>
+              <p className="mt-1 text-xs text-slate-500">{previousBalanceText}</p>
+            </div>
           </div>
           {error && <p className="mt-2 text-sm font-medium text-rose-600">{error}</p>}
         </div>

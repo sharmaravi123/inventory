@@ -17,7 +17,10 @@ type PurchaseItem = {
     boxes: number;
     looseItems: number;
     perBoxItem: number;
+    totalPieces?: number;
     purchasePrice: number;
+    pricePerPieceWithoutTax?: number;
+    perBoxPriceWithoutTax?: number;
     discountPercent?: number;
     discountAmount?: number;
     grossAmount?: number;
@@ -51,6 +54,8 @@ type PurchaseBill = {
     totalTax: number;
     grandTotal: number;
 };
+
+const DEFAULT_GST_PERCENT = 5;
 
 /* ================== UTILS ================== */
 
@@ -131,7 +136,7 @@ export default function PurchaseBillPreview({
     const subtotalWithoutTax = bill.totalBeforeTax;
     const totalGross = bill.totalGross ?? bill.items.reduce((s, it) => {
         const qty = it.boxes * it.perBoxItem + it.looseItems;
-        const taxPercent = Math.max(0, Number(it.taxPercent || 5));
+        const taxPercent = DEFAULT_GST_PERCENT;
         const pricePerPieceWithoutTax =
             taxPercent > 0 ? Number(it.purchasePrice || 0) / (1 + taxPercent / 100) : Number(it.purchasePrice || 0);
         return s + qty * pricePerPieceWithoutTax;
@@ -298,26 +303,32 @@ export default function PurchaseBillPreview({
                     <table className="mt-2 w-full border border-black border-collapse">
                         <thead>
                             <tr>
-                                {["S.N.", "ITEMS", "HSN", "QTY", "RATE", "DISC %", "DISC AMT", "TAX %", "AMOUNT"].map(h => (
+                                {["S.N.", "ITEMS", "HSN", "BOX", "PCS/BOX","Total Item",  "DISC", "TAXABLE",  "TOTAL"].map(h => (
                                     <th key={h} className="border border-black p-1 text-left">{h}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
                             {bill.items.map((it, i) => {
-                                const totalPieces = it.boxes * it.perBoxItem + it.looseItems;
+                                const totalPieces = Number(it.totalPieces ?? (it.boxes * it.perBoxItem + it.looseItems));
+                                const taxPercent = DEFAULT_GST_PERCENT;
+                                const pricePerPieceWithoutTax = typeof it.pricePerPieceWithoutTax === "number"
+                                    ? it.pricePerPieceWithoutTax
+                                    : (taxPercent > 0
+                                        ? Number(it.purchasePrice || 0) / (1 + taxPercent / 100)
+                                        : Number(it.purchasePrice || 0));
+                                const perBoxPriceWithoutTax = typeof it.perBoxPriceWithoutTax === "number"
+                                    ? it.perBoxPriceWithoutTax
+                                    : pricePerPieceWithoutTax * it.perBoxItem;
                                 const grossAmount = typeof it.grossAmount === "number"
                                     ? it.grossAmount
-                                    : totalPieces * (
-                                        Math.max(0, Number(it.taxPercent || 5)) > 0
-                                            ? Number(it.purchasePrice || 0) / (1 + Math.max(0, Number(it.taxPercent || 5)) / 100)
-                                            : Number(it.purchasePrice || 0)
-                                    );
+                                    : totalPieces * pricePerPieceWithoutTax;
                                 const discountPercent = Number(it.discountPercent ?? 0);
                                 const discountAmount = (grossAmount * discountPercent) / 100;
                                 const taxableAmount = Math.max(0, grossAmount - discountAmount);
-                                const taxPercent = Math.max(0, Number(it.taxPercent || 5));
                                 const taxAmount = (taxableAmount * taxPercent) / 100;
+                                const cgstAmount = taxAmount / 2;
+                                const sgstAmount = taxAmount / 2;
                                 const lineAmount = taxableAmount + taxAmount;
 
                                 return (
@@ -325,21 +336,26 @@ export default function PurchaseBillPreview({
                                         <td className="border p-1">{i + 1}</td>
                                         <td className="border p-1">{it.productName}</td>
                                         <td className="border p-1">{it.hsn || "-"}</td>
+                                        <td className="border p-1">{it.boxes}</td>
+                                        <td className="border p-1">{it.perBoxItem}</td>
                                         <td className="border p-1">
-                                            {it.boxes > 0 && `${it.boxes} box `}
-                                            {it.looseItems > 0 && `${it.looseItems} loose`}
-                                            <div className="text-[10px]">({totalPieces} pcs)</div>
+                                            {totalPieces}
+                                            {it.looseItems > 0 ? ` (${it.looseItems} loose)` : ""}
                                         </td>
-                                        <td className="border p-1">{(grossAmount / Math.max(totalPieces, 1)).toFixed(2)}</td>
-                                        <td className="border p-1">{discountPercent.toFixed(2)}%</td>
-                                        <td className="border p-1">{discountAmount.toFixed(2)}</td>
-                                        <td className="border p-1">{it.taxPercent}%</td>
+                                        {/* <td className="border p-1">{perBoxPriceWithoutTax.toFixed(2)}</td> */}
+                                        <td className="border p-1"> {discountPercent.toFixed(2)}%</td>
+                                        <td className="border p-1">{taxableAmount.toFixed(2)}</td>
+                                        {/* <td className="border p-1">{cgstAmount.toFixed(2)}</td> */}
+                                        {/* <td className="border p-1">{sgstAmount.toFixed(2)}</td> */}
                                         <td className="border p-1">{lineAmount.toFixed(2)}</td>
                                     </tr>
                                 );
                             })}
                         </tbody>
                     </table>
+                    <div className="mt-1 text-[10px] text-slate-600">
+                        Product price me se pehle fixed 5% GST remove karke base nikala gaya hai, uske baad discount apply karke CGST + SGST add kiya gaya hai.
+                    </div>
 
                     {/* TOTALS */}
                     <div className="mt-2 grid grid-cols-2 gap-2">
