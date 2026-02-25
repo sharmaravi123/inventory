@@ -9,6 +9,9 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
+import Swal from "sweetalert2";
+
+type PaymentMode = "CASH" | "UPI" | "RTGS" | "NEFT";
 
 type Dealer = {
   _id: string;
@@ -31,7 +34,7 @@ type LedgerEntry = {
   id: string;
   date: string;
   amount: number;
-  paymentMode?: "CASH" | "UPI" | "CARD";
+  paymentMode?: PaymentMode;
   invoiceNumber?: string;
   note?: string;
 };
@@ -40,7 +43,7 @@ type PaymentRow = {
   id: string;
   amount: number;
   date: string;
-  paymentMode?: "CASH" | "UPI" | "CARD";
+  paymentMode?: PaymentMode;
   note?: string;
 };
 
@@ -144,6 +147,11 @@ function previousMonthValue(month: string) {
   const value = new Date(year, monthIndex - 1, 1);
   value.setMonth(value.getMonth() - 1);
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function normalizePaymentMode(mode?: string): PaymentMode {
+  if (mode === "UPI" || mode === "RTGS" || mode === "NEFT") return mode;
+  return "CASH";
 }
 
 function LedgerTable({
@@ -256,7 +264,7 @@ export default function PurchaseCreditDebitPage() {
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<string>("");
   const [paymentDate, setPaymentDate] = useState<string>(todayValue());
-  const [paymentMode, setPaymentMode] = useState<"CASH" | "UPI" | "CARD">("CASH");
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>("CASH");
   const [paymentNote, setPaymentNote] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
@@ -472,7 +480,7 @@ export default function PurchaseCreditDebitPage() {
     setPaymentDate(
       payment.date ? new Date(payment.date).toISOString().slice(0, 10) : todayValue()
     );
-    setPaymentMode(payment.paymentMode || "CASH");
+    setPaymentMode(normalizePaymentMode(payment.paymentMode));
     setPaymentNote(payment.note || "");
   };
 
@@ -487,6 +495,24 @@ export default function PurchaseCreditDebitPage() {
       setError("Please select payment date");
       return;
     }
+
+    const confirm = await Swal.fire({
+      title: editingPaymentId ? "Confirm Payment Update" : "Confirm Payment Entry",
+      html: `
+        <div style="text-align:left;font-size:13px;">
+          <p><b>Dealer:</b> ${selectedDealerName}</p>
+          <p><b>Date:</b> ${paymentDate}</p>
+          <p><b>Amount:</b> ${currency.format(amount)}</p>
+          <p><b>Mode:</b> ${paymentMode}</p>
+        </div>
+      `,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: editingPaymentId ? "Update Payment" : "Add Payment",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!confirm.isConfirmed) return;
 
     setSaving(true);
     setError("");
@@ -873,12 +899,13 @@ export default function PurchaseCreditDebitPage() {
             />
             <select
               value={paymentMode}
-              onChange={(e) => setPaymentMode(e.target.value as "CASH" | "UPI" | "CARD")}
+              onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
               className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
             >
               <option value="CASH">Cash</option>
               <option value="UPI">UPI</option>
-              <option value="CARD">Card</option>
+              <option value="RTGS">RTGS</option>
+              <option value="NEFT">NEFT</option>
             </select>
             <input
               type="text"

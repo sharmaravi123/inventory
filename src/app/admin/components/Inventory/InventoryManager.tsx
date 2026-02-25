@@ -783,9 +783,10 @@ const AdminInventoryManager: React.FC = () => {
                           </td>
                           <td className="px-3 py-3 align-middle text-center">
                             <span
-                              className="rounded-full px-3 py-1 text-xs font-semibold text-[var(--color-white)]"
+                              className="rounded-full border bg-[var(--color-white)] px-3 py-1 text-xs font-semibold"
                               style={{
-                                backgroundColor: badgeColor,
+                                color: badgeColor,
+                                borderColor: badgeColor,
                               }}
                             >
                               {total === 0

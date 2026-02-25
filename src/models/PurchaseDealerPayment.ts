@@ -3,7 +3,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IPurchaseDealerPayment extends Document {
   dealerId: mongoose.Types.ObjectId;
   amount: number;
-  paymentMode: "CASH" | "UPI" | "CARD";
+  paymentMode: "CASH" | "UPI" | "RTGS" | "NEFT";
   paymentDate: Date;
   note?: string;
   createdAt: Date;
@@ -14,7 +14,7 @@ const PurchaseDealerPaymentSchema = new Schema<IPurchaseDealerPayment>(
   {
     dealerId: { type: Schema.Types.ObjectId, ref: "Dealer", required: true, index: true },
     amount: { type: Number, required: true, min: 0 },
-    paymentMode: { type: String, enum: ["CASH", "UPI", "CARD"], default: "CASH", required: true },
+    paymentMode: { type: String, enum: ["CASH", "UPI", "RTGS", "NEFT"], default: "CASH", required: true },
     paymentDate: { type: Date, required: true, index: true },
     note: { type: String, trim: true, default: "" },
   },

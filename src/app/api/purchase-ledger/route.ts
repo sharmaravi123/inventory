@@ -22,7 +22,7 @@ type PaymentDocRow = {
   _id: unknown;
   paymentDate?: Date | null;
   amount?: number;
-  paymentMode?: "CASH" | "UPI" | "CARD";
+  paymentMode?: "CASH" | "UPI" | "RTGS" | "NEFT";
   note?: string;
 };
 
@@ -207,8 +207,8 @@ export async function POST(req: NextRequest) {
     if (!paymentDate || Number.isNaN(paymentDate.getTime())) {
       return NextResponse.json({ error: "valid paymentDate is required" }, { status: 400 });
     }
-    if (!["CASH", "UPI", "CARD"].includes(paymentMode)) {
-      return NextResponse.json({ error: "paymentMode must be CASH, UPI or CARD" }, { status: 400 });
+    if (!["CASH", "UPI", "RTGS", "NEFT"].includes(paymentMode)) {
+      return NextResponse.json({ error: "paymentMode must be CASH, UPI, RTGS or NEFT" }, { status: 400 });
     }
 
     const created = await PurchaseDealerPayment.create({

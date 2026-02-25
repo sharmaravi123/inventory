@@ -299,7 +299,6 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                 <div className="flex">
 
                   <div className="font-bold uppercase">Tax Invoice</div>
-                  <div className="font-bold uppercase mx-2 border">ORIGINAL FOR RECIPIENT</div>
                 </div>
 
                 <div className="font-bold text-lg" >{company.name}</div>

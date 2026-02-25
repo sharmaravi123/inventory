@@ -310,13 +310,29 @@ export default function AdminPurchaseManager() {
     };
 
     const buildConfirmHtml = (cleanedItems: PurchaseItem[]) => {
+        const totals = calcPurchaseTotals(cleanedItems);
+        const dealerName = getDealerById(dealerId)?.name || "Unknown Dealer";
         const lines = cleanedItems.map((it) => {
             const product = getProductById(it.productId);
             const name = product?.name || "Unknown Product";
             return `<li><b>${name}</b> - Boxes: ${it.boxes}, Loose: ${it.looseItems}, Discount: ${it.discountPercent || 0}%</li>`;
         });
 
-        return `<div style="text-align:left;"><p>Selected items:</p><ul>${lines.join("")}</ul></div>`;
+        return `
+            <div style="text-align:left;font-size:13px;">
+                <p><b>Dealer:</b> ${dealerName}</p>
+                <p><b>Invoice:</b> ${purchaseInvoiceNumber.trim()}</p>
+                <p><b>Date:</b> ${purchaseDate || "-"}</p>
+                <p><b>Warehouse:</b> ${warehouseId}</p>
+                <p><b>Selected items:</b></p>
+                <ul style="margin:0;padding-left:18px;">${lines.join("")}</ul>
+                <div style="margin-top:10px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">
+                    <p><b>Taxable:</b> ${currency.format(totals.taxableAmount)}</p>
+                    <p><b>GST:</b> ${currency.format(totals.gstAmount)}</p>
+                    <p><b>Grand Total:</b> ${currency.format(totals.grandTotal)}</p>
+                </div>
+            </div>
+        `;
     };
 
     const savePurchase = async (): Promise<void> => {
@@ -332,8 +348,9 @@ export default function AdminPurchaseManager() {
                 html: buildConfirmHtml(cleanedItems),
                 icon: "question",
                 showCancelButton: true,
-                confirmButtonText: editingPurchaseId ? "Update" : "Save",
+                confirmButtonText: editingPurchaseId ? "Update Purchase" : "Create Purchase",
                 cancelButtonText: "Cancel",
+                width: 800,
             });
 
             if (!confirm.isConfirmed) return;

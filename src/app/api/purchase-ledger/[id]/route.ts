@@ -48,8 +48,8 @@ export async function PUT(
 
     if (body.paymentMode !== undefined) {
       const paymentMode = String(body.paymentMode || "").toUpperCase();
-      if (!["CASH", "UPI", "CARD"].includes(paymentMode)) {
-        return NextResponse.json({ error: "paymentMode must be CASH, UPI or CARD" }, { status: 400 });
+      if (!["CASH", "UPI", "RTGS", "NEFT"].includes(paymentMode)) {
+        return NextResponse.json({ error: "paymentMode must be CASH, UPI, RTGS or NEFT" }, { status: 400 });
       }
       updates.paymentMode = paymentMode;
     }
