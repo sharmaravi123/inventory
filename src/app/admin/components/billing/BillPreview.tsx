@@ -159,13 +159,15 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
       }
 
       discount = Math.min(discount, base);
+      const lineSubTotal = Math.max(0, base - discount);
+      const lineTax = (lineSubTotal * (l.taxPercent ?? 0)) / 100;
 
       return {
         ...l,
         totalPieces,
         grossAmount: base,
         discountAmount: discount,
-        lineTotal: base - discount,
+        lineTotal: lineSubTotal + lineTax,
       };
     });
   }, [bill]);

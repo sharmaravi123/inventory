@@ -345,12 +345,9 @@ export default function BillingAdminPage() {
 
       discountAmount = Math.min(discountAmount, baseTotal);
 
-      const lineTotal = baseTotal - discountAmount;
-
-      const lineTax =
-        (lineTotal * p.taxPercent) / (100 + p.taxPercent);
-
-      const lineBeforeTax = lineTotal - lineTax;
+      const lineBeforeTax = Math.max(0, baseTotal - discountAmount);
+      const lineTax = (lineBeforeTax * p.taxPercent) / 100;
+      const lineTotal = lineBeforeTax + lineTax;
 
       count += totalPieces;
       before += lineBeforeTax;
@@ -410,7 +407,9 @@ export default function BillingAdminPage() {
           }
           discountAmount = Math.min(discountAmount, baseTotal);
 
-          const lineTotal = Math.max(0, baseTotal - discountAmount);
+          const lineSubTotal = Math.max(0, baseTotal - discountAmount);
+          const lineTax = (lineSubTotal * p.taxPercent) / 100;
+          const lineTotal = lineSubTotal + lineTax;
 
           return `
             <tr>

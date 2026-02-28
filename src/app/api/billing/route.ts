@@ -149,20 +149,25 @@ async function reserveStock(items: BillingItemInput[]) {
 function calcLine(it: BillingItemInput) {
   const qty = it.quantityBoxes * it.itemsPerBox + it.quantityLoose;
 
-  let price = it.sellingPrice;
-  if (it.discountType === "PERCENT") price -= (price * it.discountValue) / 100;
-  else if (it.discountType === "CASH") price = Math.max(0, price - it.discountValue);
+  const baseTotal = qty * it.sellingPrice;
+  let discountAmount = 0;
+  if (it.discountType === "PERCENT") {
+    discountAmount = (baseTotal * it.discountValue) / 100;
+  } else if (it.discountType === "CASH") {
+    discountAmount = it.discountValue;
+  }
+  discountAmount = Math.min(discountAmount, baseTotal);
 
-  const gross = qty * price;
-  const tax = (gross * it.taxPercent) / (100 + it.taxPercent);
-  const before = gross - tax;
+  const subTotal = Math.max(0, baseTotal - discountAmount);
+  const tax = (subTotal * it.taxPercent) / 100;
+  const lineTotal = subTotal + tax;
 
   return {
     billItem: {
       product: new Types.ObjectId(it.productId),
       warehouse: new Types.ObjectId(it.warehouseId),
       productName: it.productName,
-      sellingPrice: price,
+      sellingPrice: it.sellingPrice,
       hsnCode: it.hsnCode ?? null,
       taxPercent: it.taxPercent,
       quantityBoxes: it.quantityBoxes,
@@ -172,11 +177,11 @@ function calcLine(it: BillingItemInput) {
       discountValue: it.discountValue,
       overridePriceForCustomer: it.overridePriceForCustomer,
       totalItems: qty,
-      totalBeforeTax: before,
+      totalBeforeTax: subTotal,
       taxAmount: tax,
-      lineTotal: gross,
+      lineTotal,
     },
-    totals: { qty, before, tax, gross },
+    totals: { qty, before: subTotal, tax, gross: lineTotal },
   };
 }
 

@@ -623,7 +623,7 @@ export default function PurchaseCreditDebitPage() {
   <div class="meta"><b>Supplier:</b> ${safeHtml(selectedDealerName)} | <b>Month:</b> ${safeHtml(monthLabel)}</div>
   <div class="party-grid">
     <div class="party-box">
-      <div class="party-title">Firm Details</div>
+      <div class="party-title">Farm Details</div>
       <div class="line"><b>Name:</b> ${safeHtml(textOrDash(companyProfile.name))}</div>
       <div class="line"><b>Address:</b> ${safeHtml(textOrDash(companyAddress))}</div>
       <div class="line"><b>Phone:</b> ${safeHtml(textOrDash(companyProfile.phone))}</div>
@@ -1003,7 +1003,7 @@ export default function PurchaseCreditDebitPage() {
 
                 <div className="mb-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-lg border border-slate-200 p-3 text-sm">
-                    <p className="font-semibold text-slate-900">Firm Details</p>
+                    <p className="font-semibold text-slate-900">Farm Details</p>
                     <p className="mt-1 text-slate-700">
                       <span className="font-medium">Name:</span> {companyProfile.name || "-"}
                     </p>

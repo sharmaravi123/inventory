@@ -77,9 +77,9 @@ function calcLine(it: IncomingItem) {
 
   discountAmount = Math.min(discountAmount, baseTotal);
 
-  const gross = baseTotal - discountAmount;
-  const tax = (gross * it.taxPercent) / (100 + it.taxPercent);
-  const before = gross - tax;
+  const subTotal = Math.max(0, baseTotal - discountAmount);
+  const tax = (subTotal * it.taxPercent) / 100;
+  const lineTotal = subTotal + tax;
 
   return {
     billItem: {
@@ -95,12 +95,12 @@ function calcLine(it: IncomingItem) {
       discountType: it.discountType ?? "NONE",
       discountValue: it.discountValue ?? 0,
       totalItems: qty,
-      totalBeforeTax: before,
+      totalBeforeTax: subTotal,
       taxAmount: tax,
-      lineTotal: gross,
+      lineTotal,
       overridePriceForCustomer: false,
     },
-    totals: { qty, before, tax, gross },
+    totals: { qty, before: subTotal, tax, gross: lineTotal },
   };
 }
 

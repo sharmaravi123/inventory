@@ -261,11 +261,9 @@ const totals: Totals = useMemo(() => {
 
       discountAmount = Math.min(discountAmount, baseTotal);
 
-      const lineTotal = baseTotal - discountAmount;
-
-      const lineTax =
-        (lineTotal * p.taxPercent) / (100 + p.taxPercent);
-      const lineBeforeTax = lineTotal - lineTax;
+      const lineBeforeTax = Math.max(0, baseTotal - discountAmount);
+      const lineTax = (lineBeforeTax * p.taxPercent) / 100;
+      const lineTotal = lineBeforeTax + lineTax;
 
       count += totalPieces;
       before += lineBeforeTax;
@@ -290,18 +288,13 @@ const totals: Totals = useMemo(() => {
   const buildBillItems = (valid: BillFormItemState[]): BillItemInput[] => {
     return valid.map((it) => {
       const p = it.selectedProduct!;
-      let price = p.sellingPrice;
-
-      if (it.discountType === "CASH") price -= Number(it.discountValue);
-      else if (it.discountType === "PERCENT")
-        price -= (price * Number(it.discountValue)) / 100;
 
       return {
         stockId: p.id,
         productId: p.productId,
         warehouseId: p.warehouseId,
         productName: p.productName,
-        sellingPrice: price,
+        sellingPrice: p.sellingPrice,
         taxPercent: p.taxPercent,
         quantityBoxes: it.quantityBoxes,
         quantityLoose: it.quantityLoose,
