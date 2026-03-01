@@ -25,6 +25,12 @@ type PurchaseItem = {
     taxPercent: number;
 };
 
+type ProductOption = {
+    value: string;
+    label: string;
+    price: number;
+};
+
 type DateFilter = "all" | "thisMonth" | "lastMonth" | "custom";
 const DEFAULT_GST_PERCENT = 5;
 
@@ -120,29 +126,78 @@ export default function AdminPurchaseManager() {
         []
     );
 
+    const normalizeEntityId = useCallback((value: unknown): string => {
+        if (value === null || value === undefined) return "";
+        if (typeof value === "string" || typeof value === "number") {
+            return String(value);
+        }
+        if (typeof value === "object") {
+            const obj = value as Record<string, unknown>;
+            const idValue = obj._id ?? obj.id ?? obj.value;
+            if (idValue === null || idValue === undefined) return "";
+            return String(idValue);
+        }
+        return "";
+    }, []);
+
     const productMap = useMemo(() => {
         const map = new Map<string, any>();
         products.forEach((p: any) => {
-            if (p?._id) map.set(p._id, p);
+            const pid = normalizeEntityId(p?._id ?? p?.id);
+            if (pid) map.set(pid, p);
         });
         return map;
-    }, [products]);
+    }, [products, normalizeEntityId]);
 
     const dealerMap = useMemo(() => {
         const map = new Map<string, any>();
         dealers.forEach((d: any) => {
-            if (d?._id) map.set(d._id, d);
+            const did = normalizeEntityId(d?._id ?? d?.id);
+            if (did) map.set(did, d);
         });
         return map;
-    }, [dealers]);
+    }, [dealers, normalizeEntityId]);
+
+    const productOptions = useMemo<ProductOption[]>(
+        () =>
+            products
+                .map((product: any) => {
+                    const value = normalizeEntityId(product?._id ?? product?.id);
+                    if (!value) return null;
+                    return {
+                        value,
+                        label: String(product?.name ?? ""),
+                        price: Number(product?.purchasePrice || 0),
+                    };
+                })
+                .filter((option): option is ProductOption => option !== null),
+        [products, normalizeEntityId]
+    );
 
     const getProductById = useCallback((id: string) => {
-        return productMap.get(id);
-    }, [productMap]);
+        return productMap.get(normalizeEntityId(id));
+    }, [productMap, normalizeEntityId]);
 
     const getDealerById = useCallback((id: string) => {
-        return dealerMap.get(id);
-    }, [dealerMap]);
+        return dealerMap.get(normalizeEntityId(id));
+    }, [dealerMap, normalizeEntityId]);
+
+    const getProductOptionById = useCallback(
+        (id: string): ProductOption | null => {
+            const normalizedId = normalizeEntityId(id);
+            if (!normalizedId) return null;
+            const matched = productOptions.find((option) => option.value === normalizedId);
+            if (matched) return matched;
+            const product = getProductById(normalizedId);
+            if (!product) return null;
+            return {
+                value: normalizedId,
+                label: String(product.name ?? normalizedId),
+                price: Number(product.purchasePrice || 0),
+            };
+        },
+        [getProductById, normalizeEntityId, productOptions]
+    );
 
     const normalizeBasePrice = useCallback((value: number) => {
         if (!Number.isFinite(value) || value < 0) return 0;
@@ -260,7 +315,8 @@ export default function AdminPurchaseManager() {
     };
 
     const onSelectProduct = (index: number, pid: string): void => {
-        const product = productMap.get(pid);
+        const normalizedPid = normalizeEntityId(pid);
+        const product = productMap.get(normalizedPid);
         if (!product) return;
 
         setItems((prev) => {
@@ -268,7 +324,7 @@ export default function AdminPurchaseManager() {
 
             copy[index] = {
                 ...copy[index],
-                productId: pid,
+                productId: normalizedPid,
                 purchasePrice: normalizeBasePrice(Number(product.purchasePrice || 0)),
                 taxPercent: product.taxPercent || 5
             };
@@ -961,25 +1017,24 @@ export default function AdminPurchaseManager() {
                                                         <label className="block text-xs font-medium text-slate-700 mb-1">
                                                             Product *
                                                         </label>
-                                                        <Select
-                                                            options={products.map((product: any) => ({
-                                                                value: product._id,
-                                                                label: product.name,
-                                                                price: Number(product.purchasePrice || 0),
-                                                            }))}
-                                                            value={
-                                                                item.productId
-                                                                    ? {
-                                                                        value: item.productId,
-                                                                        label: `${productMap.get(item.productId)?.name || ""}`,
-                                                                        price: Number(productMap.get(item.productId)?.purchasePrice || 0),
-                                                                    }
-                                                                    : null
-                                                            }
-                                                            onChange={(selected: any) => {
-                                                                if (selected) {
-                                                                    onSelectProduct(index, selected.value);
+                                                        <Select<ProductOption>
+                                                            options={productOptions}
+                                                            value={getProductOptionById(item.productId)}
+                                                            onChange={(selected) => {
+                                                                if (!selected) {
+                                                                    setItems((prev) => {
+                                                                        const copy = [...prev];
+                                                                        copy[index] = {
+                                                                            ...copy[index],
+                                                                            productId: "",
+                                                                            purchasePrice: 0,
+                                                                            taxPercent: 5,
+                                                                        };
+                                                                        return copy;
+                                                                    });
+                                                                    return;
                                                                 }
+                                                                onSelectProduct(index, selected.value);
                                                             }}
                                                             placeholder="Search & select product..."
                                                             isSearchable
@@ -996,14 +1051,13 @@ export default function AdminPurchaseManager() {
                                                             }
                                                             className="text-xs min-w-0"
                                                             classNamePrefix="purchase-product-select"
-                                                            formatOptionLabel={(option: any, meta: any) => {
+                                                            formatOptionLabel={(option, meta) => {
                                                                 const priceText = `Rs ${Number(option.price || 0).toLocaleString("en-IN")}`;
                                                                 if (meta.context === "value") {
                                                                     return (
-                                                                        <div className="flex min-w-0 items-center justify-between gap-2">
-                                                                            <span className="truncate font-medium text-slate-900">{option.label}</span>
-                                                                            <span className="shrink-0 text-[11px] font-semibold text-blue-700">{priceText}</span>
-                                                                        </div>
+                                                                        <span className="truncate font-medium text-slate-900">
+                                                                            {option.label}
+                                                                        </span>
                                                                     );
                                                                 }
                                                                 return (

@@ -663,40 +663,59 @@ const AdminInventoryManager: React.FC = () => {
               Loading inventory…
             </div>
           ) : (
-            <div className="relative w-full overflow-x-auto">
-              <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
-                <thead className="bg-[var(--color-neutral)] text-xs uppercase tracking-wide text-[var(--color-sidebar)]">
+            <div className="relative w-full overflow-x-auto rounded-xl border border-[var(--color-neutral)]">
+              <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-[13px]">
+                <colgroup>
+                  <col className="w-[180px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[170px]" />
+                  <col className="w-[75px]" />
+                  <col className="w-[95px]" />
+                  <col className="w-[75px]" />
+                  <col className="w-[80px]" />
+                  <col className="w-[95px]" />
+                  <col className="w-[110px]" />
+                  <col className="w-[140px]" />
+                </colgroup>
+                <thead className="sticky top-0 z-10 bg-[var(--color-neutral)] text-xs uppercase tracking-wide text-[var(--color-sidebar)]">
                   <tr>
-                    <th className="px-3 py-3 text-left">Product</th>
-                    <th className="px-3 py-3 text-left">Store</th>
-                    <th className="px-3 py-3 text-center">
+                    <th className="px-3 py-3 text-left font-semibold">Product</th>
+                    <th className="px-3 py-3 text-center font-semibold">
+                      Buy price
+                    </th>
+                    <th className="px-3 py-3 text-center font-semibold">
+                      Sell price
+                    </th>
+                    <th className="px-3 py-3 text-left font-semibold">Store</th>
+                    <th className="px-3 py-3 text-center font-semibold">
                       Boxes
                     </th>
-                    <th className="px-3 py-3 text-center">
+                    <th className="px-3 py-3 text-center font-semibold">
                       Items / box
                     </th>
-                    <th className="px-3 py-3 text-center">
+                    <th className="px-3 py-3 text-center font-semibold">
                       Loose
                     </th>
-                    <th className="px-3 py-3 text-center">
+                    <th className="px-3 py-3 text-center font-semibold">
                       Tax %
                     </th>
-                    <th className="px-3 py-3 text-center">
+                    <th className="px-3 py-3 text-center font-semibold">
                       Total items
                     </th>
-                    <th className="px-3 py-3 text-center">
+                    <th className="px-3 py-3 text-center font-semibold">
                       Status
                     </th>
-                    <th className="px-3 py-3 text-center">
+                    <th className="px-3 py-3 text-center font-semibold">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-[var(--color-neutral)]">
                   {filteredItems.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={11}
                         className="px-4 py-8 text-center text-sm"
                         style={{
                           color: "var(--color-secondary)",
@@ -730,36 +749,22 @@ const AdminInventoryManager: React.FC = () => {
                       return (
                         <tr
                           key={keyId}
-                          className="border-t border-[var(--color-neutral)] hover:bg-[var(--color-neutral)] transition-colors"
+                          className="hover:bg-[var(--color-neutral)]/70 transition-colors"
                         >
-                          <td className="px-3 py-3 align-top">
-                            <div className="font-medium text-[var(--color-sidebar)]">
+                          <td className="max-w-[180px] px-3 py-3 align-middle">
+                            <div className="truncate font-medium text-[var(--color-sidebar)]">
                               {prodName ?? "—"}
                             </div>
-                            <div
-                              className="mt-1 text-[11px]"
-                              style={{
-                                color: "var(--color-sidebar)",
-                                opacity: 0.7,
-                              }}
-                            >
-                              {prices.selling !== undefined && (
-                                <span className="mr-3">
-                                  Sell:{" "}
-                                  {currency.format(
-                                    prices.selling
-                                  )}
-                                </span>
-                              )}
-                              {prices.purchase !== undefined && (
-                                <span>
-                                  Buy:{" "}
-                                  {currency.format(
-                                    prices.purchase
-                                  )}
-                                </span>
-                              )}
-                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 align-middle text-center text-[var(--color-sidebar)]">
+                            {prices.purchase != null
+                              ? currency.format(prices.purchase)
+                              : "-"}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 align-middle text-center text-[var(--color-sidebar)]">
+                            {prices.selling != null
+                              ? currency.format(prices.selling)
+                              : "-"}
                           </td>
                           <td className="px-3 py-3 align-middle text-[var(--color-sidebar)]">
                             {whName ?? "—"}
@@ -783,7 +788,7 @@ const AdminInventoryManager: React.FC = () => {
                           </td>
                           <td className="px-3 py-3 align-middle text-center">
                             <span
-                              className="rounded-full border bg-[var(--color-white)] px-3 py-1 text-xs font-semibold"
+                              className="whitespace-nowrap rounded-full border bg-[var(--color-white)] px-3 py-1 text-xs font-semibold"
                               style={{
                                 color: badgeColor,
                                 borderColor: badgeColor,
@@ -800,7 +805,7 @@ const AdminInventoryManager: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-3 py-3 align-middle text-center">
-                            <div className="inline-flex flex-wrap justify-center gap-2">
+                            <div className="inline-flex flex-nowrap justify-center gap-2">
                               <button
                                 onClick={() => openEdit(inv)}
                                 className="rounded-full border border-[var(--color-primary)] px-3 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-[var(--color-white)] transition"
