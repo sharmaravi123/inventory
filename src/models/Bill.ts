@@ -59,7 +59,7 @@ const customerSnapshotSchema = new Schema(
     customer: { type: Schema.Types.ObjectId, ref: "Customer" },
     name: { type: String, required: true },
     shopName: { type: String },
-    phone: { type: String, required: true },
+    phone: { type: String, required: false, default: "" },
     address: { type: String, required: true },
     gstNumber: { type: String },
   },

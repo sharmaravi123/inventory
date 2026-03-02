@@ -6,6 +6,8 @@ const toNum = (v: unknown, fb = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : fb;
 };
+const round2 = (n: number) =>
+  Math.round((n + Number.EPSILON) * 100) / 100;
 
 export async function PATCH(
   req: NextRequest,
@@ -30,9 +32,10 @@ export async function PATCH(
     const upi = toNum(body.payment?.upiAmount);
     const card = toNum(body.payment?.cardAmount);
 
-    const collected = cash + upi + card;
+    const collected = round2(cash + upi + card);
+    const grandTotal = round2(Number(bill.grandTotal || 0));
 
-    if (collected > bill.grandTotal + 0.001) {
+    if (collected - grandTotal > 0.01) {
       return NextResponse.json(
         { error: "Payment exceeds grand total" },
         { status: 400 }
@@ -47,10 +50,17 @@ export async function PATCH(
     };
 
     bill.amountCollected = collected;
-    bill.balanceAmount = Math.max(0, bill.grandTotal - collected);
-    if (bill.balanceAmount <= 0.001) {
+    bill.balanceAmount = Math.max(
+      0,
+      round2(grandTotal - collected)
+    );
+    if (bill.balanceAmount <= 0.01) {
       bill.status = "DELIVERED";
       (bill as typeof bill & { deliveredAt?: Date }).deliveredAt = new Date();
+    } else if (collected > 0) {
+      bill.status = "PARTIALLY_PAID";
+    } else {
+      bill.status = "PENDING";
     }
     bill.updatedAt = new Date();
 

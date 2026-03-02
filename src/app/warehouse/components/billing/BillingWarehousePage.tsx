@@ -223,7 +223,7 @@ export default function BillingWarehousePage({
         _id: doc._id,
         name: doc.name,
         shopName: doc.shopName ?? "",
-        phone: doc.phone,
+        phone: doc.phone ?? "",
         address: doc.address,
         gstNumber: doc.gstNumber ?? "",
       });

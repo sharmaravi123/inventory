@@ -128,7 +128,7 @@ export default function ProductTable(): React.ReactElement {
             </div>
           ) : (
             <div className="relative mt-0 w-full overflow-x-auto">
-              <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[900px] border-separate border-spacing-x-0 border-spacing-y-2 text-left text-sm">
                 <thead className="bg-[var(--color-neutral)] text-xs uppercase tracking-wide">
                   <tr className="text-[var(--color-sidebar)] opacity-80">
                     <th className="p-3 min-w-[120px] text-left">SKU</th>
@@ -142,7 +142,7 @@ export default function ProductTable(): React.ReactElement {
                     <th className="p-3 min-w-[120px] text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="[&>tr.data-row>td]:border-y [&>tr.data-row>td]:border-[var(--color-secondary)] [&>tr.data-row>td]:bg-[var(--color-white)] [&>tr.data-row>td:first-child]:border-l [&>tr.data-row>td:last-child]:border-r [&>tr.data-row>td:first-child]:rounded-l-lg [&>tr.data-row>td:last-child]:rounded-r-lg [&>tr.data-row>td]:transition-colors [&>tr.data-row:hover>td]:bg-[var(--color-neutral)]/70">
                   {filteredProducts.length === 0 ? (
                     <tr>
                       <td

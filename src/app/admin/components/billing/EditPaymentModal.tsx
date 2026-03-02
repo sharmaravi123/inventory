@@ -61,17 +61,19 @@ export default function EditPaymentModal({
     };
   }, [bill]);
 
-  const extraTotal =
+  const round2 = (n: number) =>
+    Math.round((n + Number.EPSILON) * 100) / 100;
+
+  const baseTotal = round2(base.cash + base.upi + base.card);
+  const extraTotal = round2(
     extraPayment.cashAmount +
-    extraPayment.upiAmount +
-    extraPayment.cardAmount;
+      extraPayment.upiAmount +
+      extraPayment.cardAmount
+  );
 
-  const newPaidTotal =
-    base.cash + base.upi + base.card + extraTotal;
-
-  const remaining = bill
-    ? bill.grandTotal - (base.cash + base.upi + base.card)
-    : 0;
+  const grandTotal = bill ? round2(bill.grandTotal) : 0;
+  const remaining = round2(grandTotal - baseTotal);
+  const newPaidTotal = round2(baseTotal + extraTotal);
 
   const handleSave = async () => {
     if (!bill) return;
@@ -87,7 +89,7 @@ export default function EditPaymentModal({
       return;
     }
 
-    if (extraTotal > remaining + 0.001) {
+    if (extraTotal - remaining > 0.01) {
       Swal.fire({
         icon: "warning",
         title: "Error",
@@ -159,11 +161,10 @@ export default function EditPaymentModal({
         </div>
 
         <p className="text-xs">
-          Grand Total: ₹{bill.grandTotal.toFixed(2)}
+          Grand Total: ₹{grandTotal.toFixed(2)}
         </p>
         <p className="mb-2 text-xs">
-          Paid: ₹{(base.cash + base.upi + base.card).toFixed(2)} •
-          Balance: ₹{remaining.toFixed(2)}
+          Paid: ₹{baseTotal.toFixed(2)} • Balance: ₹{remaining.toFixed(2)}
         </p>
 
         <div className="mb-3 flex gap-2 text-xs">
@@ -235,7 +236,7 @@ export default function EditPaymentModal({
 
         <p className="mt-2 text-xs">
           New Paid: ₹{newPaidTotal.toFixed(2)} • New Balance: ₹
-          {(bill.grandTotal - newPaidTotal).toFixed(2)}
+          {round2(grandTotal - newPaidTotal).toFixed(2)}
         </p>
 
         <div className="mt-4 flex justify-end gap-2">

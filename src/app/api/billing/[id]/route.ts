@@ -44,13 +44,17 @@ type RequestBody = {
 
 const toNum = (v: unknown, fb = 0) =>
   Number.isFinite(Number(v)) ? Number(v) : fb;
+const round2 = (n: number) =>
+  Math.round((n + Number.EPSILON) * 100) / 100;
 
 function validatePayment(p: PaymentInput, total: number) {
   const cash = toNum(p.cashAmount);
   const upi = toNum(p.upiAmount);
   const card = toNum(p.cardAmount);
+  const collected = round2(cash + upi + card);
+  const grand = round2(total);
 
-  if (cash + upi + card > total) {
+  if (collected - grand > 0.01) {
     throw new Error("Payment exceeds total");
   }
 
@@ -204,12 +208,23 @@ export async function PUT(
     bill.grandTotal = grand;
     bill.payment = pay;
 
-    bill.amountCollected =
-      pay.cashAmount + pay.upiAmount + pay.cardAmount;
+    bill.amountCollected = round2(
+      pay.cashAmount + pay.upiAmount + pay.cardAmount
+    );
 
-    bill.balanceAmount = grand - bill.amountCollected;
+    bill.balanceAmount = Math.max(
+      0,
+      round2(grand - bill.amountCollected)
+    );
     bill.billDate = new Date(body.billDate);
     bill.updatedAt = new Date();
+    if (bill.balanceAmount <= 0.01) {
+      bill.status = "DELIVERED";
+    } else if (bill.amountCollected > 0) {
+      bill.status = "PARTIALLY_PAID";
+    } else {
+      bill.status = "PENDING";
+    }
 
     await bill.save();
 

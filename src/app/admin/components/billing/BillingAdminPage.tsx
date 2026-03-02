@@ -289,7 +289,7 @@ export default function BillingAdminPage() {
         _id: doc._id,
         name: doc.name,
         shopName: doc.shopName ?? "",
-        phone: doc.phone,
+        phone: doc.phone ?? "",
         address: doc.address ?? "",
         gstNumber: doc.gstNumber ?? "",
       });
@@ -471,11 +471,11 @@ export default function BillingAdminPage() {
 
 
   const createBill = async () => {
-    if (!customer.name?.trim() || !customer.phone?.trim())
+    if (!customer.name?.trim())
       return  Swal.fire({
         icon: "warning",
         title: "Customer Required",
-        text: "Please add customer name and phone number",
+        text: "Please add customer name",
         confirmButtonText: "OK",
       });;
     const valid = items.filter(
@@ -559,11 +559,11 @@ export default function BillingAdminPage() {
 
   const updateBillSubmit = async () => {
     if (!billForEdit) return;
-    if (!customer.name?.trim() || !customer.phone?.trim()) {
+    if (!customer.name?.trim()) {
       Swal.fire({
         icon: "warning",
         title: "Customer Required",
-        text: "Please add customer name and phone number",
+        text: "Please add customer name",
         confirmButtonText: "OK",
       });
       return;
@@ -665,7 +665,7 @@ export default function BillingAdminPage() {
       _id: bill.customerInfo.customer,
       name: bill.customerInfo.name,
       shopName: bill.customerInfo.shopName || "",
-      phone: bill.customerInfo.phone,
+      phone: bill.customerInfo.phone || "",
       address: bill.customerInfo.address || "",
       gstNumber: bill.customerInfo.gstNumber || "",
     });

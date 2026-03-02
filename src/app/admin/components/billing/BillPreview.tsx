@@ -76,6 +76,15 @@ function numberToINRWords(amount: number): string {
   return str.trim().replace(/^./, c => c.toUpperCase()) + " rupees only";
 }
 
+function getFinancialYearLabel(dateValue: string | Date): string {
+  const d = typeof dateValue === "string" ? new Date(dateValue) : dateValue;
+  const year = d.getFullYear();
+  const month = d.getMonth(); // 0-based
+  const fyStartYear = month >= 3 ? year : year - 1; // FY starts April
+  const fyEndYearShort = String(fyStartYear + 1).slice(-2);
+  return `${fyStartYear}-${fyEndYearShort}`;
+}
+
 /* ================== COMPONENT ================== */
 
 export default function BillPreview({ bill, onClose }: BillPreviewProps) {
@@ -180,6 +189,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
     grossTotal > 0 ? (discountTotal * 100) / grossTotal : 0;
   const cgst = (bill.totalTax ?? 0) / 2;
   const sgst = (bill.totalTax ?? 0) / 2;
+  const fyLabel = getFinancialYearLabel(bill.billDate);
 
   const handlePrint = () => window.print();
   const generatePDF = async () => {
@@ -307,7 +317,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                 <div style={{ whiteSpace: "pre-line" }}>{company.addressLine1}</div>
                 <div>{company.addressLine2}</div>
                 <div>GSTIN: {company.gstin}</div>
-                <div>Mobile: {company.phone}</div>
+                <div>Mobile: {company.phone || "-"}</div>
               </div>
               <div className="text-right">
                 <div>Invoice No: {bill.invoiceNumber}</div>
@@ -315,6 +325,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                   Date:{" "}
                   {new Date(bill.billDate).toLocaleDateString("en-IN")}
                 </div>
+                <div>FY: {fyLabel}</div>
               </div>
             </div>
           </div>
@@ -325,7 +336,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
               <b>BILL TO</b>
               <div>{bill.customerInfo.shopName}</div>
               <div>Address : {bill.customerInfo.address}</div>
-              <div>Mobile: {bill.customerInfo.phone}</div>
+              <div>Mobile: {bill.customerInfo.phone || "-"}</div>
               {bill.customerInfo.gstNumber && (
                 <div>GSTIN: {bill.customerInfo.gstNumber}</div>
               )}

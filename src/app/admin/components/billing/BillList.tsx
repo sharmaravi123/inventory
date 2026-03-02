@@ -96,7 +96,7 @@ export default function BillList({
 
       const balance = bill.balanceAmount;
       const paymentStatusLabel =
-        balance <= 0
+        balance <= 0.01
           ? "Paid"
           : bill.status === "PARTIALLY_PAID"
             ? "Partially Paid"
@@ -176,14 +176,14 @@ export default function BillList({
                   : "Pending";
 
           const paymentStatusLabel =
-            balance <= 0
+            balance <= 0.01
               ? "Paid"
               : bill.status === "PARTIALLY_PAID"
                 ? "Partially Paid"
                 : "Pending";
 
           const paymentBadgeClass =
-            balance <= 0
+            balance <= 0.01
               ? "bg-emerald-100 text-emerald-700"
               : bill.status === "PARTIALLY_PAID"
                 ? "bg-amber-100 text-amber-700"

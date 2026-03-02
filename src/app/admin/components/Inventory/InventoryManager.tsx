@@ -664,7 +664,7 @@ const AdminInventoryManager: React.FC = () => {
             </div>
           ) : (
             <div className="relative w-full overflow-x-auto rounded-xl border border-[var(--color-neutral)]">
-              <table className="w-full min-w-[980px] table-fixed border-collapse text-left text-[13px]">
+              <table className="w-full min-w-[980px] table-fixed border-separate border-spacing-x-0 border-spacing-y-2 text-left text-[13px]">
                 <colgroup>
                   <col className="w-[180px]" />
                   <col className="w-[120px]" />
@@ -711,7 +711,7 @@ const AdminInventoryManager: React.FC = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--color-neutral)]">
+                <tbody className="[&>tr.data-row>td]:border-y [&>tr.data-row>td]:border-[var(--color-secondary)] [&>tr.data-row>td]:bg-[var(--color-white)] [&>tr.data-row>td:first-child]:border-l [&>tr.data-row>td:last-child]:border-r [&>tr.data-row>td:first-child]:rounded-l-lg [&>tr.data-row>td:last-child]:rounded-r-lg [&>tr.data-row>td]:transition-colors [&>tr.data-row:hover>td]:bg-[var(--color-neutral)]/70">
                   {filteredItems.length === 0 ? (
                     <tr>
                       <td
@@ -749,7 +749,7 @@ const AdminInventoryManager: React.FC = () => {
                       return (
                         <tr
                           key={keyId}
-                          className="hover:bg-[var(--color-neutral)]/70 transition-colors"
+                          className="data-row"
                         >
                           <td className="max-w-[180px] px-3 py-3 align-middle">
                             <div className="truncate font-medium text-[var(--color-sidebar)]">

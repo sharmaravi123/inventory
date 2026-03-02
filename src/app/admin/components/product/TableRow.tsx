@@ -58,7 +58,7 @@ export default function TableRow({
     perBoxItem !== undefined ? String(perBoxItem) : "—";
 
   return (
-    <tr className="border-t border-[var(--color-neutral)] hover:bg-[var(--color-neutral)] transition-colors">
+    <tr className="data-row">
       <td className="p-3 align-middle text-[var(--color-sidebar)]">
         {product.sku}
       </td>

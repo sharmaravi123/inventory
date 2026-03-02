@@ -29,7 +29,7 @@ export type CreateBillCustomerInput = {
   _id?: string;
   name: string;
   shopName?: string;
-  phone: string;
+  phone?: string;
   address: string;
   gstNumber?: string;
 };
@@ -53,15 +53,21 @@ const toNum = (v: unknown, fb = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : fb;
 };
+const round2 = (n: number) =>
+  Math.round((n + Number.EPSILON) * 100) / 100;
 
-function validatePayment(p: CreateBillPaymentInput | undefined, total: number) {
+function validatePayment(
+  p: CreateBillPaymentInput | undefined,
+  total: number
+) {
   const cash = toNum(p?.cashAmount);
   const upi = toNum(p?.upiAmount);
   const card = toNum(p?.cardAmount);
 
-  const collected = cash + upi + card;
+  const collected = round2(cash + upi + card);
+  const grand = round2(total);
 
-  if (collected > total) {
+  if (collected - grand > 0.01) {
     throw new Error("Payment exceeds grand total");
   }
 
@@ -81,37 +87,50 @@ function validatePayment(p: CreateBillPaymentInput | undefined, total: number) {
 }
 
 
+const normalizePhone = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
+
 async function upsertCustomer(c: CreateBillCustomerInput) {
-  if (!c.phone?.trim()) {
-    throw new Error("Customer phone is required");
+  const normalizedPhone = normalizePhone(c.phone);
+  const update = {
+    name: c.name,
+    address: c.address,
+    shopName: c.shopName,
+    gstNumber: c.gstNumber,
+    ...(normalizedPhone ? { phone: normalizedPhone } : {}),
+  };
+
+  if (c._id && Types.ObjectId.isValid(c._id)) {
+    const byId = await CustomerModel.findByIdAndUpdate(
+      c._id,
+      { $set: update },
+      { new: true }
+    );
+    if (byId) return byId;
   }
 
-  const customer = await CustomerModel.findOneAndUpdate(
-    { phone: c.phone },
-    {
-      $set: {
-        name: c.name,
-        address: c.address,
-        shopName: c.shopName,
-        gstNumber: c.gstNumber,
-      },
-    },
-    { new: true, upsert: true }
-  );
+  if (normalizedPhone) {
+    return CustomerModel.findOneAndUpdate(
+      { phone: normalizedPhone },
+      { $set: update },
+      { new: true, upsert: true }
+    );
+  }
 
-  return customer;
+  // No phone + no valid _id: don't create a customer document.
+  return null;
 }
 
 
 
 function takeSnapshot(
-  customerDoc: { _id: string | Types.ObjectId },
+  customerDoc: { _id: string | Types.ObjectId } | null,
   src: CreateBillCustomerInput
 ) {
   return {
-    customer: customerDoc._id.toString(),
+    customer: customerDoc?._id?.toString(),
     name: src.name,
-    phone: src.phone,
+    phone: normalizePhone(src.phone),
     address: src.address,
     shopName: src.shopName,
     gstNumber: src.gstNumber,
@@ -195,9 +214,6 @@ export async function POST(req: NextRequest) {
     if (!body.customer.name?.trim()) {
       throw new Error("Customer name is required");
     }
-    if (!body.customer.phone?.trim()) {
-      throw new Error("Customer phone is required");
-    }
     if (!body.customer.address?.trim()) {
       throw new Error("Customer address is required");
     }
@@ -225,7 +241,7 @@ export async function POST(req: NextRequest) {
     const cust = await upsertCustomer(body.customer);
 
     const overrideItems = body.items.filter((it) => it.overridePriceForCustomer);
-    if (overrideItems.length > 0) {
+    if (cust && overrideItems.length > 0) {
       const uniqueOverrideItems = [
         ...new Map(
           overrideItems.map((it) => [String(it.productId), it])
@@ -259,6 +275,11 @@ export async function POST(req: NextRequest) {
 
     const invoice = await getNextInvoiceNumber();
 
+    const collected = round2(
+      toNum(pay.cashAmount) + toNum(pay.upiAmount) + toNum(pay.cardAmount)
+    );
+    const balanceAmount = Math.max(0, round2(grand - collected));
+
     const bill = await BillModel.create({
       invoiceNumber: invoice,
       billDate: body.billDate ? new Date(body.billDate) : new Date(),
@@ -270,20 +291,14 @@ export async function POST(req: NextRequest) {
       totalTax: tax,
       grandTotal: grand,
       payment: pay,
-      amountCollected:
-        toNum(pay.cashAmount) + toNum(pay.upiAmount) + toNum(pay.cardAmount),
-      balanceAmount:
-        grand -
-        (toNum(pay.cashAmount) +
-          toNum(pay.upiAmount) +
-          toNum(pay.cardAmount)),
+      amountCollected: collected,
+      balanceAmount,
       status:
-        grand ===
-          (toNum(pay.cashAmount) +
-            toNum(pay.upiAmount) +
-            toNum(pay.cardAmount))
+        balanceAmount <= 0.01
           ? "DELIVERED"
-          : "PENDING",
+          : collected > 0
+            ? "PARTIALLY_PAID"
+            : "PENDING",
     });
 
     return NextResponse.json({ bill });

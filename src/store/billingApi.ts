@@ -7,7 +7,7 @@ export type Customer = {
   _id?: string;
   name: string;
   shopName?: string;
-  phone: string;
+  phone?: string;
   address: string;
   gstNumber?: string;
   customPrices?: { product: string; price: number }[];
@@ -140,7 +140,7 @@ export type Bill = {
     customer?: string; // customer id (added for edit)
     name: string;
     shopName?: string;
-    phone: string;
+    phone?: string;
     address: string;
     gstNumber?: string;
   };

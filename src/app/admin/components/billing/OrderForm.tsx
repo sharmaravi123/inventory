@@ -30,7 +30,7 @@ interface OrderFormProps {
       _id?: string;
       name: string;
       shopName?: string;
-      phone: string;
+      phone?: string;
       address?: string;
       gstNumber?: string;
       customPrices?: { product: string; price: number }[];
@@ -258,7 +258,7 @@ export default function OrderForm({
                                     {cust.name}
                                   </div>
                                   <div className="text-xs text-slate-500">
-                                    {cust.phone}
+                                    {cust.phone || "-"}
                                   </div>
                                 </div>
                                 {cust.shopName && (
@@ -293,11 +293,10 @@ export default function OrderForm({
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-700">
-                    Phone *
+                    Phone
                   </label>
                   <input
                     type="tel"
-                    required
                     value={customer.phone}
                     onChange={(e) =>
                       setCustomer({
