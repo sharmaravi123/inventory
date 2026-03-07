@@ -478,6 +478,13 @@ export default function BillingAdminPage() {
         text: "Please add customer name",
         confirmButtonText: "OK",
       });;
+    if (!customer.address?.trim())
+      return Swal.fire({
+        icon: "warning",
+        title: "Customer Required",
+        text: "Please add customer address",
+        confirmButtonText: "OK",
+      });
     const valid = items.filter(
       (it) =>
         it.selectedProduct &&
@@ -547,11 +554,11 @@ export default function BillingAdminPage() {
       resetForm();
       setShowForm(false);
       await refetch();
-    } catch {
+    } catch (err) {
       Swal.fire({
         icon: "warning",
         title: "Failed",
-        text: "Something went Wrong ?",
+        text: String(err || "Something went wrong"),
         confirmButtonText: "OK",
       });
     }
