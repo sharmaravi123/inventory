@@ -276,46 +276,63 @@ export default function DriverDashboardPage() {
         )}
 
         <div className="max-h-72 space-y-2 overflow-y-auto">
-          {driverTodayBills.map((bill) => (
-            <div
-              key={bill._id}
-              className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-xs"
-            >
-              <div>
-                <p className="font-semibold text-slate-800">
-                  {bill.invoiceNumber}
-                </p>
-                <p className="text-[11px] text-slate-600">
-                  {bill.customerInfo.name} • {bill.customerInfo.phone}
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  {formatDate(bill.billDate)}
-                </p>
+          {driverTodayBills.map((bill) => {
+            const shopName = (bill.customerInfo.shopName || "").trim();
+            const customerName = (bill.customerInfo.name || "").trim();
+            const phone = bill.customerInfo.phone || "";
+            const primaryTitle = shopName || customerName || "Customer";
+            const secondaryLine = shopName
+              ? `Customer: ${customerName || "-"}${phone ? ` - ${phone}` : ""}`
+              : phone
+                ? `Phone: ${phone}`
+                : "";
+
+            return (
+              <div
+                key={bill._id}
+                className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-xs"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {primaryTitle}
+                  </p>
+                  {secondaryLine && (
+                    <p className="text-[11px] text-slate-600">
+                      {secondaryLine}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-slate-500">
+                    Invoice: {bill.invoiceNumber || "-"}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {formatDate(bill.billDate)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] text-slate-500">
+                    Grand: ?{bill.grandTotal.toFixed(2)}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Paid: ?{bill.amountCollected.toFixed(2)} ? Bal: ?
+                    {bill.balanceAmount.toFixed(2)}
+                  </p>
+                  <span
+                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      bill.status === "DELIVERED"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : bill.status === "OUT_FOR_DELIVERY"
+                        ? "bg-blue-100 text-blue-700"
+                        : bill.status === "PARTIALLY_PAID"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    {formatStatus(bill)}
+                  </span>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-[11px] text-slate-500">
-                  Grand: ₹{bill.grandTotal.toFixed(2)}
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  Paid: ₹{bill.amountCollected.toFixed(2)} • Bal: ₹
-                  {bill.balanceAmount.toFixed(2)}
-                </p>
-                <span
-                  className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                    bill.status === "DELIVERED"
-                      ? "bg-emerald-100 text-emerald-700"
-                      : bill.status === "OUT_FOR_DELIVERY"
-                      ? "bg-blue-100 text-blue-700"
-                      : bill.status === "PARTIALLY_PAID"
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-slate-100 text-slate-700"
-                  }`}
-                >
-                  {formatStatus(bill)}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <p className="mt-2 text-[11px] text-slate-500">

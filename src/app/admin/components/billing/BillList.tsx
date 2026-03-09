@@ -165,6 +165,16 @@ export default function BillList({
         {bills.map((bill) => {
           const paid = bill.amountCollected;
           const balance = bill.balanceAmount;
+          const shopName = (bill.customerInfo.shopName || "").trim();
+          const customerName = (bill.customerInfo.name || "").trim();
+          const phone = bill.customerInfo.phone || "";
+          const primaryTitle = shopName || customerName || "Customer";
+          const secondaryLine = shopName
+            ? `Customer: ${customerName || "-"}${phone ? ` - ${phone}` : ""}`
+            : phone
+              ? `Phone: ${phone}`
+              : "";
+
 
           const statusLabel =
             bill.status === "DELIVERED"
@@ -209,17 +219,17 @@ export default function BillList({
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {bill.invoiceNumber}
+                  <p className="text-base font-semibold text-slate-800">
+                    {primaryTitle}
                   </p>
-                  <p className="text-xs text-slate-600">
-                    {bill.customerInfo.name} • {bill.customerInfo.phone}
-                  </p>
-                  {bill.customerInfo.shopName && (
-                    <p className="text-[11px] text-slate-500">
-                      {bill.customerInfo.shopName}
+                  {secondaryLine && (
+                    <p className="text-xs text-slate-600">
+                      {secondaryLine}
                     </p>
                   )}
+                  <p className="text-[11px] text-slate-500">
+                    Invoice: {bill.invoiceNumber || "-"}
+                  </p>
 
                   {/* Driver assignment (admin) */}
                   {drivers && onAssignDriver && (
