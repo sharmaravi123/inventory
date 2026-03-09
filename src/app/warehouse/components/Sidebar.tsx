@@ -81,10 +81,15 @@ const isActive = (href: string) => {
   const handleLogout = async () => {
     try {
       await dispatch(logoutUser()).unwrap();
-      router.push("/");
     } catch (err) {
-      console.error("Logout failed", err);
+      console.warn("Logout failed", err);
     }
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+    } catch {}
+    router.replace("/");
+    router.refresh();
   };
 
   const canAccess = (perm: string | null, href: string) => {
