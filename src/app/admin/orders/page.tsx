@@ -201,11 +201,10 @@ export default function OrdersPage() {
         "Gross Total": grossTotal.toFixed(2),
         "Tax Rate": uniqueRates.join(", "),
         Sales: salesAmount.toFixed(2),
-        "CGST OUTPUT @ 9% SALES": cgst.toFixed(2),
-        "SGST OUTPUT @ 9% SALES": sgst.toFixed(2),
+        "CGST OUTPUT @ 2.5% SALES": cgst.toFixed(2),
+        "SGST OUTPUT @ 2.5% SALES": sgst.toFixed(2),
         Round: roundValue.toFixed(2),
-        "IGST-OUTPUT@18% SALE": igst.toFixed(2),
-        "CGST INPUT@ 9% PUR": "0.00",
+        "GST 5%": igst.toFixed(2),
       };
     });
 

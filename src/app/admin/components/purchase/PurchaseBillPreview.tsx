@@ -272,10 +272,12 @@ export default function PurchaseBillPreview({
                             <div className="flex gap-2 font-bold uppercase">
                                 <span>Tax Invoice</span>
                             </div>
-                            <div className="text-lg font-bold">{company.name}</div>
-                            <div style={{ whiteSpace: "pre-line" }}>{company.addressLine1}</div>
-                            <div>{company.addressLine2}</div>
-                            <div>Mobile: {company.phone}</div>
+                            <b>BILL FROM (DEALER)</b>
+
+                            <div className="text-lg font-bold">{bill.dealer.name}</div>
+                            <div style={{ whiteSpace: "pre-line" }}> {bill.dealer.address}</div>
+                            <div>Mobile: {bill.dealer.phone}</div>
+                            {bill.dealer.gstin && <div>GSTIN: {bill.dealer.gstin}</div>}
                         </div>
 
                         <div className="text-right">
@@ -287,11 +289,10 @@ export default function PurchaseBillPreview({
                     {/* DEALER */}
                     <div className="mt-2 grid grid-cols-2 border border-black">
                         <div className="border-r border-black p-2">
-                            <b>BILL FROM (DEALER)</b>
-                            <div>{bill.dealer.name}</div>
-                            <div>Address : {bill.dealer.address}</div>
-                            <div>Mobile: {bill.dealer.phone}</div>
-                            {bill.dealer.gstin && <div>GSTIN: {bill.dealer.gstin}</div>}
+                            <div>{company.name}</div>
+                            <div>Address : {company.addressLine1}</div>
+                            <div>{company.addressLine2}</div>
+                            <div>Mobile:  {company.phone}</div>
                         </div>
                         <div className="p-2">
                             <b>Store</b>
@@ -353,9 +354,7 @@ export default function PurchaseBillPreview({
                             })}
                         </tbody>
                     </table>
-                    <div className="mt-1 text-[10px] text-slate-600">
-                        Product price me se pehle fixed 5% GST remove karke base nikala gaya hai, uske baad discount apply karke CGST + SGST add kiya gaya hai.
-                    </div>
+                   
 
                     {/* TOTALS */}
                     <div className="mt-2 grid grid-cols-2 gap-2">
