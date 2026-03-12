@@ -9,6 +9,7 @@ import { fetchCompanyProfile } from "@/store/companyProfileSlice";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import Swal from "sweetalert2";
+import { roundGrandTotal } from "@/lib/rounding";
 
 type BillPreviewProps = {
   bill?: Bill;
@@ -189,6 +190,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
     grossTotal > 0 ? (discountTotal * 100) / grossTotal : 0;
   const cgst = (bill.totalTax ?? 0) / 2;
   const sgst = (bill.totalTax ?? 0) / 2;
+  const roundedGrandTotal = roundGrandTotal(bill.grandTotal ?? 0);
   const fyLabel = getFinancialYearLabel(bill.billDate);
 
   const handlePrint = () => window.print();
@@ -432,7 +434,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
           <div className="mt-2 grid grid-cols-2 gap-2">
             <div className="border border-black p-2">
               <b>Total Amount (in words)</b>
-              <div>{numberToINRWords(bill.grandTotal ?? 0)}</div>
+              <div>{numberToINRWords(roundedGrandTotal)}</div>
             </div>
             <div className="border border-black p-2">
               <div className="flex justify-between">
@@ -455,7 +457,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
               </div>
               <div className="mt-1 flex justify-between border-t border-black pt-1 font-bold">
                 <span>Grand Total</span>
-                <span>{bill.grandTotal?.toFixed(2)}</span>
+                <span>{roundedGrandTotal.toFixed(2)}</span>
               </div>
             </div>
           </div>

@@ -30,6 +30,7 @@ import Swal from "sweetalert2";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
+import { roundGrandTotal } from "@/lib/rounding";
 
 
 type WithId = {
@@ -361,7 +362,7 @@ export default function BillingAdminPage() {
       totalItemsCount: count,
       totalBeforeTax: before,
       totalTax: tax,
-      grandTotal: total,
+      grandTotal: roundGrandTotal(total),
       discountTotal,
     };
   }, [items]);

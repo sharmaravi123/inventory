@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import dbConnect from "@/lib/mongodb";
 import Bill from "@/models/Bill";
+import { roundGrandTotal } from "@/lib/rounding";
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,7 +29,10 @@ export async function POST(req: NextRequest) {
     const upi = Number(payment?.upiAmount || 0);
     const card = Number(payment?.cardAmount || 0);
     const amountCollected = cash + upi + card;
-    const balanceAmount = Math.max(0, Number(bill.grandTotal || 0) - amountCollected);
+    const balanceAmount = Math.max(
+      0,
+      roundGrandTotal(Number(bill.grandTotal || 0)) - amountCollected
+    );
 
     const payload: Record<string, unknown> = {
       amountCollected,

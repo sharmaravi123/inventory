@@ -17,6 +17,7 @@ import { fetchDrivers } from "@/store/driverSlice";
 import { Search, Calendar } from "lucide-react";
 import Swal from "sweetalert2";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
+import { roundGrandTotal } from "@/lib/rounding";
 
 /* ================= TYPES ================= */
 
@@ -173,7 +174,7 @@ export default function OrdersPage() {
           : true;
 
       const totalTax = Number(bill.totalTax ?? 0);
-      const grossTotal = Number(bill.grandTotal ?? 0);
+      const grossTotal = roundGrandTotal(Number(bill.grandTotal ?? 0));
       const salesAmount = Number(bill.totalBeforeTax ?? 0);
 
       const cgst = isIntraState ? totalTax / 2 : 0;

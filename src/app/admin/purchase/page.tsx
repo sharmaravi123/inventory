@@ -15,6 +15,7 @@ import {
     updatePurchase,
 } from "@/store/purchaseSlice";
 import { useRouter } from "next/navigation";
+import { roundGrandTotal } from "@/lib/rounding";
 
 type PurchaseItem = {
     productId: string;
@@ -271,7 +272,7 @@ export default function AdminPurchaseManager() {
             cgstAmount: gstAmount / 2,
             sgstAmount: gstAmount / 2,
             gstAmount,
-            grandTotal: taxableAmount + gstAmount,
+            grandTotal: roundGrandTotal(taxableAmount + gstAmount),
         };
     }, [calcItem, getProductById]);
 
@@ -544,10 +545,11 @@ export default function AdminPurchaseManager() {
                 purchase.purchaseNumber ||
                 "-";
 
-            const effectiveGrossTotal =
+            const effectiveGrossTotalRaw =
                 typeof purchase.grandTotal === "number"
                     ? purchase.grandTotal
                     : lineTotal;
+            const effectiveGrossTotal = roundGrandTotal(effectiveGrossTotalRaw);
             const roundValue =
                 effectiveGrossTotal - (purchaseAmount + totalTax);
 

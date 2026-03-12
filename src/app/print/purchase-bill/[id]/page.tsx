@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import PurchaseBillPreview from "@/app/admin/components/purchase/PurchaseBillPreview";
+import { roundGrandTotal } from "@/lib/rounding";
 
 const DEFAULT_GST_PERCENT = 5;
 
@@ -93,7 +94,8 @@ export default function PrintPurchaseBillPage() {
 
         const totalTax = items.reduce((sum: number, it: any) => sum + it.taxAmount, 0);
 
-        const grandTotal = items.reduce((sum: number, it: any) => sum + it.lineAmount, 0);
+        const grandTotalRaw = items.reduce((sum: number, it: any) => sum + it.lineAmount, 0);
+        const grandTotal = roundGrandTotal(grandTotalRaw);
         const totalDiscountPercent =
           totalGross > 0 ? (totalDiscountAmount * 100) / totalGross : 0;
 

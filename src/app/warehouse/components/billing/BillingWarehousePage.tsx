@@ -29,6 +29,7 @@ import BillList from "@/app/admin/components/billing/BillList";
 import BillPreview from "@/app/admin/components/billing/BillPreview";
 import EditPaymentModal from "@/app/admin/components/billing/EditPaymentModal";
 import Swal from "sweetalert2";
+import { roundGrandTotal } from "@/lib/rounding";
 
 const COMPANY_GST_NUMBER = "23GPAPM0803L1Z4";
 
@@ -276,7 +277,7 @@ const totals: Totals = useMemo(() => {
       totalItemsCount: count,
       totalBeforeTax: before,
       totalTax: tax,
-      grandTotal: total,
+      grandTotal: roundGrandTotal(total),
       discountTotal,
     };
   }, [items]);

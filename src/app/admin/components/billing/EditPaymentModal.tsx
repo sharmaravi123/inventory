@@ -8,6 +8,7 @@ import {
   useUpdateBillPaymentMutation,
 } from "@/store/billingApi";
 import Swal from "sweetalert2";
+import { roundGrandTotal } from "@/lib/rounding";
 
 type EditPaymentModalProps = {
   bill?: Bill;
@@ -71,7 +72,7 @@ export default function EditPaymentModal({
       extraPayment.cardAmount
   );
 
-  const grandTotal = bill ? round2(bill.grandTotal) : 0;
+  const grandTotal = bill ? roundGrandTotal(bill.grandTotal) : 0;
   const remaining = round2(grandTotal - baseTotal);
   const newPaidTotal = round2(baseTotal + extraTotal);
 

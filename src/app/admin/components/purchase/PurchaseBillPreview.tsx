@@ -8,6 +8,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useRef } from "react";
 import Swal from "sweetalert2";
+import { roundGrandTotal } from "@/lib/rounding";
 
 /* ================== TYPES ================== */
 
@@ -134,6 +135,7 @@ export default function PurchaseBillPreview({
 
     if (!bill) return null;
     const subtotalWithoutTax = bill.totalBeforeTax;
+    const roundedGrandTotal = roundGrandTotal(bill.grandTotal);
     const totalGross = bill.totalGross ?? bill.items.reduce((s, it) => {
         const qty = it.boxes * it.perBoxItem + it.looseItems;
         const taxPercent = DEFAULT_GST_PERCENT;
@@ -360,7 +362,7 @@ export default function PurchaseBillPreview({
                     <div className="mt-2 grid grid-cols-2 gap-2">
                         <div className="border p-2">
                             <b>Total Amount (in words)</b>
-                            <div>{numberToINRWords(bill.grandTotal)}</div>
+                            <div>{numberToINRWords(roundedGrandTotal)}</div>
                         </div>
                         <div className="border p-2">
                             <div className="flex justify-between"><span>Gross Total</span><span>{totalGross.toFixed(2)}</span></div>
@@ -371,7 +373,7 @@ export default function PurchaseBillPreview({
                             <div className="flex justify-between"><span>SGST</span><span>{sgst.toFixed(2)}</span></div>
                             <div className="flex justify-between border-t border-black font-bold pt-1">
                                 <span>Grand Total</span>
-                                <span>{bill.grandTotal.toFixed(2)}</span>
+                                <span>{roundedGrandTotal.toFixed(2)}</span>
                             </div>
                         </div>
                     </div>

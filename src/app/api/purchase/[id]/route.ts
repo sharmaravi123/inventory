@@ -7,6 +7,7 @@ import "@/models/Product";
 import Product from "@/models/Product";
 import Stock from "@/models/Stock";
 import mongoose from "mongoose";
+import { roundGrandTotal } from "@/lib/rounding";
 
 type PurchaseDocWithNumbers = {
   invoiceNumber?: string;
@@ -226,7 +227,7 @@ export async function PUT(
         items: computedItems,
         subTotal,
         taxTotal,
-        grandTotal: subTotal + taxTotal,
+        grandTotal: roundGrandTotal(subTotal + taxTotal),
         purchaseDate: purchaseDate
           ? new Date(purchaseDate)
           : existing.purchaseDate ?? existing.createdAt,

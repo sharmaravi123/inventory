@@ -5,6 +5,7 @@ import CustomerModel from "@/models/Customer";
 import Stock from "@/models/Stock";
 import { Types } from "mongoose";
 import { getNextInvoiceNumber } from "@/models/InvoiceCounter";
+import { roundGrandTotal } from "@/lib/rounding";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -237,7 +238,8 @@ export async function POST(req: NextRequest) {
       return billItem;
     });
 
-    const pay = validatePayment(body.payment, grand);
+    const roundedGrand = roundGrandTotal(grand);
+    const pay = validatePayment(body.payment, roundedGrand);
     const cust = await upsertCustomer(body.customer);
 
     const overrideItems = body.items.filter((it) => it.overridePriceForCustomer);
@@ -278,7 +280,7 @@ export async function POST(req: NextRequest) {
     const collected = round2(
       toNum(pay.cashAmount) + toNum(pay.upiAmount) + toNum(pay.cardAmount)
     );
-    const balanceAmount = Math.max(0, round2(grand - collected));
+    const balanceAmount = Math.max(0, round2(roundedGrand - collected));
 
     const bill = await BillModel.create({
       invoiceNumber: invoice,
@@ -289,7 +291,7 @@ export async function POST(req: NextRequest) {
       totalItems,
       totalBeforeTax: before,
       totalTax: tax,
-      grandTotal: grand,
+      grandTotal: roundedGrand,
       payment: pay,
       amountCollected: collected,
       balanceAmount,

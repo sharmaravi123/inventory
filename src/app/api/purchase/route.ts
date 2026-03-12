@@ -9,6 +9,7 @@ import "@/models/Dealer";
 import "@/models/Warehouse";
 import { cookies } from "next/headers";
 import mongoose from "mongoose";
+import { roundGrandTotal } from "@/lib/rounding";
 
 type PurchaseDocWithNumbers = {
   invoiceNumber?: string;
@@ -170,7 +171,7 @@ export async function POST(req: NextRequest) {
     items: computedItems,
     subTotal,
     taxTotal,
-    grandTotal: subTotal + taxTotal,
+    grandTotal: roundGrandTotal(subTotal + taxTotal),
     purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
   });
 

@@ -4,6 +4,7 @@ import dbConnect from "@/lib/mongodb";
 import BillModel from "@/models/Bill";
 import BillReturn, { BillReturnItem } from "@/models/BillReturn";
 import Stock from "@/models/Stock";
+import { roundGrandTotal } from "@/lib/rounding";
 
 type ReturnItemByIndex = {
   itemIndex: number;
@@ -223,6 +224,7 @@ export async function POST(
 
     let newGrandTotal = oldGrandTotal - totalReturnAmount;
     if (newGrandTotal < 0) newGrandTotal = 0;
+    newGrandTotal = roundGrandTotal(newGrandTotal);
 
     const refundAmount =
       oldCollected > newGrandTotal

@@ -3,6 +3,7 @@ import dbConnect from "@/lib/mongodb";
 import BillModel from "@/models/Bill";
 import Stock from "@/models/Stock";
 import { Types } from "mongoose";
+import { roundGrandTotal } from "@/lib/rounding";
 
 /* ---------------------------------------------
    TYPES
@@ -199,13 +200,14 @@ export async function PUT(
       return billItem;
     });
 
-    const pay = validatePayment(body.payment, grand);
+    const roundedGrand = roundGrandTotal(grand);
+    const pay = validatePayment(body.payment, roundedGrand);
 
     bill.set("items", newItems);
     bill.totalItems = totalItems;
     bill.totalBeforeTax = before;
     bill.totalTax = tax;
-    bill.grandTotal = grand;
+    bill.grandTotal = roundedGrand;
     bill.payment = pay;
 
     bill.amountCollected = round2(
@@ -214,7 +216,7 @@ export async function PUT(
 
     bill.balanceAmount = Math.max(
       0,
-      round2(grand - bill.amountCollected)
+      round2(roundedGrand - bill.amountCollected)
     );
     bill.billDate = new Date(body.billDate);
     bill.updatedAt = new Date();
