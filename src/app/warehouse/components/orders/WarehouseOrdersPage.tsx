@@ -201,10 +201,10 @@ export default function WarehouseOrdersPage({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[color:var(--color-sidebar)]">
-            Warehouse Orders
+            Store Orders
           </h1>
           <p className="text-xs text-slate-500">
-            Orders and payment status for your assigned warehouse(s) only.
+            Orders and payment status for your assigned store(s) only.
           </p>
         </div>
         <button

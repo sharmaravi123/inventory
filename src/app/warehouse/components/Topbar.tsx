@@ -56,7 +56,7 @@ export default function Topbar(): JSX.Element {
   const name = me?.name ?? "User";
   const email = me?.email ?? "no-email@example.com";
   const pwh = me?.warehouses && me.warehouses.length ? me.warehouses[0] : undefined;
-  const warehouseName = pwh?.name ?? pwh?._id ?? "No warehouse selected";
+  const warehouseName = pwh?.name ?? pwh?._id ?? "No store selected";
 
   return (
     <header className="w-full sticky top-0 z-50 bg-[var(--color-white)] border-b border-[var(--border-color)] shadow-sm">
@@ -72,7 +72,7 @@ export default function Topbar(): JSX.Element {
         <div className="flex items-center gap-4 mt-2 md:mt-0">
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-[var(--text-muted)]" />
-            <input type="text" placeholder="Search Products, Orders, Warehouses..." className="pl-9 pr-4 py-2 text-sm rounded-md border border-[var(--border-color)] w-full focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all" />
+            <input type="text" placeholder="Search Products, Orders, Stores..." className="pl-9 pr-4 py-2 text-sm rounded-md border border-[var(--border-color)] w-full focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all" />
           </div>
 
           <div className="relative" ref={dropdownRef}>
@@ -94,7 +94,7 @@ export default function Topbar(): JSX.Element {
                     </div>
 
                     <div className="pt-2 border-t border-[var(--border-color)] text-xs">
-                      <div className="text-[var(--text-muted)] mb-1">Warehouse</div>
+                      <div className="text-[var(--text-muted)] mb-1">Store</div>
                       <div className="font-medium truncate">{warehouseName}</div>
                     </div>
                   </>

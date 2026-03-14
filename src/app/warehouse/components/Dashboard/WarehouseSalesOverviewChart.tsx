@@ -145,7 +145,7 @@ export default function WarehouseSalesOverviewChart({
           </p>
         ) : chartData.length === 0 ? (
           <div className="flex justify-center items-center h-full text-xs sm:text-sm text-gray-400">
-            No sales data found for this warehouse
+            No sales data found for this store
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">

@@ -156,10 +156,10 @@ export default function WarehouseInventoryDistribution({
   return (
     <div className="bg-[var(--color-white)] rounded-2xl shadow-md p-6 w-full max-w-md">
       <h2 className="text-xl font-semibold text-gray-900">
-        Inventory Distribution – This Warehouse
+        Inventory Distribution – This Store
       </h2>
       <p className="text-sm text-gray-500 mb-4">
-        Breakdown of products by category for this warehouse.
+        Breakdown of products by category for this store.
       </p>
 
       <div className="w-full h-64 flex items-center justify-center">
@@ -167,7 +167,7 @@ export default function WarehouseInventoryDistribution({
           <div className="text-gray-400 text-sm">Loading products...</div>
         ) : !hasData ? (
           <div className="text-gray-400 text-sm">
-            No products found for this warehouse
+            No products found for this store
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">

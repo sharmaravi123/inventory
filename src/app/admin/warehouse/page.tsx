@@ -169,7 +169,7 @@ export default function WarehouseOverview() {
                   onChange={e => setQuery(e.target.value)}
                   placeholder="Search by name or address"
                   className="w-full min-w-0 bg-transparent text-sm outline-none text-[var(--color-sidebar)] placeholder:text-[var(--color-sidebar)]/60"
-                  aria-label="Search warehouses"
+                  aria-label="Search stores"
                 />
                 {query && (
                   <button
@@ -296,7 +296,7 @@ export default function WarehouseOverview() {
                       colSpan={4}
                       className="p-8 text-center text-sm text-[var(--color-secondary)]"
                     >
-                      No warehouses found. Try a different search or create a new one.
+                      No stores found. Try a different search or create a new one.
                     </td>
                   </tr>
                 ) : (

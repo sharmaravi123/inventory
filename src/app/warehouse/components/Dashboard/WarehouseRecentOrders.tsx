@@ -101,17 +101,17 @@ export default function WarehouseRecentOrders({
   return (
     <div className="w-full">
       <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-        Recent Orders – This Warehouse
+        Recent Orders – This Store
       </h2>
       <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
-        Latest customer orders for this warehouse.
+        Latest customer orders for this store.
       </p>
 
       {isLoading ? (
         <p className="text-xs sm:text-sm text-gray-500">Loading...</p>
       ) : recentOrders.length === 0 ? (
         <p className="text-xs sm:text-sm text-gray-500">
-          No recent orders found for this warehouse.
+          No recent orders found for this store.
         </p>
       ) : (
         <div className="overflow-x-auto">

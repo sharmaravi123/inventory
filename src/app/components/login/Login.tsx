@@ -108,7 +108,7 @@ export default function LoginPage() {
           <div className="h-full flex flex-col justify-center items-star?t text-white">
             <h2 className="text-3xl font-extrabold mb-2">{companyProfile?.name}</h2>
             <p className="mb-6 text-sm max-w-xs">
-              Manage warehouses, users, drivers and inventory seamlessly. Fast,
+              Manage stores, users, drivers and inventory seamlessly. Fast,
               reliable and secure.
             </p>
 

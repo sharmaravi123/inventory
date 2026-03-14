@@ -185,7 +185,7 @@ export default function BillingWarehousePage({
           productId: pid,
           warehouseId: wid,
           productName: prod.name ?? "Unnamed Product",
-          warehouseName: wh?.name ?? "Warehouse",
+          warehouseName: wh?.name ?? "Store",
           sellingPrice: prod.sellingPrice ?? 0,
           taxPercent: prod.taxPercent ?? 0,
           itemsPerBox: prod.perBoxItem ?? 1,
@@ -412,7 +412,7 @@ const totals: Totals = useMemo(() => {
   return (
     <div className="space-y-6">
       <header className="flex justify-between">
-        <h1 className="text-xl font-bold">Warehouse Billing</h1>
+        <h1 className="text-xl font-bold">Store Billing</h1>
 
         <div className="flex gap-2">
           <input

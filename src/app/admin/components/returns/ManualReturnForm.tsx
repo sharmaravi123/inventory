@@ -90,7 +90,7 @@ export default function ManualReturnForm({
     }
 
     if (!productId || !warehouseId) {
-      setError("Please select product and warehouse");
+      setError("Please select product and store");
       return;
     }
 
@@ -213,13 +213,13 @@ export default function ManualReturnForm({
             </div>
 
             <div>
-              <label className="block text-xs font-medium">Warehouse</label>
+              <label className="block text-xs font-medium">Store</label>
               <select
                 value={warehouseId}
                 onChange={(e) => setWarehouseId(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               >
-                <option value="">Select warehouse</option>
+                <option value="">Select store</option>
                 {warehouses.map((w) => (
                   <option
                     key={String(w._id ?? w.id)}

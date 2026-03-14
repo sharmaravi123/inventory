@@ -649,7 +649,7 @@ export default function ReportsPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-900 flex items-center gap-2">
             <Package className="h-4 w-4 text-[color:var(--color-primary)]" />
-            Products & Warehouses
+            Products & Stores
           </p>
           <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -659,7 +659,7 @@ export default function ReportsPage() {
               </p>
             </div>
             <div>
-              <p className="text-[11px] text-slate-500">Warehouses</p>
+              <p className="text-[11px] text-slate-500">Stores</p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
                 {warehouses.length}
               </p>

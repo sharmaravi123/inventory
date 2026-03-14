@@ -103,7 +103,7 @@ const isActive = (href: string) => {
   const SidebarContent = () => (
     <nav className="px-4 py-6 h-full flex flex-col">
       <div className="mb-6">
-        <h3 className="text-xs font-semibold text-[var(--text-primary)] mb-2">Warehouse</h3>
+        <h3 className="text-xs font-semibold text-[var(--text-primary)] mb-2">Store</h3>
         <div className="flex flex-col gap-1">
           {navItems.map((item) => {
             const allowed = canAccess(item.perm, item.href);
@@ -149,7 +149,7 @@ const isActive = (href: string) => {
       <aside className="hidden lg:flex flex-col justify-between w-64 bg-[var(--color-white)] border-r border-[var(--border-color)] min-h-screen fixed">
         <div>
           <div className="px-4 py-4 border-b border-[var(--border-color)]">
-            <h2 className="text-lg font-bold text-[var(--color-primary)]">Warehouse</h2>
+            <h2 className="text-lg font-bold text-[var(--color-primary)]">Store</h2>
             <p className="text-xs text-gray-500">Manager panel</p>
           </div>
           <SidebarContent />
@@ -162,7 +162,7 @@ const isActive = (href: string) => {
             <motion.aside ref={sidebarRef} initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }} transition={{ type: "spring", stiffness: 90, damping: 20 }} className="fixed inset-y-0 left-0 z-50 w-64 bg-[var(--color-white)] shadow-lg flex flex-col">
               <div className="px-4 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-[var(--color-primary)]">Warehouse</h2>
+                  <h2 className="text-lg font-bold text-[var(--color-primary)]">Store</h2>
                   <p className="text-xs text-gray-500">Manager panel</p>
                 </div>
                 <button aria-label="Close menu" onClick={() => setOpen(false)} className="p-1">

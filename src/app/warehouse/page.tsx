@@ -102,7 +102,7 @@ export default function WarehousePage() {
     warehouseState.list.find((w) => w._id === activeWarehouseId) ??
     warehouseState.list[0];
 
-  const activeWarehouseName = activeWarehouse?.name ?? "All Warehouses";
+  const activeWarehouseName = activeWarehouse?.name ?? "All Stores";
 
   const warehousesLoading = warehouseState.loading ?? false;
   const hasWarehouses =
@@ -113,7 +113,7 @@ export default function WarehousePage() {
     return (
       <div className="p-4 sm:p-6">
         <h1 className="text-lg sm:text-xl font-semibold text-[var(--color-sidebar)]">
-          Loading warehouse dashboard...
+          Loading store dashboard...
         </h1>
       </div>
     );
@@ -131,7 +131,7 @@ export default function WarehousePage() {
   }
 
   const headingSuffix =
-    meLoading && !me ? "Loading warehouse..." : `(${activeWarehouseName})`;
+    meLoading && !me ? "Loading store..." : `(${activeWarehouseName})`;
 
   return (
     <motion.div
@@ -142,7 +142,7 @@ export default function WarehousePage() {
     >
       <div className="px-3 sm:px-6 md:px-8">
         <h1 className="text-xl sm:text-2xl font-bold text-[var(--color-sidebar)] flex items-center gap-2 flex-wrap">
-          Warehouse Dashboard
+          Store Dashboard
           <span className="text-xs sm:text-sm font-medium text-[var(--text-secondary)] bg-[var(--color-neutral)] px-3 py-1 rounded-full">
             {headingSuffix}
           </span>

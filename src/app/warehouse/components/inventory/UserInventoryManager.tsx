@@ -243,7 +243,7 @@ const UserInventoryManager: React.FC<Props> = ({
     e?.preventDefault();
 
     if (!form._id && (!form.productId || !form.warehouseId)) {
-      Swal.fire("Error", "Please select product and warehouse", "error");
+      Swal.fire("Error", "Please select product and store", "error");
       return;
     }
 
@@ -330,7 +330,7 @@ const UserInventoryManager: React.FC<Props> = ({
             <thead>
               <tr className="border-b">
                 <th className="p-2 text-left">Product</th>
-                <th className="p-2 text-left">Warehouse</th>
+                <th className="p-2 text-left">Store</th>
                 <th className="p-2 text-center">Boxes</th>
                 <th className="p-2 text-center">Items/Box</th>
                 <th className="p-2 text-center">Loose</th>

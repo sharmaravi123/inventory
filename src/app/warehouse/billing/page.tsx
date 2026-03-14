@@ -33,7 +33,7 @@ export default async function WarehouseBillingPage() {
         <div className="p-6">
           <h1 className="text-xl font-semibold">Access denied / Error</h1>
           <p className="text-sm text-gray-600">
-            You do not have permission to access Billing for warehouses, or there was a server error.
+            You do not have permission to access Billing for stores, or there was a server error.
           </p>
         </div>
       );
@@ -57,7 +57,7 @@ export default async function WarehouseBillingPage() {
         <div className="p-6">
           <h1 className="text-xl font-semibold">Billing</h1>
           <p className="text-sm text-gray-600">
-            No stores is assigned to your account. Please contact the administrator.
+            No store is assigned to your account. Please contact the administrator.
           </p>
         </div>
       );

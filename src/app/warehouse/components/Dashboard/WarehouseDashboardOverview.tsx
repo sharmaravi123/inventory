@@ -315,7 +315,7 @@ export default function WarehouseDashboardOverview({
         className="lg:col-span-4 xl:col-span-3 rounded-xl border p-4 bg-gray-50"
       >
         <h3 className="font-semibold mb-1">Quick Actions</h3>
-        <p className="text-xs text-gray-500 mb-4">Warehouse shortcuts.</p>
+        <p className="text-xs text-gray-500 mb-4">Store shortcuts.</p>
 
         <div className="flex flex-col space-y-2">
           {quickActions.map((action) => (

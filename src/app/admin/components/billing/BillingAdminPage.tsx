@@ -249,7 +249,7 @@ export default function BillingAdminPage() {
         productId: pid,
         warehouseId: wid,
         productName: prod?.name ?? "Unnamed Product",
-        warehouseName: wh?.name ?? "Unknown Warehouse",
+        warehouseName: wh?.name ?? "Unknown Store",
         basePrice: perPiecePrice,
         sellingPrice: perPiecePrice,
         taxPercent: (prodAny.taxPercent as number) ?? 0,

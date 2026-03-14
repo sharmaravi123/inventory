@@ -485,7 +485,7 @@ const AdminInventoryManager: React.FC = () => {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search product / warehouse"
+              placeholder="Search product / store"
               className="w-full rounded-lg border border-[var(--color-secondary)] bg-[var(--color-white)] px-3 py-2 text-sm text-[var(--color-sidebar)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70 md:w-64"
             />
             <button
@@ -589,7 +589,7 @@ const AdminInventoryManager: React.FC = () => {
                 onChange={(e) => setFilterWarehouse(e.target.value)}
                 className="w-full rounded-lg border border-[var(--color-secondary)] bg-[var(--color-white)] px-3 py-2 text-sm text-[var(--color-sidebar)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70 md:w-56"
               >
-                <option value="">All Store</option>
+                <option value="">All Stores</option>
                 {warehouses.map((w) => (
                   <option
                     key={w.stableKey}
@@ -942,7 +942,7 @@ const AdminInventoryManager: React.FC = () => {
 
                       <div>
                         <label className="text-xs font-medium text-[var(--color-sidebar)]">
-                          Warehouse
+                          Store
                         </label>
                         <select
                           value={form.warehouseId}
@@ -955,7 +955,7 @@ const AdminInventoryManager: React.FC = () => {
                           className="mt-1 w-full rounded-lg border border-[var(--color-secondary)] bg-[var(--color-neutral)] px-3 py-2 text-sm text-[var(--color-sidebar)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70"
                         >
                           <option value="">
-                            Choose warehouse
+                            Choose store
                           </option>
                           {warehouses.map((w) => (
                             <option

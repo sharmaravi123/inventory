@@ -281,7 +281,7 @@ export default function WarehouseReportsPage({
             Store Reports
           </h1>
           <p className="text-xs text-slate-500">
-            Orders, payments, drivers, and inventory for your warehouse(s)
+            Orders, payments, drivers, and inventory for your store(s)
           </p>
         </div>
 
@@ -364,7 +364,7 @@ export default function WarehouseReportsPage({
         <div className="rounded-xl border bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold flex items-center gap-1">
             <Package className="h-4 w-4" />
-            Products & Warehouses
+            Products & Stores
           </p>
           <div className="mt-3 grid grid-cols-2">
             <div>
@@ -372,7 +372,7 @@ export default function WarehouseReportsPage({
               <p className="text-xl font-semibold">{products.length}</p>
             </div>
             <div>
-              <p className="text-[11px]">Warehouses</p>
+              <p className="text-[11px]">Stores</p>
               <p className="text-xl font-semibold">{warehouseCount}</p>
             </div>
           </div>

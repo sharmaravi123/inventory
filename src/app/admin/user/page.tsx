@@ -233,7 +233,7 @@ export default function CreateUserPage(): JSX.Element {
               Users & Permissions
             </h1>
             <p className="text-sm md:text-base text-[var(--color-muted)] max-w-xl">
-              Create users, assign stored and finely control what each user
+              Create users, assign stores and finely control what each user
               can access across your inventory platform.
             </p>
           </div>
@@ -443,7 +443,7 @@ export default function CreateUserPage(): JSX.Element {
                           onChange={e => changeUserWarehouse(u._id, e.target.value)}
                           className="max-w-[180px] rounded-full border border-[var(--color-border-soft)] bg-[var(--color-neutral)] px-3 py-1 text-xs font-medium text-[var(--color-sidebar)] outline-none"
                         >
-                          <option value="">No warehouse</option>
+                          <option value="">No store</option>
                           {warehouses.map(w => (
                             <option key={w._id} value={w._id}>
                               {w.name}
@@ -512,7 +512,7 @@ export default function CreateUserPage(): JSX.Element {
                       {editingUser ? "Edit user" : "Create user"}
                     </h3>
                     <p className="text-xs text-[var(--color-muted)] mt-1">
-                      Define user identity, map a warehouse and configure fine-grained
+                      Define user identity, map a store and configure fine-grained
                       permissions.
                     </p>
                   </div>
@@ -567,14 +567,14 @@ export default function CreateUserPage(): JSX.Element {
 
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-[var(--color-muted)]">
-                      Warehouse
+                      Store
                     </label>
                     <select
                       value={selectedWarehouseId}
                       onChange={e => setSelectedWarehouseId(e.target.value)}
                       className="w-full rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-neutral)] px-3 py-2 text-sm text-[var(--color-sidebar)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70"
                     >
-                      <option value="">No warehouse</option>
+                      <option value="">No store</option>
                       {warehouses.map(w => (
                         <option key={w._id} value={w._id}>
                           {w.name}

@@ -380,7 +380,7 @@ export default function AdminPurchaseManager() {
                 <p><b>Dealer:</b> ${dealerName}</p>
                 <p><b>Invoice:</b> ${purchaseInvoiceNumber.trim()}</p>
                 <p><b>Date:</b> ${purchaseDate || "-"}</p>
-                <p><b>Warehouse:</b> ${warehouseId}</p>
+                <p><b>Store:</b> ${warehouseId}</p>
                 <p><b>Selected items:</b></p>
                 <ul style="margin:0;padding-left:18px;">${lines.join("")}</ul>
                 <div style="margin-top:10px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">
@@ -775,7 +775,7 @@ export default function AdminPurchaseManager() {
                                 Purchase Orders
                             </h2>
                             <p className="mt-0.5 text-xs text-slate-500">
-                                Detailed breakdown by dealer, warehouse and items
+                                Detailed breakdown by dealer, store and items
                             </p>
                         </div>
                         <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
@@ -947,7 +947,7 @@ export default function AdminPurchaseManager() {
 
                                         <div>
                                             <label className="block text-sm font-semibold text-slate-700 mb-3">
-                                                Warehouse *
+                                                Store *
                                             </label>
                                             <select
                                                 value={warehouseId}
@@ -955,7 +955,7 @@ export default function AdminPurchaseManager() {
                                                 className="w-full p-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                                 required
                                             >
-                                                <option value="">Select Warehouse</option>
+                                                <option value="">Select Store</option>
                                                 {warehouses.map((warehouse: any) => (
                                                     <option key={warehouse?._id} value={warehouse?._id}>
                                                         {warehouse?.name}

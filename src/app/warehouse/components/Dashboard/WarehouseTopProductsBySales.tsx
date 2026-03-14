@@ -125,10 +125,10 @@ export default function WarehouseTopProductsBySales({
   return (
     <div className="w-full">
       <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-        Top 5 Products – This Warehouse
+        Top 5 Products – This Store
       </h2>
       <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
-        Performance of top products this month for this warehouse.
+        Performance of top products this month for this store.
       </p>
 
       <div className="w-full h-56 sm:h-64">
@@ -138,7 +138,7 @@ export default function WarehouseTopProductsBySales({
           </div>
         ) : chartData.length === 0 ? (
           <div className="flex items-center justify-center h-full text-xs sm:text-sm text-gray-400">
-            No sales data found for this warehouse
+            No sales data found for this store
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">

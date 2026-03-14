@@ -40,7 +40,7 @@ const Topbar: React.FC = () => {
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-[var(--text-muted)]" />
             <input
               type="text"
-              placeholder="Search Products, Orders, Warehouses..."
+              placeholder="Search Products, Orders, Stores..."
               className="pl-9 pr-4 py-2 text-sm rounded-md border border-[var(--border-color)] w-full focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
             />
           </div> */}

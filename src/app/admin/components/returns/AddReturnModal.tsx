@@ -121,7 +121,7 @@ export default function AddReturnModal({
         const data = (await res.json()) as { warehouses: Warehouse[] };
         setWarehouses(data.warehouses ?? []);
       } catch {
-        setWarehousesError("Failed to load warehouses.");
+        setWarehousesError("Failed to load stores.");
       }
     };
 
@@ -446,7 +446,7 @@ export default function AddReturnModal({
         {step === 2 && selectedBill && (
           <div className="space-y-3 text-sm">
             <p className="text-xs text-slate-500">
-              Step 2 – Enter return quantities and warehouse.
+              Step 2 – Enter return quantities and store.
             </p>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
@@ -495,7 +495,7 @@ export default function AddReturnModal({
                       Return Loose
                     </th>
                     <th className="border-b px-2 py-1 text-left">
-                      Return WH
+                      Return Store
                     </th>
                     <th className="border-b px-2 py-1 text-right">
                       Amount
@@ -517,7 +517,7 @@ export default function AddReturnModal({
                             <span>{line.productName}</span>
                             {line.warehouseName && (
                               <span className="text-[10px] text-slate-500">
-                                Bill WH: {line.warehouseName}
+                                Bill Store: {line.warehouseName}
                               </span>
                             )}
                           </div>
@@ -571,7 +571,7 @@ export default function AddReturnModal({
                         <td className="border-b px-2 py-1 text-left align-top">
                           {warehouses.length === 0 ? (
                             <span className="text-[10px] text-slate-500">
-                              Same as bill warehouse
+                              Same as bill store
                             </span>
                           ) : (
                             <select
@@ -590,7 +590,7 @@ export default function AddReturnModal({
                               className="w-32 rounded border border-slate-300 px-1 py-0.5"
                             >
                               <option value="">
-                                Select warehouse
+                                Select store
                               </option>
                               {warehouses.map((w) => (
                                 <option key={w._id} value={w._id}>
