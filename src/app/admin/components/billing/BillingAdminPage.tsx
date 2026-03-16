@@ -75,6 +75,9 @@ export type Totals = {
   totalItemsCount: number;
   totalBeforeTax: number;
   totalTax: number;
+  roundOff: number;
+  autoRoundOff: number;
+  autoGrandTotal: number;
   grandTotal: number;
   discountTotal: number,
 };
@@ -150,6 +153,7 @@ export default function BillingAdminPage() {
   const [payment, setPayment] =
     useState<CreateBillPaymentInput>(initialPayment);
   const [billDate, setBillDate] = useState(todayISO());
+  const [manualRoundOffTarget, setManualRoundOffTarget] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [billSearch, setBillSearch] = useState("");
   const [billForEdit, setBillForEdit] = useState<Bill>();
@@ -358,14 +362,29 @@ export default function BillingAdminPage() {
     });
 
 
+    const autoGrandTotal = roundGrandTotal(total);
+    const autoRoundOff =
+      Math.round((autoGrandTotal - total + Number.EPSILON) * 100) / 100;
+    const roundOff =
+      manualRoundOffTarget === null
+        ? autoRoundOff
+        : Math.round((manualRoundOffTarget - total + Number.EPSILON) * 100) / 100;
+    const grandTotal =
+      manualRoundOffTarget === null
+        ? Math.round((total + roundOff + Number.EPSILON) * 100) / 100
+        : Math.round((manualRoundOffTarget + Number.EPSILON) * 100) / 100;
+
     return {
       totalItemsCount: count,
       totalBeforeTax: before,
       totalTax: tax,
-      grandTotal: roundGrandTotal(total),
+      roundOff,
+      autoRoundOff,
+      autoGrandTotal,
+      grandTotal,
       discountTotal,
     };
-  }, [items]);
+  }, [items, manualRoundOffTarget]);
 
   const formatMoney = useCallback((value: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -462,6 +481,7 @@ export default function BillingAdminPage() {
             <p><b>Before Tax:</b> ${formatMoney(summaryTotals.totalBeforeTax)}</p>
             <p><b>Tax:</b> ${formatMoney(summaryTotals.totalTax)}</p>
             <p><b>Discount:</b> ${formatMoney(summaryTotals.discountTotal)}</p>
+            <p><b>Round Off:</b> ${formatMoney(summaryTotals.roundOff)}</p>
             <p><b>Grand Total:</b> ${formatMoney(summaryTotals.grandTotal)}</p>
           </div>
         </div>
@@ -528,6 +548,7 @@ export default function BillingAdminPage() {
         };
       }),
       payment,
+      roundOff: totals.roundOff,
     };
 
     const confirm = await Swal.fire({
@@ -621,6 +642,7 @@ export default function BillingAdminPage() {
         };
       }),
       payment,
+      roundOff: totals.roundOff,
     };
 
     const confirm = await Swal.fire({
@@ -668,6 +690,9 @@ export default function BillingAdminPage() {
   const loadBillForEdit = (bill: Bill) => {
     setBillForEdit(bill);
     setShowForm(true);
+    setManualRoundOffTarget(
+      typeof bill.grandTotal === "number" ? bill.grandTotal : null
+    );
 
     setCustomer({
       _id: bill.customerInfo.customer,
@@ -734,6 +759,7 @@ export default function BillingAdminPage() {
     setSelectedCustomerId("");
     setCustomerSavedPrices({});
     setBillDate(todayISO());
+    setManualRoundOffTarget(null);
     setBillForEdit(undefined);
   };
 
@@ -778,6 +804,8 @@ export default function BillingAdminPage() {
             setItems={setItems}
             payment={payment}
             setPayment={setPayment}
+            manualRoundOffTarget={manualRoundOffTarget}
+            setManualRoundOffTarget={setManualRoundOffTarget}
             customerSearch={customerSearch}
             setCustomerSearch={setCustomerSearch}
             selectedCustomerId={selectedCustomerId}

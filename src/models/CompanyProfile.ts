@@ -25,11 +25,11 @@ const CompanyProfileSchema = new Schema<ICompanyProfile>(
     phone: { type: String, required: true },
     gstin: { type: String, required: true },
 
-    bankName: { type: String, required: true },
-    accountHolder: { type: String, required: true },
-    accountNumber: { type: String, required: true },
-    ifscCode: { type: String, required: true },
-    branch: { type: String, required: true },
+    bankName: { type: String, required: false, default: "" },
+    accountHolder: { type: String, required: false, default: "" },
+    accountNumber: { type: String, required: false, default: "" },
+    ifscCode: { type: String, required: false, default: "" },
+    branch: { type: String, required: false, default: "" },
   },
   { timestamps: true }
 );

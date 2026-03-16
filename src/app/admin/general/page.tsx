@@ -175,7 +175,7 @@ export default function GeneralSetting() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Bank Name *
+                    Bank Name
                   </label>
                   <input
                     name="bankName"
@@ -201,7 +201,7 @@ export default function GeneralSetting() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Account Holder Name *
+                    Account Holder Name
                   </label>
                   <input
                     name="accountHolder"
@@ -214,7 +214,7 @@ export default function GeneralSetting() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Account Number *
+                    Account Number
                   </label>
                   <input
                     name="accountNumber"
@@ -227,7 +227,7 @@ export default function GeneralSetting() {
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    IFSC Code *
+                    IFSC Code
                   </label>
                   <input
                     name="ifscCode"

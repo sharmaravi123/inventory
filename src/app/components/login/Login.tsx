@@ -32,6 +32,38 @@ export default function LoginPage() {
         }, [dispatch]);
   const router = useRouter();
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const decodeJwtPayload = (token: string): { role?: string } | null => {
+      const parts = token.split(".");
+      if (parts.length < 2) return null;
+      try {
+        const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const padded = base64.padEnd(
+          base64.length + ((4 - (base64.length % 4)) % 4),
+          "="
+        );
+        const json = atob(padded);
+        return JSON.parse(json) as { role?: string };
+      } catch {
+        return null;
+      }
+    };
+
+    const storedToken =
+      window.localStorage.getItem("adminToken") ??
+      window.localStorage.getItem("token");
+
+    if (!storedToken) return;
+
+    const payload = decodeJwtPayload(storedToken);
+    const role = payload?.role?.toLowerCase();
+    if (role === "admin") router.replace("/admin");
+    if (role === "warehouse") router.replace("/warehouse");
+    if (role === "driver") router.replace("/driver");
+  }, [router]);
+
   const handleLogin = async () => {
     if (!email || !password || submitting) {
       return;

@@ -17,7 +17,6 @@ import { fetchDrivers } from "@/store/driverSlice";
 import { Search, Calendar } from "lucide-react";
 import Swal from "sweetalert2";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
-import { roundGrandTotal } from "@/lib/rounding";
 
 /* ================= TYPES ================= */
 
@@ -154,13 +153,19 @@ export default function OrdersPage() {
       return `${day}-${month}-${year}`;
     };
 
+    const getMonthRangeLabel = (value: Date) => {
+      const start = new Date(value.getFullYear(), value.getMonth(), 1);
+      const end = new Date(value.getFullYear(), value.getMonth() + 1, 0);
+      return `${formatDateShort(start)} to ${formatDateShort(end)}`;
+    };
+
     const reportPeriod =
       filterType === "custom" && fromDate && toDate
         ? `${formatDateShort(new Date(fromDate))} to ${formatDateShort(new Date(toDate))}`
         : filterType === "thisMonth"
-          ? "This Month"
+          ? getMonthRangeLabel(new Date())
           : filterType === "lastMonth"
-            ? "Last Month"
+            ? getMonthRangeLabel(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1))
             : "All Time";
 
     const companyState = (companyProfile?.gstin || "").slice(0, 2);
@@ -174,14 +179,17 @@ export default function OrdersPage() {
           : true;
 
       const totalTax = Number(bill.totalTax ?? 0);
-      const grossTotal = roundGrandTotal(Number(bill.grandTotal ?? 0));
+      const grossTotal = Number(bill.grandTotal ?? 0);
       const salesAmount = Number(bill.totalBeforeTax ?? 0);
 
       const cgst = isIntraState ? totalTax / 2 : 0;
       const sgst = isIntraState ? totalTax / 2 : 0;
       const igst = isIntraState ? 0 : totalTax;
 
-      const roundValue = grossTotal - (salesAmount + cgst + sgst + igst);
+      const roundValue =
+        typeof bill.roundOff === "number"
+          ? bill.roundOff
+          : grossTotal - (salesAmount + cgst + sgst + igst);
 
       const uniqueRates = Array.from(
         new Set(

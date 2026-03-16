@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Bill, BillItemForClient } from "@/store/billingApi";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { fetchProducts, ProductType } from "@/store/productSlice";
@@ -9,7 +9,6 @@ import { fetchCompanyProfile } from "@/store/companyProfileSlice";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import Swal from "sweetalert2";
-import { roundGrandTotal } from "@/lib/rounding";
 
 type BillPreviewProps = {
   bill?: Bill;
@@ -92,6 +91,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const invoiceRef = useRef<HTMLDivElement>(null);
+  const [showBankDetails, setShowBankDetails] = useState(true);
   const companyProfile = useAppSelector(
     (state) => state.companyProfile.data
   );
@@ -190,8 +190,20 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
     grossTotal > 0 ? (discountTotal * 100) / grossTotal : 0;
   const cgst = (bill.totalTax ?? 0) / 2;
   const sgst = (bill.totalTax ?? 0) / 2;
-  const roundedGrandTotal = roundGrandTotal(bill.grandTotal ?? 0);
+  const finalGrandTotal = Number(bill.grandTotal ?? 0);
+  const round2 = (n: number) =>
+    Math.round((n + Number.EPSILON) * 100) / 100;
+  const roundOffValue =
+    typeof bill.roundOff === "number"
+      ? bill.roundOff
+      : round2(finalGrandTotal - ((bill.totalBeforeTax ?? 0) + (bill.totalTax ?? 0)));
   const fyLabel = getFinancialYearLabel(bill.billDate);
+  const bankDetailsMissing =
+    !company.accountHolder &&
+    !company.accountNumber &&
+    !company.ifsc &&
+    !company.bankName &&
+    !company.branch;
 
   const handlePrint = () => window.print();
   const generatePDF = async () => {
@@ -257,7 +269,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
         @media print {
           @page {
             size: A4;
-            margin: 10mm;
+            margin: 0;
           }
 
           html,
@@ -283,6 +295,12 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
         <div className="mb-2 flex justify-between print-only-hide">
           <b>Invoice Preview</b>
           <div className="flex gap-2">
+            <button
+              onClick={() => setShowBankDetails((prev) => !prev)}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400"
+            >
+              Bank Details: {showBankDetails ? "On" : "Off"}
+            </button>
             <button
               onClick={handlePrint}
               className="rounded-md bg-blue-600 px-4 py-1.5 text-white font-medium shadow hover:bg-blue-700 transition"
@@ -434,7 +452,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
           <div className="mt-2 grid grid-cols-2 gap-2">
             <div className="border border-black p-2">
               <b>Total Amount (in words)</b>
-              <div>{numberToINRWords(roundedGrandTotal)}</div>
+              <div>{numberToINRWords(finalGrandTotal)}</div>
             </div>
             <div className="border border-black p-2">
               <div className="flex justify-between">
@@ -455,31 +473,49 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                 <span>SGST</span>
                 <span>{sgst.toFixed(2)}</span>
               </div>
+              <div className="flex justify-between">
+                <span>Round off</span>
+                <span>{roundOffValue.toFixed(2)}</span>
+              </div>
               <div className="mt-1 flex justify-between border-t border-black pt-1 font-bold">
                 <span>Grand Total</span>
-                <span>{roundedGrandTotal.toFixed(2)}</span>
+                <span>{finalGrandTotal.toFixed(2)}</span>
               </div>
             </div>
           </div>
 
           {/* BANK */}
-          <div className="mt-2 grid grid-cols-2 border border-black">
-            <div className="border-r border-black p-2">
-              <b>Bank Details</b>
-              <div>Name: {company.accountHolder}</div>
-              <div>A/C No: {company.accountNumber}</div>
-              <div>IFSC: {company.ifsc}</div>
-              <div>
-                Bank: {company.bankName}
-                {company.branch && `, ${company.branch}`}
+          {showBankDetails ? (
+            <div className="mt-2 grid grid-cols-2 border border-black">
+              <div className="border-r border-black p-2">
+                <b>Bank Details</b>
+                {bankDetailsMissing ? (
+                  <div className="mt-1">404 Not Found</div>
+                ) : (
+                  <>
+                    <div>Name: {company.accountHolder || "-"}</div>
+                    <div>A/C No: {company.accountNumber || "-"}</div>
+                    <div>IFSC: {company.ifsc || "-"}</div>
+                    <div>
+                      Bank: {company.bankName || "-"}
+                      {company.branch && `, ${company.branch}`}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="p-2">
+                <b>Terms & Conditions</b>
+                <div>1. Goods once sold will not be taken back.</div>
+                <div>2. Subject to local jurisdiction.</div>
               </div>
             </div>
-            <div className="p-2">
+          ) : (
+            <div className="mt-2 border border-black p-2">
               <b>Terms & Conditions</b>
               <div>1. Goods once sold will not be taken back.</div>
               <div>2. Subject to local jurisdiction.</div>
             </div>
-          </div>
+          )}
 
           <div className="mt-2 text-center">
             This is a computer generated invoice.

@@ -83,6 +83,7 @@ const billSchema = new Schema(
     totalItems: { type: Number, required: true, min: 0 },
     totalBeforeTax: { type: Number, required: true, min: 0 },
     totalTax: { type: Number, required: true, min: 0 },
+    roundOff: { type: Number, required: true, default: 0 },
     grandTotal: { type: Number, required: true, min: 0 },
 
     payment: { type: paymentSchema, required: true },

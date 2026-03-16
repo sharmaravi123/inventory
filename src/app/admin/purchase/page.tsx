@@ -581,6 +581,19 @@ export default function AdminPurchaseManager() {
     };
 
     const getDateRangeLabel = () => {
+        const now = new Date();
+        if (filterType === "thisMonth") {
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            return `${formatDateShort(start)} to ${formatDateShort(end)}`;
+        }
+
+        if (filterType === "lastMonth") {
+            const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+            return `${formatDateShort(lastStart)} to ${formatDateShort(lastEnd)}`;
+        }
+
         if (filterType === "custom" && fromDate && toDate) {
             const from = new Date(fromDate);
             const to = new Date(toDate);

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import BillModel from "@/models/Bill";
-import { roundGrandTotal } from "@/lib/rounding";
 
 const toNum = (v: unknown, fb = 0) => {
   const n = Number(v);
@@ -34,7 +33,7 @@ export async function PATCH(
     const card = toNum(body.payment?.cardAmount);
 
     const collected = round2(cash + upi + card);
-    const grandTotal = roundGrandTotal(Number(bill.grandTotal || 0));
+    const grandTotal = Number(bill.grandTotal || 0);
 
     if (collected - grandTotal > 0.01) {
       return NextResponse.json(

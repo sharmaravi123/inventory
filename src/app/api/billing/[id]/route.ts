@@ -37,6 +37,7 @@ type RequestBody = {
   items: IncomingItem[];
   payment: PaymentInput;
   billDate: string;
+  roundOff?: number;
 };
 
 /* ---------------------------------------------
@@ -47,6 +48,11 @@ const toNum = (v: unknown, fb = 0) =>
   Number.isFinite(Number(v)) ? Number(v) : fb;
 const round2 = (n: number) =>
   Math.round((n + Number.EPSILON) * 100) / 100;
+const resolveRoundOff = (total: number, roundOffInput?: unknown) => {
+  const n = Number(roundOffInput);
+  if (Number.isFinite(n)) return round2(n);
+  return round2(roundGrandTotal(total) - total);
+};
 
 function validatePayment(p: PaymentInput, total: number) {
   const cash = toNum(p.cashAmount);
@@ -200,14 +206,16 @@ export async function PUT(
       return billItem;
     });
 
-    const roundedGrand = roundGrandTotal(grand);
-    const pay = validatePayment(body.payment, roundedGrand);
+    const roundOff = resolveRoundOff(grand, body.roundOff);
+    const finalGrandTotal = round2(grand + roundOff);
+    const pay = validatePayment(body.payment, finalGrandTotal);
 
     bill.set("items", newItems);
     bill.totalItems = totalItems;
     bill.totalBeforeTax = before;
     bill.totalTax = tax;
-    bill.grandTotal = roundedGrand;
+    bill.roundOff = roundOff;
+    bill.grandTotal = finalGrandTotal;
     bill.payment = pay;
 
     bill.amountCollected = round2(
@@ -216,7 +224,7 @@ export async function PUT(
 
     bill.balanceAmount = Math.max(
       0,
-      round2(roundedGrand - bill.amountCollected)
+      round2(finalGrandTotal - bill.amountCollected)
     );
     bill.billDate = new Date(body.billDate);
     bill.updatedAt = new Date();

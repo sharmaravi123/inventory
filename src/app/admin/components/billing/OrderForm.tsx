@@ -22,6 +22,8 @@ interface OrderFormProps {
   setPayment: React.Dispatch<
     React.SetStateAction<CreateBillPaymentInput>
   >;
+  manualRoundOffTarget: number | null;
+  setManualRoundOffTarget: (value: number | null) => void;
   customerSearch: string;
   setCustomerSearch: (search: string) => void;
   selectedCustomerId: string;
@@ -59,6 +61,8 @@ export default function OrderForm({
   setItems,
   payment,
   setPayment,
+  manualRoundOffTarget,
+  setManualRoundOffTarget,
   customerSearch,
   setCustomerSearch,
   selectedCustomerId,
@@ -121,6 +125,8 @@ export default function OrderForm({
 
   const cgst = totals.totalTax / 2;
   const sgst = totals.totalTax / 2;
+  const roundOffTargetValue =
+    manualRoundOffTarget === null ? "" : manualRoundOffTarget;
 
   const customers =
     customerSearchResult?.customers ??
@@ -915,8 +921,27 @@ export default function OrderForm({
                   <span>₹{totals.totalTax.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-slate-700">
-                  <span>Round</span>
-                  <span>₹0.00</span>
+                  <span>Round to</span>
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step={0.01}
+                      value={roundOffTargetValue}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (!raw.trim()) {
+                          setManualRoundOffTarget(null);
+                          return;
+                        }
+                        setManualRoundOffTarget(safeNum(raw));
+                      }}
+                      placeholder={totals.autoGrandTotal.toFixed(2)}
+                      className="w-24 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    />
+                    <span className="text-[11px] text-slate-500">
+                      Auto: ₹{totals.autoGrandTotal.toFixed(2)}
+                    </span>
+                  </span>
                 </div>
                 <div className="border-t border-sky-200 pt-2 mt-1">
                   <div className="flex justify-between text-base font-semibold text-slate-900">

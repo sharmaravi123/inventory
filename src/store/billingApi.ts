@@ -152,6 +152,7 @@ export type Bill = {
   totalItems: number;
   totalBeforeTax: number;
   totalTax: number;
+  roundOff: number;
   grandTotal: number;
   taxAmount: number;
 
@@ -244,6 +245,7 @@ export type CreateBillPayload = {
   billDate: string;
   items: BillItemInput[];
   payment: CreateBillPaymentInput;
+  roundOff?: number;
   driverId?: string;
   vehicleNumber?: string;
 };

@@ -1,6 +1,9 @@
 // src/app/page.tsx (Server Component)
 
 import LoginPage from "./components/login/Login";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { verifyAppToken } from "@/lib/jwt";
 
 type CompanyProfile = {
   name?: string;
@@ -38,6 +41,25 @@ export async function generateMetadata() {
 
 /* ================= PAGE ================= */
 
-export default function Page() {
+export default async function Page() {
+  const cookieStore = await cookies();
+  const token =
+    cookieStore.get("adminToken")?.value ??
+    cookieStore.get("token")?.value ??
+    null;
+
+  if (token) {
+    try {
+      const payload = verifyAppToken(token);
+      const role = payload?.role?.toLowerCase() ?? "";
+
+      if (role === "admin") redirect("/admin");
+      if (role === "warehouse") redirect("/warehouse");
+      if (role === "driver") redirect("/driver");
+    } catch {
+      // Invalid token, fall through to login page
+    }
+  }
+
   return <LoginPage />;
 }

@@ -48,6 +48,7 @@ export type CreateBillPayload = {
   payment: CreateBillPaymentInput;
   companyGstNumber?: string;
   billDate?: string;
+  roundOff?: number;
 };
 
 const toNum = (v: unknown, fb = 0) => {
@@ -56,6 +57,11 @@ const toNum = (v: unknown, fb = 0) => {
 };
 const round2 = (n: number) =>
   Math.round((n + Number.EPSILON) * 100) / 100;
+const resolveRoundOff = (total: number, roundOffInput?: unknown) => {
+  const n = Number(roundOffInput);
+  if (Number.isFinite(n)) return round2(n);
+  return round2(roundGrandTotal(total) - total);
+};
 
 function validatePayment(
   p: CreateBillPaymentInput | undefined,
@@ -238,8 +244,9 @@ export async function POST(req: NextRequest) {
       return billItem;
     });
 
-    const roundedGrand = roundGrandTotal(grand);
-    const pay = validatePayment(body.payment, roundedGrand);
+    const roundOff = resolveRoundOff(grand, body.roundOff);
+    const finalGrandTotal = round2(grand + roundOff);
+    const pay = validatePayment(body.payment, finalGrandTotal);
     const cust = await upsertCustomer(body.customer);
 
     const overrideItems = body.items.filter((it) => it.overridePriceForCustomer);
@@ -280,7 +287,7 @@ export async function POST(req: NextRequest) {
     const collected = round2(
       toNum(pay.cashAmount) + toNum(pay.upiAmount) + toNum(pay.cardAmount)
     );
-    const balanceAmount = Math.max(0, round2(roundedGrand - collected));
+    const balanceAmount = Math.max(0, round2(finalGrandTotal - collected));
 
     const bill = await BillModel.create({
       invoiceNumber: invoice,
@@ -291,7 +298,8 @@ export async function POST(req: NextRequest) {
       totalItems,
       totalBeforeTax: before,
       totalTax: tax,
-      grandTotal: roundedGrand,
+      roundOff,
+      grandTotal: finalGrandTotal,
       payment: pay,
       amountCollected: collected,
       balanceAmount,
@@ -321,7 +329,7 @@ export async function GET() {
   const bills = await BillModel.find()
     .sort({ createdAt: -1 })
     .select(
-      "invoiceNumber billDate customerInfo items totalItems totalBeforeTax totalTax grandTotal payment driver vehicleNumber amountCollected balanceAmount status createdAt"
+      "invoiceNumber billDate customerInfo items totalItems totalBeforeTax totalTax roundOff grandTotal payment driver vehicleNumber amountCollected balanceAmount status createdAt"
     )
     .lean();
   return NextResponse.json(

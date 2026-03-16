@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
@@ -106,6 +106,7 @@ export default function PurchaseBillPreview({
         (state) => state.companyProfile.data
     );
     const invoiceRef = useRef<HTMLDivElement>(null);
+    const [showBankDetails, setShowBankDetails] = useState(true);
 
     useEffect(() => {
         if (!companyProfile) {
@@ -148,6 +149,12 @@ export default function PurchaseBillPreview({
 
     const cgst = bill.totalTax / 2;
     const sgst = bill.totalTax / 2;
+    const bankDetailsMissing =
+        !company.accountHolder &&
+        !company.accountNumber &&
+        !company.ifsc &&
+        !company.bankName &&
+        !company.branch;
 
     const handlePrint = () => window.print();
     const generatePDF = async () => {
@@ -235,8 +242,14 @@ export default function PurchaseBillPreview({
             {/* PRINT STYLE */}
             <style jsx global>{`
         @media print {
-          @page { size: A4; margin: 10mm; }
+          @page { size: A4; margin: 0; }
           .print-hide { display: none !important; }
+          html,
+          body {
+            margin: 0;
+            padding: 0;
+            background: white;
+          }
         }
       `}</style>
 
@@ -245,6 +258,12 @@ export default function PurchaseBillPreview({
                 <div className="mb-2 flex justify-between print-hide">
                     <b>Purchase Invoice Preview</b>
                     <div className="flex gap-2">
+                        <button
+                            onClick={() => setShowBankDetails((prev) => !prev)}
+                            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-400"
+                        >
+                            Bank Details: {showBankDetails ? "On" : "Off"}
+                        </button>
                         <button onClick={handlePrint} className="bg-blue-600 px-4 py-1.5 text-white rounded">
                             🖨 Print
                         </button>
@@ -379,23 +398,37 @@ export default function PurchaseBillPreview({
                     </div>
 
                     {/* BANK */}
-                    <div className="mt-2 grid grid-cols-2 border border-black">
-                        <div className="border-r border-black p-2">
-                            <b>Bank Details</b>
-                            <div>Name: {company.accountHolder}</div>
-                            <div>A/C No: {company.accountNumber}</div>
-                            <div>IFSC: {company.ifsc}</div>
-                            <div>
-                                Bank: {company.bankName}
-                                {company.branch && `, ${company.branch}`}
+                    {showBankDetails ? (
+                        <div className="mt-2 grid grid-cols-2 border border-black">
+                            <div className="border-r border-black p-2">
+                                <b>Bank Details</b>
+                                {bankDetailsMissing ? (
+                                    <div className="mt-1">404 Not Found</div>
+                                ) : (
+                                    <>
+                                        <div>Name: {company.accountHolder || "-"}</div>
+                                        <div>A/C No: {company.accountNumber || "-"}</div>
+                                        <div>IFSC: {company.ifsc || "-"}</div>
+                                        <div>
+                                            Bank: {company.bankName || "-"}
+                                            {company.branch && `, ${company.branch}`}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            <div className="p-2">
+                                <b>Terms & Conditions</b>
+                                <div>1. Goods once purchased will not be returned.</div>
+                                <div>2. Subject to local jurisdiction.</div>
                             </div>
                         </div>
-                        <div className="p-2">
+                    ) : (
+                        <div className="mt-2 border border-black p-2">
                             <b>Terms & Conditions</b>
                             <div>1. Goods once purchased will not be returned.</div>
                             <div>2. Subject to local jurisdiction.</div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="mt-2 text-center">
                         This is a computer generated purchase invoice.
