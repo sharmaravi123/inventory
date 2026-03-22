@@ -35,7 +35,9 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const decodeJwtPayload = (token: string): { role?: string } | null => {
+    const decodeJwtPayload = (
+      token: string
+    ): { role?: string; exp?: number } | null => {
       const parts = token.split(".");
       if (parts.length < 2) return null;
       try {
@@ -45,7 +47,7 @@ export default function LoginPage() {
           "="
         );
         const json = atob(padded);
-        return JSON.parse(json) as { role?: string };
+        return JSON.parse(json) as { role?: string; exp?: number };
       } catch {
         return null;
       }
@@ -58,7 +60,21 @@ export default function LoginPage() {
     if (!storedToken) return;
 
     const payload = decodeJwtPayload(storedToken);
-    const role = payload?.role?.toLowerCase();
+
+    const isExpired =
+      typeof payload?.exp === "number" &&
+      payload.exp * 1000 <= Date.now();
+
+    if (!payload || isExpired) {
+      // stale/invalid token: clear local state so we don't redirect-loop
+      window.localStorage.removeItem("adminToken");
+      window.localStorage.removeItem("token");
+      window.localStorage.removeItem("admin_token");
+      window.localStorage.removeItem("admin_role");
+      return;
+    }
+
+    const role = payload.role?.toLowerCase();
     if (role === "admin") router.replace("/admin");
     if (role === "warehouse") router.replace("/warehouse");
     if (role === "driver") router.replace("/driver");
