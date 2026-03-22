@@ -23,6 +23,7 @@ type EnhancedLine = BillItemForClient & {
   totalPieces: number;
   grossAmount: number;
   discountAmount: number;
+  taxableAmount: number;
 };
 
 /* ================== UTILS ================== */
@@ -177,6 +178,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
         totalPieces,
         grossAmount: base,
         discountAmount: discount,
+        taxableAmount: lineSubTotal,
         lineTotal: lineSubTotal + lineTax,
       };
     });
@@ -376,11 +378,12 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                   "S.N.",
                   "ITEMS",
                   "HSN",
-                  "QTY",
-                  "RATE",
-                  "TAX %",
+                  "BOX",
+                  "PCS/BOX",
+                  "TOTAL ITEM",
                   "DISC.",
-                  "AMOUNT",
+                  "TAX %",
+                  "TAXABLE",
                 ].map((h) => (
                   <th
                     key={h}
@@ -403,35 +406,14 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                   </td>
 
                   <td className="border border-black p-1">
-                    {l.quantityBoxes > 0 && l.quantityLoose > 0 && (
-                      <>
-                        {l.quantityBoxes} box / {l.quantityLoose} loose
-                      </>
-                    )}
-
-                    {l.quantityBoxes > 0 && l.quantityLoose === 0 && (
-                      <>
-                        {l.quantityBoxes} box
-                      </>
-                    )}
-
-                    {l.quantityLoose > 0 && l.quantityBoxes === 0 && (
-                      <>
-                        {l.quantityLoose} loose
-                      </>
-                    )}
-
-                    {/* <div className="text-[10px] text-slate-600">
-                      ({l.totalPieces} pcs)
-                    </div> */}
-                  </td>
-
-
-                  <td className="border border-black p-1">
-                    {l.sellingPrice?.toFixed(2)}
+                    {l.quantityBoxes ?? 0}
                   </td>
                   <td className="border border-black p-1">
-                    {l.taxPercent?.toFixed(2)}%
+                    {l.itemsPerBox ?? 0}
+                  </td>
+                  <td className="border border-black p-1">
+                    {l.totalPieces}
+                    {l.quantityLoose > 0 ? ` (${l.quantityLoose} loose)` : ""}
                   </td>
                   <td className="border border-black p-1">
                     {l.discountType === "PERCENT"
@@ -441,7 +423,10 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
                         : `0.00`}
                   </td>
                   <td className="border border-black p-1">
-                    {l.lineTotal?.toFixed(2)}
+                    {l.taxPercent?.toFixed(2)}%
+                  </td>
+                  <td className="border border-black p-1">
+                    {l.taxableAmount?.toFixed(2)}
                   </td>
                 </tr>
               ))}

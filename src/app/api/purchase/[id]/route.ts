@@ -161,12 +161,8 @@ export async function PUT(
           : 1;
 
       const totalQty = item.boxes * perBox + item.looseItems;
-      const taxPercent = Math.max(0, Number(item.taxPercent || 5));
-      const pricePerPieceWithTax = Number(item.purchasePrice || 0);
-      const pricePerPieceWithoutTax =
-        taxPercent > 0
-          ? pricePerPieceWithTax / (1 + taxPercent / 100)
-          : pricePerPieceWithTax;
+      const taxPercent = Math.max(0, Number(item.taxPercent ?? 5));
+      const pricePerPieceWithoutTax = Number(item.purchasePrice || 0);
       const grossAmount = totalQty * pricePerPieceWithoutTax;
       const discountPercent = Math.max(
         0,

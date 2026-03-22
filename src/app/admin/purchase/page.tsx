@@ -207,12 +207,10 @@ export default function AdminPurchaseManager() {
 
     const calcItem = useCallback((it: any, perBox: number) => {
         const totalPieces = Number(it.boxes || 0) * perBox + Number(it.looseItems || 0);
-        const taxPercent = DEFAULT_GST_PERCENT;
-        const pricePerPieceWithTax = Number(it.purchasePrice || 0);
-        const pricePerPieceWithoutTax =
-            taxPercent > 0
-                ? pricePerPieceWithTax / (1 + taxPercent / 100)
-                : pricePerPieceWithTax;
+        const taxPercent = Math.max(0, Number(it.taxPercent ?? DEFAULT_GST_PERCENT));
+        const pricePerPieceWithoutTax = Number(it.purchasePrice || 0);
+        const pricePerPieceWithTax =
+            pricePerPieceWithoutTax * (1 + taxPercent / 100);
         const perBoxPriceWithoutTax = pricePerPieceWithoutTax * perBox;
         const grossAmount = totalPieces * pricePerPieceWithoutTax;
         const discountPercent = Math.max(0, Math.min(100, Number(it.discountPercent ?? 0)));
