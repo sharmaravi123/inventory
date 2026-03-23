@@ -87,7 +87,7 @@ export const userLogin = createAsyncThunk<
 export const logoutUser = createAsyncThunk("auth/logoutUser", async () => {
   const res = await fetch("/api/auth/logout", {
     method: "POST",
-    credentials: "same-origin",
+    credentials: "include",
   });
   if (!res.ok) {
     throw new Error("Logout failed");

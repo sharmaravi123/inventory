@@ -60,9 +60,7 @@ const sections: Section[] = [
     label: "Settings",
     items: [
       { href: "/admin/general", label: "General" },
-      { href: "/admin/settings/tax", label: "Tax & HSN" },
-      { href: "/admin/settings/notifications", label: "Notifications" },
-      { href: "/admin/settings/backup", label: "Backup & Restore" },
+      { href: "/admin/settings/password", label: "Password Manage" },
     ],
   },
 ];
@@ -124,13 +122,14 @@ const Sidebar: React.FC = () => {
     } catch {}
 
     try {
+      localStorage.removeItem("adminToken");
       localStorage.removeItem("admin_token");
       localStorage.removeItem("admin_role");
       localStorage.removeItem("token");
       localStorage.removeItem("role");
     } catch {}
 
-    router.replace("/");
+    window.location.href = "/";
   };
 
   const linkClass = (href: string) =>
