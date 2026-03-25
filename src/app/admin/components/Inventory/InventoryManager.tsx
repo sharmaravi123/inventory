@@ -91,6 +91,17 @@ const AdminInventoryManager: React.FC = () => {
     [rawProducts]
   );
 
+  const compareText = (a: string, b: string) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" });
+
+  const sortedProducts = useMemo(
+    () =>
+      [...products].sort((a, b) =>
+        compareText(a.name ?? "", b.name ?? "")
+      ),
+    [products]
+  );
+
   const warehouses = useMemo(
     () =>
       rawWarehouses.map((w, i) => ({
@@ -295,6 +306,19 @@ const AdminInventoryManager: React.FC = () => {
     extractId,
     getProductPerBox,
   ]);
+
+  const sortedFilteredItems = useMemo(
+    () =>
+      [...filteredItems].sort((a, b) => {
+        const nameCmp = compareText(
+          getProductName(a),
+          getProductName(b)
+        );
+        if (nameCmp !== 0) return nameCmp;
+        return compareText(getWarehouseName(a), getWarehouseName(b));
+      }),
+    [filteredItems, getProductName, getWarehouseName]
+  );
 
   const totalItemsCount = useMemo(
     () =>
@@ -606,7 +630,7 @@ const AdminInventoryManager: React.FC = () => {
                 className="w-full rounded-lg border border-[var(--color-secondary)] bg-[var(--color-white)] px-3 py-2 text-sm text-[var(--color-sidebar)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70 md:w-56"
               >
                 <option value="">All products</option>
-                {products.map((p) => (
+                {sortedProducts.map((p) => (
                   <option
                     key={p.stableKey}
                     value={String(p._id ?? p.id)}
@@ -726,7 +750,7 @@ const AdminInventoryManager: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredItems.map((inv) => {
+                    sortedFilteredItems.map((inv) => {
                       const prodName = getProductName(inv);
                       const whName = getWarehouseName(inv);
                       const keyId =
@@ -929,7 +953,7 @@ const AdminInventoryManager: React.FC = () => {
                           <option value="">
                             Choose product
                           </option>
-                          {products.map((p) => (
+                          {sortedProducts.map((p) => (
                             <option
                               key={p.stableKey}
                               value={String(p._id ?? p.id)}

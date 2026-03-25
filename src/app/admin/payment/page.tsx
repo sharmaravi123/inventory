@@ -375,12 +375,17 @@ export default function PaymentsDashboardPage() {
       );
     }
 
-    // sort by period orders desc, then total due desc
+    // sort A-Z by display name (shop name first, then customer name)
     arr.sort((a, b) => {
-      if (b.periodOrders !== a.periodOrders) {
-        return b.periodOrders - a.periodOrders;
-      }
-      return b.totalDue - a.totalDue;
+      const nameA = (a.shopName || a.name || "").trim();
+      const nameB = (b.shopName || b.name || "").trim();
+      const nameCmp = nameA.localeCompare(nameB, undefined, {
+        sensitivity: "base",
+      });
+      if (nameCmp !== 0) return nameCmp;
+      return (a.phone || "").localeCompare(b.phone || "", undefined, {
+        sensitivity: "base",
+      });
     });
 
     return arr;

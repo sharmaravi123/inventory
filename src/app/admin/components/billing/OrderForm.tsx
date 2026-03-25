@@ -92,6 +92,16 @@ export default function OrderForm({
     ]);
   }, [setItems]);
 
+  const sortedBillingProducts = useMemo(
+    () =>
+      [...billingProducts].sort((a, b) =>
+        a.productName.localeCompare(b.productName, undefined, {
+          sensitivity: "base",
+        })
+      ),
+    [billingProducts]
+  );
+
   const removeItem = useCallback(
     (id: string) => {
       setItems((prev) => prev.filter((item) => item.id !== id));
@@ -112,15 +122,15 @@ export default function OrderForm({
 
   const getFilteredProducts = useCallback(
     (search: string): BillingProductOption[] => {
-      if (!search.trim()) return billingProducts;
+      if (!search.trim()) return sortedBillingProducts;
       const lower = search.toLowerCase();
-      return billingProducts
+      return sortedBillingProducts
         .filter((p) =>
           p.productName.toLowerCase().includes(lower)
         )
         .slice(0, 40);
     },
-    [billingProducts]
+    [sortedBillingProducts]
   );
 
   const cgst = totals.totalTax / 2;
@@ -474,7 +484,7 @@ export default function OrderForm({
 
                           >
                             <option value="">Select product...</option>
-                            {billingProducts.map((p) => (
+                            {sortedBillingProducts.map((p) => (
                               <option key={p.id} value={p.id}>
                                 {p.productName} ({p.warehouseName})
                               </option>

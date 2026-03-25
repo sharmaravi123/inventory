@@ -9,6 +9,8 @@ interface Props {
   setSearch: (val: string) => void;
   categoryId: string;
   setCategoryId: React.Dispatch<React.SetStateAction<string>>;
+  sortOrder: "asc" | "desc";
+  setSortOrder: React.Dispatch<React.SetStateAction<"asc" | "desc">>;
 }
 
 export default function SearchAndFilters({
@@ -16,6 +18,8 @@ export default function SearchAndFilters({
   setSearch,
   categoryId,
   setCategoryId,
+  sortOrder,
+  setSortOrder,
 }: Props) {
   const { categories } = useSelector((state: RootState) => state.category);
 
@@ -39,6 +43,14 @@ export default function SearchAndFilters({
               {c.name}
             </option>
           ))}
+      </select>
+      <select
+        value={sortOrder}
+        onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+        className="w-full rounded-lg border border-[var(--color-neutral)] bg-[var(--color-white)] px-3 py-2 text-sm text-[var(--color-sidebar)] outline-none focus:ring-2 focus:ring-[var(--color-primary)]/70 md:w-1/3"
+      >
+        <option value="asc">Sort: A to Z</option>
+        <option value="desc">Sort: Z to A</option>
       </select>
     </div>
   );

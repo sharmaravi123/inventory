@@ -766,7 +766,7 @@ export default function BillingAdminPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <header className="sticky top-0 z-30 -mx-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-slate-50/95 px-4 py-3 backdrop-blur border-b border-slate-200">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
               Billing Console

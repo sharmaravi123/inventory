@@ -155,7 +155,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
   const lines: EnhancedLine[] = useMemo(() => {
     if (!bill) return [];
 
-    return bill.items.map((l) => {
+    const mapped = bill.items.map((l) => {
       const totalPieces =
         (l.quantityBoxes ?? 0) * (l.itemsPerBox ?? 1) +
         (l.quantityLoose ?? 0);
@@ -182,6 +182,11 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
         lineTotal: lineSubTotal + lineTax,
       };
     });
+    return mapped.sort((a, b) =>
+      (a.productName ?? "").localeCompare(b.productName ?? "", undefined, {
+        sensitivity: "base",
+      })
+    );
   }, [bill]);
 
   if (!bill) return null;

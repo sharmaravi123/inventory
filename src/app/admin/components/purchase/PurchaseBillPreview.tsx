@@ -134,6 +134,15 @@ export default function PurchaseBillPreview({
         return () => window.removeEventListener("keydown", esc);
     }, [onClose]);
 
+    const sortedItems = useMemo(() => {
+        if (!bill) return [];
+        return [...bill.items].sort((a, b) =>
+            (a.productName ?? "").localeCompare(b.productName ?? "", undefined, {
+                sensitivity: "base",
+            })
+        );
+    }, [bill]);
+
     if (!bill) return null;
     const subtotalWithoutTax = bill.totalBeforeTax;
     const roundedGrandTotal = roundGrandTotal(bill.grandTotal);
@@ -329,7 +338,7 @@ export default function PurchaseBillPreview({
                             </tr>
                         </thead>
                         <tbody>
-                            {bill.items.map((it, i) => {
+                            {sortedItems.map((it, i) => {
                                 const totalPieces = Number(it.totalPieces ?? (it.boxes * it.perBoxItem + it.looseItems));
                                 const taxPercent = Math.max(0, Number(it.taxPercent ?? DEFAULT_GST_PERCENT));
                                 const pricePerPieceWithoutTax = Number(it.purchasePrice || 0);

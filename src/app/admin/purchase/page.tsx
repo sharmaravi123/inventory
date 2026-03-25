@@ -175,6 +175,16 @@ export default function AdminPurchaseManager() {
         [products, normalizeEntityId]
     );
 
+    const sortedProductOptions = useMemo(
+        () =>
+            [...productOptions].sort((a, b) =>
+                a.label.localeCompare(b.label, undefined, {
+                    sensitivity: "base",
+                })
+            ),
+        [productOptions]
+    );
+
     const getProductById = useCallback((id: string) => {
         return productMap.get(normalizeEntityId(id));
     }, [productMap, normalizeEntityId]);
@@ -673,7 +683,7 @@ export default function AdminPurchaseManager() {
         <div className="min-h-screen bg-slate-50 py-4 px-3 sm:px-4 lg:px-6">
             <div className="mx-auto max-w-7xl space-y-5">
                 {/* TOP BAR */}
-                <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <header className="sticky top-0 z-30 -mx-3 sm:-mx-4 lg:-mx-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-slate-50/95 px-3 sm:px-4 lg:px-6 py-3 backdrop-blur border-b border-slate-200">
                     <div>
                         <p className="text-xs font-semibold tracking-wide text-blue-600 uppercase">Purchases</p>
                         <h1 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">
@@ -1031,7 +1041,7 @@ export default function AdminPurchaseManager() {
                                                             Product *
                                                         </label>
                                                         <Select<ProductOption>
-                                                            options={productOptions}
+                                                            options={sortedProductOptions}
                                                             value={getProductOptionById(item.productId)}
                                                             onChange={(selected) => {
                                                                 if (!selected) {

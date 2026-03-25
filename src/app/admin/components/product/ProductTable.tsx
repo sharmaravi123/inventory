@@ -39,6 +39,7 @@ export default function ProductTable(): React.ReactElement {
 
   const [search, setSearch] = useState<string>("");
   const [categoryId, setCategoryId] = useState<string>("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const productList: ProductWithExtras[] = (products ?? []) as ProductWithExtras[];
 
@@ -63,6 +64,17 @@ export default function ProductTable(): React.ReactElement {
     const matchesCategory = !categoryId || pCatId === categoryId;
 
     return matchesSearch && matchesCategory;
+  });
+
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    const nameA = (a.name ?? "").toString();
+    const nameB = (b.name ?? "").toString();
+    const cmp = nameA.localeCompare(nameB, undefined, { sensitivity: "base" });
+    if (cmp !== 0) return sortOrder === "asc" ? cmp : -cmp;
+    const skuA = (a.sku ?? "").toString();
+    const skuB = (b.sku ?? "").toString();
+    const skuCmp = skuA.localeCompare(skuB, undefined, { sensitivity: "base" });
+    return sortOrder === "asc" ? skuCmp : -skuCmp;
   });
 
   const handleEdit = (product: ProductWithExtras) => {
@@ -116,6 +128,8 @@ export default function ProductTable(): React.ReactElement {
           setSearch={setSearch}
           categoryId={categoryId}
           setCategoryId={setCategoryId}
+          sortOrder={sortOrder}
+          setSortOrder={setSortOrder}
         />
 
         <div className="overflow-hidden rounded-xl border border-[var(--color-neutral)] bg-[var(--color-white)]">
@@ -154,7 +168,7 @@ export default function ProductTable(): React.ReactElement {
                       </td>
                     </tr>
                   ) : (
-                    filteredProducts.map((p) => (
+                    sortedProducts.map((p) => (
                       <TableRow
                         key={String(p.id)}
                         product={p}
