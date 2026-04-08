@@ -7,6 +7,8 @@ export interface Dealer {
     phone: string;
     address?: string;
     gstin?: string;
+    fassiNumber?: string;
+    isActive?: boolean;
 }
 
 interface DealerState {

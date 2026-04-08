@@ -24,6 +24,7 @@ export interface IPurchase extends Document {
   items: IPurchaseItem[];
   subTotal: number;
   taxTotal: number;
+  roundOff?: number;
   grandTotal: number;
   purchaseDate?: Date;
   createdAt: Date;
@@ -54,6 +55,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     ],
     subTotal: Number,
     taxTotal: Number,
+    roundOff: { type: Number, default: 0 },
     grandTotal: Number,
     purchaseDate: { type: Date, default: null },
   },

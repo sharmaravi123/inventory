@@ -14,6 +14,13 @@ type PurchaseDocWithNumbers = {
   purchaseNumber?: string;
 };
 
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const resolveRoundOff = (total: number, roundOffInput?: unknown) => {
+  const n = Number(roundOffInput);
+  if (Number.isFinite(n)) return round2(n);
+  return round2(roundGrandTotal(total) - total);
+};
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -24,8 +31,8 @@ export async function GET(
     const { id } = await context.params;
 
     const purchase = await Purchase.findById(id)
-      .select("invoiceNumber purchaseNumber dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
-      .populate("dealerId", "name phone address gstin")
+      .select("invoiceNumber purchaseNumber dealerId warehouseId items subTotal taxTotal roundOff grandTotal purchaseDate createdAt")
+      .populate("dealerId", "name phone address gstin fassiNumber")
       .populate("warehouseId", "name")
       .populate("items.productId", "name hsnCode perBoxItem")
       .lean();
@@ -60,7 +67,7 @@ export async function PUT(
     await dbConnect();
 
     const { id } = await context.params;
-    const { dealerId, warehouseId, items, purchaseDate, invoiceNumber, purchaseNumber } =
+    const { dealerId, warehouseId, items, purchaseDate, invoiceNumber, purchaseNumber, roundOff } =
       await req.json();
     const normalizedInvoiceNumber = String(invoiceNumber || purchaseNumber || "").trim();
 
@@ -213,6 +220,10 @@ export async function PUT(
       }
     }
 
+    const rawTotal = subTotal + taxTotal;
+    const finalRoundOff = resolveRoundOff(rawTotal, roundOff);
+    const finalGrandTotal = round2(rawTotal + finalRoundOff);
+
     await Purchase.findByIdAndUpdate(
       id,
       {
@@ -223,7 +234,8 @@ export async function PUT(
         items: computedItems,
         subTotal,
         taxTotal,
-        grandTotal: roundGrandTotal(subTotal + taxTotal),
+        roundOff: finalRoundOff,
+        grandTotal: finalGrandTotal,
         purchaseDate: purchaseDate
           ? new Date(purchaseDate)
           : existing.purchaseDate ?? existing.createdAt,
@@ -238,8 +250,8 @@ export async function PUT(
     );
 
     const refreshed = await Purchase.findById(id)
-      .select("invoiceNumber purchaseNumber dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
-      .populate("dealerId", "name phone address gstin")
+      .select("invoiceNumber purchaseNumber dealerId warehouseId items subTotal taxTotal roundOff grandTotal purchaseDate createdAt")
+      .populate("dealerId", "name phone address gstin fassiNumber")
       .populate("warehouseId", "name")
       .populate("items.productId", "name hsnCode perBoxItem")
       .lean();

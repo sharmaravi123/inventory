@@ -1,11 +1,23 @@
 "use client";
 
 import React, { useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/store/store";
 import { fetchProducts } from "@/store/productSlice";
 import { fetchCategories } from "@/store/categorySlice";
-import ProductTable from "../components/product/ProductTable";
+
+const ProductTable = dynamic(
+  () => import("../components/product/ProductTable"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-2xl bg-white p-4 text-sm text-slate-600 shadow-sm">
+        Loading products...
+      </div>
+    ),
+  }
+);
 
 export default function ProductPage() {
   const dispatch = useDispatch<AppDispatch>();

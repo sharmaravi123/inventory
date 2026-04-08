@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import * as XLSX from "xlsx";
+import dynamic from "next/dynamic";
 import {
   useListBillsQuery,
   useAssignBillDriverMutation,
@@ -9,14 +9,21 @@ import {
   Bill,
 } from "@/store/billingApi";
 import BillList from "@/app/admin/components/billing/BillList";
-import BillPreview from "@/app/admin/components/billing/BillPreview";
-import EditPaymentModal from "@/app/admin/components/billing/EditPaymentModal";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "@/store/store";
 import { fetchDrivers } from "@/store/driverSlice";
 import { Search, Calendar } from "lucide-react";
 import Swal from "sweetalert2";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
+
+const BillPreview = dynamic(
+  () => import("@/app/admin/components/billing/BillPreview"),
+  { ssr: false }
+);
+const EditPaymentModal = dynamic(
+  () => import("@/app/admin/components/billing/EditPaymentModal"),
+  { ssr: false }
+);
 
 /* ================= TYPES ================= */
 
@@ -133,7 +140,7 @@ export default function OrdersPage() {
 
   /* ================= GST EXCEL ================= */
 
-  const exportGstExcel = () => {
+  const exportGstExcel = async () => {
     if (!filteredBills.length) {
       Swal.fire({
         icon: "warning",
@@ -217,6 +224,7 @@ export default function OrdersPage() {
       };
     });
 
+    const XLSX = await import("xlsx");
     const worksheet = XLSX.utils.aoa_to_sheet([]);
     const workbook = XLSX.utils.book_new();
 

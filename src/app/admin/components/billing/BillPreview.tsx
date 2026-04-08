@@ -6,8 +6,6 @@ import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { fetchProducts, ProductType } from "@/store/productSlice";
 import { useRouter } from "next/navigation";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import Swal from "sweetalert2";
 
 type BillPreviewProps = {
@@ -215,9 +213,13 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
   const handlePrint = () => window.print();
   const generatePDF = async () => {
     if (!invoiceRef.current) return;
+    const [{ default: html2canvas }, { default: JsPdf }] = await Promise.all([
+      import("html2canvas"),
+      import("jspdf"),
+    ]);
     const canvas = await html2canvas(invoiceRef.current, { scale: 2, useCORS: true });
     const img = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
+    const pdf = new JsPdf("p", "mm", "a4");
     const w = pdf.internal.pageSize.getWidth();
     const h = (canvas.height * w) / canvas.width;
     pdf.addImage(img, "PNG", 0, 0, w, h);

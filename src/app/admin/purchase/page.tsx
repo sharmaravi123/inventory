@@ -70,6 +70,8 @@ export default function AdminPurchaseManager() {
     const [searchTerm, setSearchTerm] = useState<string>("");
     const [openDealer, setOpenDealer] = useState(false);
     const [company, setCompany] = useState<any>(null);
+    const [manualRoundOffTarget, setManualRoundOffTarget] = useState<number | null>(null);
+    const [editingDealerId, setEditingDealerId] = useState<string | null>(null);
 
     useEffect(() => {
         const loadCompany = async () => {
@@ -89,6 +91,7 @@ export default function AdminPurchaseManager() {
         phone: "",
         address: "",
         gstin: "",
+        fassiNumber: "",
     });
     useEffect(() => {
         const fetchData = async () => {
@@ -275,14 +278,30 @@ export default function AdminPurchaseManager() {
             gstAmount += calc.taxAmount;
         });
 
+        const rawTotal = taxableAmount + gstAmount;
+        const autoGrandTotal = roundGrandTotal(rawTotal);
+        const autoRoundOff =
+            Math.round((autoGrandTotal - rawTotal + Number.EPSILON) * 100) / 100;
+        const roundOff =
+            manualRoundOffTarget === null
+                ? autoRoundOff
+                : Math.round((manualRoundOffTarget - rawTotal + Number.EPSILON) * 100) / 100;
+        const grandTotal =
+            manualRoundOffTarget === null
+                ? Math.round((rawTotal + roundOff + Number.EPSILON) * 100) / 100
+                : Math.round((manualRoundOffTarget + Number.EPSILON) * 100) / 100;
+
         return {
             taxableAmount,
             cgstAmount: gstAmount / 2,
             sgstAmount: gstAmount / 2,
             gstAmount,
-            grandTotal: roundGrandTotal(taxableAmount + gstAmount),
+            autoRoundOff,
+            autoGrandTotal,
+            roundOff,
+            grandTotal,
         };
-    }, [calcItem, getProductById]);
+    }, [calcItem, getProductById, manualRoundOffTarget]);
 
     const filteredPurchases = useMemo(() => {
         return purchases.filter((p: any) => {
@@ -372,6 +391,38 @@ export default function AdminPurchaseManager() {
         setPurchaseDate("");
         setPurchaseInvoiceNumber("");
         setEditingPurchaseId(null);
+        setManualRoundOffTarget(null);
+    };
+
+    const resetDealerForm = () => {
+        setDealerForm({ name: "", phone: "", address: "", gstin: "", fassiNumber: "" });
+        setEditingDealerId(null);
+    };
+
+    const openDealerCreateModal = () => {
+        resetDealerForm();
+        setOpenDealer(true);
+    };
+
+    const openDealerEditModal = () => {
+        if (!dealerId) {
+            Swal.fire("Select Dealer", "Please select a dealer first", "info");
+            return;
+        }
+        const dealer = getDealerById(dealerId);
+        if (!dealer) {
+            Swal.fire("Not Found", "Dealer details not found", "warning");
+            return;
+        }
+        setEditingDealerId(String(dealer._id || dealerId));
+        setDealerForm({
+            name: dealer.name || "",
+            phone: dealer.phone || "",
+            address: dealer.address || "",
+            gstin: dealer.gstin || "",
+            fassiNumber: dealer.fassiNumber || "",
+        });
+        setOpenDealer(true);
     };
 
     const buildConfirmHtml = (cleanedItems: PurchaseItem[]) => {
@@ -394,6 +445,7 @@ export default function AdminPurchaseManager() {
                 <div style="margin-top:10px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">
                     <p><b>Taxable:</b> ${currency.format(totals.taxableAmount)}</p>
                     <p><b>GST:</b> ${currency.format(totals.gstAmount)}</p>
+                    <p><b>Round Off:</b> ${currency.format(totals.roundOff)}</p>
                     <p><b>Grand Total:</b> ${currency.format(totals.grandTotal)}</p>
                 </div>
             </div>
@@ -402,6 +454,7 @@ export default function AdminPurchaseManager() {
 
     const savePurchase = async (): Promise<void> => {
         const cleanedItems = items.filter((it) => it.productId);
+        const totals = calcPurchaseTotals(cleanedItems);
         if (!dealerId || !warehouseId || !purchaseInvoiceNumber.trim() || cleanedItems.length === 0) {
             Swal.fire("Validation Error", "Please fill all required fields", "warning");
             return;
@@ -430,6 +483,7 @@ export default function AdminPurchaseManager() {
                             warehouseId,
                             items: cleanedItems,
                             purchaseDate,
+                            roundOff: totals.roundOff,
                         },
                     })
                 ).unwrap();
@@ -441,6 +495,7 @@ export default function AdminPurchaseManager() {
                         warehouseId,
                         items: cleanedItems,
                         purchaseDate,
+                        roundOff: totals.roundOff,
                     })
                 ).unwrap();
             }
@@ -491,6 +546,9 @@ export default function AdminPurchaseManager() {
         const dateSource = purchase.purchaseDate ?? purchase.createdAt;
         setPurchaseDate(new Date(dateSource).toISOString().slice(0, 10));
         setPurchaseInvoiceNumber(purchase.invoiceNumber || purchase.purchaseNumber || "");
+        setManualRoundOffTarget(
+            typeof purchase.grandTotal === "number" ? Number(purchase.grandTotal) : null
+        );
 
         const mappedItems: PurchaseItem[] = (purchase.items || []).map((it: any) => ({
             productId: typeof it.productId === "string" ? it.productId : it.productId?._id || "",
@@ -559,7 +617,9 @@ export default function AdminPurchaseManager() {
                     : lineTotal;
             const effectiveGrossTotal = roundGrandTotal(effectiveGrossTotalRaw);
             const roundValue =
-                effectiveGrossTotal - (purchaseAmount + totalTax);
+                typeof purchase.roundOff === "number"
+                    ? purchase.roundOff
+                    : effectiveGrossTotal - (purchaseAmount + totalTax);
 
             rows.push({
                 Date: formatDateShort(date),
@@ -852,6 +912,11 @@ export default function AdminPurchaseManager() {
                                                     <div className="text-xs text-slate-500">
                                                         {dealer?.phone || ""}
                                                     </div>
+                                                    {dealer?.fassiNumber && (
+                                                        <div className="text-xs text-slate-500">
+                                                            Fassi: {dealer.fassiNumber}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-2 py-3 text-sm text-slate-700 max-w-xs truncate">
                                                     {dealer?.address || "N/A"}
@@ -959,10 +1024,18 @@ export default function AdminPurchaseManager() {
 
                                             <button
                                                 type="button"
-                                                onClick={() => setOpenDealer(true)}
+                                                onClick={openDealerCreateModal}
                                                 className="px-2 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
                                             >
                                                 + Add
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={openDealerEditModal}
+                                                disabled={!dealerId}
+                                                className="px-2 rounded-xl bg-amber-600 text-white font-semibold hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                                            >
+                                                Edit
                                             </button>
                                         </div>
 
@@ -1239,6 +1312,57 @@ export default function AdminPurchaseManager() {
                                         ))}
                                     </div>
 
+                                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        {(() => {
+                                            const summary = calcPurchaseTotals(items.filter((it) => it.productId));
+                                            const roundTargetValue = manualRoundOffTarget === null ? "" : manualRoundOffTarget;
+                                            return (
+                                                <div className="space-y-2 text-sm text-slate-700">
+                                                    <div className="flex justify-between">
+                                                        <span>Taxable</span>
+                                                        <span className="font-semibold">{currency.format(summary.taxableAmount)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span>Total GST</span>
+                                                        <span className="font-semibold">{currency.format(summary.gstAmount)}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <span>Round to</span>
+                                                        <span className="flex items-center gap-2">
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                value={roundTargetValue}
+                                                                onChange={(e) => {
+                                                                    const raw = e.target.value;
+                                                                    if (!raw.trim()) {
+                                                                        setManualRoundOffTarget(null);
+                                                                        return;
+                                                                    }
+                                                                    const parsed = Number(raw);
+                                                                    setManualRoundOffTarget(Number.isFinite(parsed) ? parsed : null);
+                                                                }}
+                                                                placeholder={summary.autoGrandTotal.toFixed(2)}
+                                                                className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
+                                                            />
+                                                            <span className="text-xs text-slate-500">
+                                                                Auto: {currency.format(summary.autoGrandTotal)}
+                                                            </span>
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span>Round Off</span>
+                                                        <span className="font-semibold">{currency.format(summary.roundOff)}</span>
+                                                    </div>
+                                                    <div className="border-t border-slate-200 pt-2 flex justify-between text-base">
+                                                        <span className="font-semibold">Grand Total</span>
+                                                        <span className="font-bold text-slate-900">{currency.format(summary.grandTotal)}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
                                     <div className="flex flex-col sm:flex-row gap-4 pt-3 border-t border-slate-200">
                                         <button
                                             type="button"
@@ -1280,8 +1404,12 @@ export default function AdminPurchaseManager() {
                                 exit={{ scale: 0.95, y: 20 }}
                             >
                                 <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 text-white">
-                                    <h2 className="text-xl font-bold">Add New Dealer</h2>
-                                    <p className="text-slate-300 text-sm">Create dealer profile</p>
+                                    <h2 className="text-xl font-bold">
+                                        {editingDealerId ? "Edit Dealer" : "Add New Dealer"}
+                                    </h2>
+                                    <p className="text-slate-300 text-sm">
+                                        {editingDealerId ? "Update dealer profile" : "Create dealer profile"}
+                                    </p>
                                 </div>
 
                                 <div className="p-6 space-y-4">
@@ -1312,31 +1440,93 @@ export default function AdminPurchaseManager() {
                                         value={dealerForm.gstin}
                                         onChange={(e) => setDealerForm({ ...dealerForm, gstin: e.target.value })}
                                     />
+
+                                    <input
+                                        placeholder="Fassi Number (optional)"
+                                        className="w-full p-3 border rounded-xl"
+                                        value={dealerForm.fassiNumber}
+                                        onChange={(e) => setDealerForm({ ...dealerForm, fassiNumber: e.target.value })}
+                                    />
                                 </div>
 
                                 <div className="flex gap-3 p-6 border-t">
                                     <button
-                                        onClick={() => setOpenDealer(false)}
+                                        onClick={() => {
+                                            setOpenDealer(false);
+                                            resetDealerForm();
+                                        }}
                                         className="flex-1 border rounded-xl py-2"
                                     >
                                         Cancel
                                     </button>
+                                    {editingDealerId && (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const confirm = await Swal.fire({
+                                                        title: "Deactivate Dealer?",
+                                                        text: "Dealer will be inactive and hidden from new selection.",
+                                                        icon: "warning",
+                                                        showCancelButton: true,
+                                                        confirmButtonText: "Deactivate",
+                                                        cancelButtonText: "Cancel",
+                                                        confirmButtonColor: "#dc2626",
+                                                    });
+                                                    if (!confirm.isConfirmed) return;
+                                                    const res = await fetch(`/api/dealers/${editingDealerId}`, {
+                                                        method: "DELETE",
+                                                    });
+                                                    const data = await res.json().catch(() => ({}));
+                                                    if (!res.ok) {
+                                                        throw new Error(data?.error || "Failed to deactivate dealer");
+                                                    }
+                                                    await dispatch(fetchDealers()).unwrap();
+                                                    if (dealerId === editingDealerId) setDealerId("");
+                                                    setOpenDealer(false);
+                                                    resetDealerForm();
+                                                    Swal.fire("Done", "Dealer deactivated", "success");
+                                                } catch (e) {
+                                                    Swal.fire("Error", e instanceof Error ? e.message : "Failed to deactivate dealer", "error");
+                                                }
+                                            }}
+                                            className="flex-1 bg-rose-600 text-white rounded-xl py-2 font-semibold"
+                                        >
+                                            Inactive Delete
+                                        </button>
+                                    )}
                                     <button
                                         onClick={async () => {
-                                            if (!dealerForm.name) {
-                                                Swal.fire("Required", "Name required", "warning");
-                                                return;
+                                            try {
+                                                if (!dealerForm.name) {
+                                                    Swal.fire("Required", "Name required", "warning");
+                                                    return;
+                                                }
+                                                if (editingDealerId) {
+                                                    const res = await fetch(`/api/dealers/${editingDealerId}`, {
+                                                        method: "PUT",
+                                                        headers: { "Content-Type": "application/json" },
+                                                        body: JSON.stringify(dealerForm),
+                                                    });
+                                                    const data = await res.json().catch(() => ({}));
+                                                    if (!res.ok) {
+                                                        throw new Error(data?.error || "Failed to update dealer");
+                                                    }
+                                                    Swal.fire("Success", "Dealer updated", "success");
+                                                } else {
+                                                    await dispatch(createDealer(dealerForm)).unwrap();
+                                                    Swal.fire("Success", "Dealer added", "success");
+                                                }
+
+                                                await dispatch(fetchDealers()).unwrap();
+                                                setOpenDealer(false);
+                                                resetDealerForm();
+                                            } catch (e) {
+                                                Swal.fire("Error", e instanceof Error ? e.message : "Failed to save dealer", "error");
                                             }
-
-                                            await dispatch(createDealer(dealerForm)).unwrap();
-                                            Swal.fire("Success", "Dealer added", "success");
-
-                                            setDealerForm({ name: "", phone: "", address: "", gstin: "" });
-                                            setOpenDealer(false);
                                         }}
                                         className="flex-1 bg-emerald-600 text-white rounded-xl py-2 font-semibold"
                                     >
-                                        Save Dealer
+                                        {editingDealerId ? "Update Dealer" : "Save Dealer"}
                                     </button>
                                 </div>
                             </motion.div>

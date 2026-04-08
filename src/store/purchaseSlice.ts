@@ -5,6 +5,7 @@ export interface Purchase {
   invoiceNumber?: string;
   dealerId?: { name: string; phone: string; address: string };
   items: any[];
+  roundOff?: number;
   grandTotal: number;
   createdAt: string;
   purchaseDate?: string;

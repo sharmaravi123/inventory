@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   IndianRupee,
@@ -108,6 +109,7 @@ function parseDateInput(value: string): Date | null {
 /* =============== COMPONENT =============== */
 
 export default function PaymentsDashboardPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilterType, setDateFilterType] =
     useState<DateFilterType>("thisMonth");
@@ -816,6 +818,16 @@ export default function PaymentsDashboardPage() {
                     <ChevronRight className="h-3.5 w-3.5" />
                   </button>
                   <button
+                    onClick={() =>
+                      router.push(
+                        `/admin/payment/customer/${encodeURIComponent(c.dbId || c.customerId)}`
+                      )
+                    }
+                    className="inline-flex items-center rounded-xl border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                  >
+                    Details
+                  </button>
+                  <button
                     onClick={() => openEditCustomerDialog(c)}
                     disabled={!c.dbId}
                     className="ml-2 inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -893,6 +905,16 @@ export default function PaymentsDashboardPage() {
                         >
                           Collect
                           <ChevronRight className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            router.push(
+                              `/admin/payment/customer/${encodeURIComponent(c.dbId || c.customerId)}`
+                            )
+                          }
+                          className="inline-flex items-center rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                        >
+                          Details
                         </button>
                         <button
                           onClick={() => openEditCustomerDialog(c)}

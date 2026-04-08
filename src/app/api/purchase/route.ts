@@ -16,6 +16,13 @@ type PurchaseDocWithNumbers = {
   purchaseNumber?: string;
 };
 
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const resolveRoundOff = (total: number, roundOffInput?: unknown) => {
+  const n = Number(roundOffInput);
+  if (Number.isFinite(n)) return round2(n);
+  return round2(roundGrandTotal(total) - total);
+};
+
 /* ================= GET ================= */
 export async function GET(req: NextRequest) {
   try {
@@ -34,8 +41,8 @@ export async function GET(req: NextRequest) {
     }
 
     const purchases = await Purchase.find()
-      .select("invoiceNumber purchaseNumber dealerId warehouseId items subTotal taxTotal grandTotal purchaseDate createdAt")
-      .populate("dealerId", "name phone address gstin")
+      .select("invoiceNumber purchaseNumber dealerId warehouseId items subTotal taxTotal roundOff grandTotal purchaseDate createdAt")
+      .populate("dealerId", "name phone address gstin fassiNumber")
       .populate("items.productId", "name perBoxItem")
       .sort({ createdAt: -1 })
       .lean();
@@ -63,7 +70,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   await dbConnect();
 
-  const { dealerId, warehouseId, items, purchaseDate, invoiceNumber, purchaseNumber } = await req.json();
+  const { dealerId, warehouseId, items, purchaseDate, invoiceNumber, purchaseNumber, roundOff } = await req.json();
   const normalizedInvoiceNumber = String(invoiceNumber || purchaseNumber || "").trim();
   if (!normalizedInvoiceNumber) {
     return NextResponse.json({ error: "Invoice number is required" }, { status: 400 });
@@ -158,6 +165,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const rawTotal = subTotal + taxTotal;
+  const finalRoundOff = resolveRoundOff(rawTotal, roundOff);
+  const finalGrandTotal = round2(rawTotal + finalRoundOff);
+
   /* ✅ CREATE PURCHASE */
   const purchase = await Purchase.create({
     invoiceNumber: normalizedInvoiceNumber,
@@ -167,7 +178,8 @@ export async function POST(req: NextRequest) {
     items: computedItems,
     subTotal,
     taxTotal,
-    grandTotal: roundGrandTotal(subTotal + taxTotal),
+    roundOff: finalRoundOff,
+    grandTotal: finalGrandTotal,
     purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
   });
 
@@ -179,7 +191,7 @@ export async function POST(req: NextRequest) {
 
   /* 🔥 RETURN POPULATED DATA */
   const populated = await Purchase.findById(purchase._id)
-    .populate("dealerId", "name phone")
+    .populate("dealerId", "name phone address gstin fassiNumber")
     .populate("items.productId", "name")
     .lean();
 

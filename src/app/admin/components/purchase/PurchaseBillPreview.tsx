@@ -4,8 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 import { useRef } from "react";
 import Swal from "sweetalert2";
 import { roundGrandTotal } from "@/lib/rounding";
@@ -40,6 +38,7 @@ type PurchaseBill = {
         phone?: string;
         address?: string;
         gstin?: string;
+        fassiNumber?: string;
     };
 
     warehouse?: {
@@ -53,6 +52,7 @@ type PurchaseBill = {
     totalDiscountPercent?: number;
     totalBeforeTax: number;
     totalTax: number;
+    roundOff?: number;
     grandTotal: number;
 };
 
@@ -156,6 +156,10 @@ export default function PurchaseBillPreview({
 
     const cgst = bill.totalTax / 2;
     const sgst = bill.totalTax / 2;
+    const roundOffValue =
+        typeof bill.roundOff === "number"
+            ? bill.roundOff
+            : roundedGrandTotal - (bill.totalBeforeTax + bill.totalTax);
     const bankDetailsMissing =
         !company.accountHolder &&
         !company.accountNumber &&
@@ -166,6 +170,10 @@ export default function PurchaseBillPreview({
     const handlePrint = () => window.print();
     const generatePDF = async () => {
         if (!invoiceRef.current) return;
+        const [{ default: html2canvas }, { default: JsPdf }] = await Promise.all([
+            import("html2canvas"),
+            import("jspdf"),
+        ]);
 
         const canvas = await html2canvas(invoiceRef.current, {
             scale: 2,
@@ -173,7 +181,7 @@ export default function PurchaseBillPreview({
         });
 
         const imgData = canvas.toDataURL("image/png");
-        const pdf = new jsPDF("p", "mm", "a4");
+        const pdf = new JsPdf("p", "mm", "a4");
 
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
@@ -306,6 +314,7 @@ export default function PurchaseBillPreview({
                             <div style={{ whiteSpace: "pre-line" }}> {bill.dealer.address}</div>
                             <div>Mobile: {bill.dealer.phone}</div>
                             {bill.dealer.gstin && <div>GSTIN: {bill.dealer.gstin}</div>}
+                            {bill.dealer.fassiNumber && <div>Fassi No: {bill.dealer.fassiNumber}</div>}
                         </div>
 
                         <div className="text-right">
@@ -386,6 +395,7 @@ export default function PurchaseBillPreview({
                             <div className="flex justify-between"><span>Sub Total</span><span>{subtotalWithoutTax.toFixed(2)}</span></div>
                             <div className="flex justify-between"><span>CGST</span><span>{cgst.toFixed(2)}</span></div>
                             <div className="flex justify-between"><span>SGST</span><span>{sgst.toFixed(2)}</span></div>
+                            <div className="flex justify-between"><span>Round Off</span><span>{roundOffValue.toFixed(2)}</span></div>
                             <div className="flex justify-between border-t border-black font-bold pt-1">
                                 <span>Grand Total</span>
                                 <span>{roundedGrandTotal.toFixed(2)}</span>

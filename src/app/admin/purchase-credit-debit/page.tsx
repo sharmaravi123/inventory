@@ -5,8 +5,10 @@ import {
   CalendarDays,
   Download,
   IndianRupee,
+  Pencil,
   Printer,
   RefreshCw,
+  Trash2,
   X,
 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -19,6 +21,7 @@ type Dealer = {
   phone?: string;
   address?: string;
   gstin?: string;
+  fassiNumber?: string;
 };
 
 type CompanyProfile = {
@@ -336,9 +339,11 @@ export default function PurchaseCreditDebitPage() {
       const data = await res.json();
       const list = Array.isArray(data?.dealers) ? data.dealers : [];
       setDealers(list);
-      if (list.length > 0) {
-        setSelectedDealerId((prev) => prev || String(list[0]._id));
-      }
+      setSelectedDealerId((prev) => {
+        if (list.length === 0) return "";
+        if (prev && list.some((dealer: Dealer) => dealer._id === prev)) return prev;
+        return String(list[0]._id);
+      });
     } catch {
       setError("Failed to load dealers");
     }
@@ -471,6 +476,91 @@ export default function PurchaseCreditDebitPage() {
     setPaymentMode("CASH");
     setPaymentNote("");
   };
+
+  const editDealer = useCallback(
+    async (dealer: Dealer) => {
+      const result = await Swal.fire({
+        title: "Edit Dealer",
+        html: `
+          <div style="display:grid;gap:10px;text-align:left;">
+            <input id="dealer-name" class="swal2-input" placeholder="Dealer Name *" value="${dealer.name || ""}" />
+            <input id="dealer-phone" class="swal2-input" placeholder="Phone" value="${dealer.phone || ""}" />
+            <input id="dealer-address" class="swal2-input" placeholder="Address" value="${dealer.address || ""}" />
+            <input id="dealer-gstin" class="swal2-input" placeholder="GSTIN" value="${dealer.gstin || ""}" />
+            <input id="dealer-fassi" class="swal2-input" placeholder="Fassi Number (optional)" value="${dealer.fassiNumber || ""}" />
+          </div>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: "Update",
+        preConfirm: () => {
+          const name = (document.getElementById("dealer-name") as HTMLInputElement | null)?.value?.trim() || "";
+          const phone = (document.getElementById("dealer-phone") as HTMLInputElement | null)?.value?.trim() || "";
+          const address = (document.getElementById("dealer-address") as HTMLInputElement | null)?.value?.trim() || "";
+          const gstin = (document.getElementById("dealer-gstin") as HTMLInputElement | null)?.value?.trim() || "";
+          const fassiNumber = (document.getElementById("dealer-fassi") as HTMLInputElement | null)?.value?.trim() || "";
+          if (!name) {
+            Swal.showValidationMessage("Dealer name is required");
+            return null;
+          }
+          return { name, phone, address, gstin, fassiNumber };
+        },
+      });
+
+      if (!result.isConfirmed || !result.value) return;
+      const res = await fetch(`/api/dealers/${dealer._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(result.value),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to update dealer");
+      }
+
+      await loadDealers();
+      if (selectedDealerId) {
+        clearDealerCache(selectedDealerId);
+        await loadLedger(selectedDealerId, selectedMonth, { force: true });
+      }
+      Swal.fire("Success", "Dealer updated", "success");
+    },
+    [clearDealerCache, loadDealers, loadLedger, selectedDealerId, selectedMonth]
+  );
+
+  const deactivateDealer = useCallback(
+    async (dealer: Dealer) => {
+      const confirm = await Swal.fire({
+        title: "Deactivate Dealer?",
+        text: `${dealer.name} will be hidden from active list.`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Deactivate",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#dc2626",
+      });
+      if (!confirm.isConfirmed) return;
+
+      const res = await fetch(`/api/dealers/${dealer._id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to deactivate dealer");
+      }
+
+      await loadDealers();
+      clearDealerCache(dealer._id);
+      if (selectedDealerId === dealer._id) {
+        setSelectedDealerId("");
+        setLedger({
+          entries: [],
+          payments: [],
+          summary: { totalPurchase: 0, totalPaid: 0, balance: 0 },
+        });
+      }
+      Swal.fire("Done", "Dealer deactivated", "success");
+    },
+    [clearDealerCache, loadDealers, selectedDealerId]
+  );
 
   const startEdit = (paymentId: string) => {
     const payment = ledger.payments.find((p) => p.id === paymentId);
@@ -817,18 +907,49 @@ export default function PurchaseCreditDebitPage() {
         <div className="overflow-x-auto rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
           <div className="flex min-w-max gap-2">
             {dealers.map((dealer) => (
-              <button
-                key={dealer._id}
-                type="button"
-                onClick={() => setSelectedDealerId(dealer._id)}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold ${
-                  selectedDealerId === dealer._id
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                {dealer.name}
-              </button>
+              <div key={dealer._id} className="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDealerId(dealer._id)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                    selectedDealerId === dealer._id
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {dealer.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await editDealer(dealer);
+                    } catch (e) {
+                      const message = e instanceof Error ? e.message : "Failed to update dealer";
+                      setError(message);
+                    }
+                  }}
+                  className="rounded-lg p-1.5 text-slate-600 hover:bg-white"
+                  title="Edit dealer"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await deactivateDealer(dealer);
+                    } catch (e) {
+                      const message = e instanceof Error ? e.message : "Failed to deactivate dealer";
+                      setError(message);
+                    }
+                  }}
+                  className="rounded-lg p-1.5 text-rose-600 hover:bg-white"
+                  title="Deactivate dealer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             ))}
             {dealers.length === 0 && (
               <span className="px-1 text-sm text-slate-500">No dealers found</span>
