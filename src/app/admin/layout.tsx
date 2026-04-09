@@ -1,5 +1,4 @@
 // src/app/admin/layout.tsx
-import "../globals.css";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import React from "react";
@@ -42,15 +41,15 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--color-neutral)]">
+    <div className="h-screen overflow-hidden flex flex-col bg-[var(--color-neutral)]">
       <div className="print-hide">
         <Topbar />
       </div>
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-h-0">
         <div className="print-hide">
           <Sidebar />
         </div>
-        <main className="flex-1 p-6 lg:ml-64 overflow-y-auto bg-[var(--color-neutral)]">
+        <main className="flex-1 min-h-0 overflow-y-auto bg-[var(--color-neutral)] p-6 lg:ml-64">
           {children}
         </main>
       </div>
