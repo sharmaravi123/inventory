@@ -115,7 +115,7 @@ export default function AdminPurchaseManager() {
     useEffect(() => {
         if (open && items.length === 0) {
             setItems([
-                { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 2, taxPercent: 5 }
+                { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 0, taxPercent: 5 }
             ]);
         }
     }, [open]);
@@ -162,6 +162,15 @@ export default function AdminPurchaseManager() {
         return map;
     }, [dealers, normalizeEntityId]);
 
+    const warehouseMap = useMemo(() => {
+        const map = new Map<string, any>();
+        warehouses.forEach((w: any) => {
+            const wid = normalizeEntityId(w?._id ?? w?.id);
+            if (wid) map.set(wid, w);
+        });
+        return map;
+    }, [warehouses, normalizeEntityId]);
+
     const productOptions = useMemo<ProductOption[]>(
         () =>
             products
@@ -195,6 +204,10 @@ export default function AdminPurchaseManager() {
     const getDealerById = useCallback((id: string) => {
         return dealerMap.get(normalizeEntityId(id));
     }, [dealerMap, normalizeEntityId]);
+
+    const getWarehouseById = useCallback((id: string) => {
+        return warehouseMap.get(normalizeEntityId(id));
+    }, [warehouseMap, normalizeEntityId]);
 
     const getProductOptionById = useCallback(
         (id: string): ProductOption | null => {
@@ -335,7 +348,7 @@ export default function AdminPurchaseManager() {
     }, [purchases, filterType, fromDate, toDate, searchTerm, getDealerById, getProductById]);
 
     const addItem = (): void => {
-        setItems((prev) => [...prev, { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 2, taxPercent: 5 }]);
+        setItems((prev) => [...prev, { productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 0, taxPercent: 5 }]);
     };
 
     const removeItem = (index: number): void => {
@@ -366,7 +379,7 @@ export default function AdminPurchaseManager() {
                     boxes: 0,
                     looseItems: 0,
                     purchasePrice: 0,
-                    discountPercent: 2,
+                    discountPercent: 0,
                     taxPercent: 5
                 });
             }
@@ -428,6 +441,7 @@ export default function AdminPurchaseManager() {
     const buildConfirmHtml = (cleanedItems: PurchaseItem[]) => {
         const totals = calcPurchaseTotals(cleanedItems);
         const dealerName = getDealerById(dealerId)?.name || "Unknown Dealer";
+        const storeName = getWarehouseById(warehouseId)?.name || "Unknown Store";
         const lines = cleanedItems.map((it) => {
             const product = getProductById(it.productId);
             const name = product?.name || "Unknown Product";
@@ -439,7 +453,7 @@ export default function AdminPurchaseManager() {
                 <p><b>Dealer:</b> ${dealerName}</p>
                 <p><b>Invoice:</b> ${purchaseInvoiceNumber.trim()}</p>
                 <p><b>Date:</b> ${purchaseDate || "-"}</p>
-                <p><b>Store:</b> ${warehouseId}</p>
+                <p><b>Store:</b> ${storeName}</p>
                 <p><b>Selected items:</b></p>
                 <ul style="margin:0;padding-left:18px;">${lines.join("")}</ul>
                 <div style="margin-top:10px;padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">
@@ -555,11 +569,11 @@ export default function AdminPurchaseManager() {
             boxes: it.boxes ?? 0,
             looseItems: it.looseItems ?? 0,
             purchasePrice: it.purchasePrice ?? 0,
-            discountPercent: it.discountPercent ?? 2,
+            discountPercent: it.discountPercent ?? 0,
             taxPercent: it.taxPercent ?? 5,
         }));
 
-        setItems(mappedItems.length ? mappedItems : [{ productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 2, taxPercent: 5 }]);
+        setItems(mappedItems.length ? mappedItems : [{ productId: "", boxes: 0, looseItems: 0, purchasePrice: 0, discountPercent: 0, taxPercent: 5 }]);
         setOpen(true);
     };
 
