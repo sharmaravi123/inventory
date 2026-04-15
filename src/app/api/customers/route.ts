@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import CustomerModel, { CustomerDocument } from "@/models/Customer";
+import CustomerModel, {
+  CustomerDocument,
+  ensureCustomerPhoneIndex,
+} from "@/models/Customer";
 
 type CustomersResponse = {
   customers: CustomerDocument[];
@@ -9,26 +12,40 @@ type CustomersResponse = {
 export async function POST(req: NextRequest) {
   try {
     await dbConnect();
+    await ensureCustomerPhoneIndex();
 
     const body = await req.json();
-    const { name, phone, shopName, address, gstNumber } = body;
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
     const normalizedPhone =
-      typeof phone === "string" ? phone.trim() : "";
+      typeof body?.phone === "string" ? body.phone.trim() : "";
+    const shopName =
+      typeof body?.shopName === "string" ? body.shopName.trim() : "";
+    const address =
+      typeof body?.address === "string" ? body.address.trim() : "";
+    const gstNumber =
+      typeof body?.gstNumber === "string" ? body.gstNumber.trim() : "";
 
-    if (!name?.trim()) {
+    if (!name) {
       return NextResponse.json(
         { error: "Customer name is required" },
         { status: 400 }
       );
     }
 
-    const payload = {
-      name,
-      phone: normalizedPhone || undefined,
-      shopName,
-      address,
-      gstNumber,
-    };
+    const payload: Record<string, string> = { name };
+
+    if (normalizedPhone) {
+      payload.phone = normalizedPhone;
+    }
+    if (shopName) {
+      payload.shopName = shopName;
+    }
+    if (address) {
+      payload.address = address;
+    }
+    if (gstNumber) {
+      payload.gstNumber = gstNumber;
+    }
 
     let customer;
     if (normalizedPhone) {
@@ -46,6 +63,18 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (e: unknown) {
+    if (
+      typeof e === "object" &&
+      e !== null &&
+      "code" in e &&
+      e.code === 11000
+    ) {
+      return NextResponse.json(
+        { error: "This phone number is already linked to another customer" },
+        { status: 409 }
+      );
+    }
+
     const message =
       e instanceof Error ? e.message : "Failed to create customer";
     console.error("CUSTOMER CREATE ERROR:", e);
@@ -61,6 +90,7 @@ export async function GET(
 ): Promise<NextResponse<CustomersResponse | { error: string }>> {
   try {
     await dbConnect();
+    await ensureCustomerPhoneIndex();
 
     const searchParams = req.nextUrl.searchParams;
     const q = (searchParams.get("q") ?? "").trim();
@@ -94,6 +124,7 @@ export async function GET(
 export async function PUT(req: NextRequest) {
   try {
     await dbConnect();
+    await ensureCustomerPhoneIndex();
 
     const body = await req.json();
     const id = typeof body?._id === "string" ? body._id : "";
@@ -119,17 +150,47 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    const setPayload: Record<string, string> = { name };
+    const unsetPayload: Record<string, 1> = {};
+
+    if (phone) {
+      setPayload.phone = phone;
+    } else {
+      unsetPayload.phone = 1;
+    }
+
+    if (shopName) {
+      setPayload.shopName = shopName;
+    } else {
+      unsetPayload.shopName = 1;
+    }
+
+    if (address) {
+      setPayload.address = address;
+    } else {
+      unsetPayload.address = 1;
+    }
+
+    if (gstNumber) {
+      setPayload.gstNumber = gstNumber;
+    } else {
+      unsetPayload.gstNumber = 1;
+    }
+
+    const updateQuery: {
+      $set: Record<string, string>;
+      $unset?: Record<string, 1>;
+    } = {
+      $set: setPayload,
+    };
+
+    if (Object.keys(unsetPayload).length > 0) {
+      updateQuery.$unset = unsetPayload;
+    }
+
     const updated = await CustomerModel.findByIdAndUpdate(
       id,
-      {
-        $set: {
-          name,
-          phone: phone || undefined,
-          shopName: shopName || undefined,
-          address: address || undefined,
-          gstNumber: gstNumber || undefined,
-        },
-      },
+      updateQuery,
       { new: true }
     );
 
@@ -142,6 +203,18 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ customer: updated }, { status: 200 });
   } catch (e: unknown) {
+    if (
+      typeof e === "object" &&
+      e !== null &&
+      "code" in e &&
+      e.code === 11000
+    ) {
+      return NextResponse.json(
+        { error: "This phone number is already linked to another customer" },
+        { status: 409 }
+      );
+    }
+
     const message =
       e instanceof Error ? e.message : "Failed to update customer";
     return NextResponse.json({ error: message }, { status: 500 });

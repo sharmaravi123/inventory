@@ -1239,6 +1239,7 @@ export default function PaymentsDashboardPage() {
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 />
                 <input
+                  aria-label="Phone number optional"
                   placeholder="Phone number (optional)"
                   value={newCustomer.phone}
                   onChange={(e) =>
@@ -1284,9 +1285,9 @@ export default function PaymentsDashboardPage() {
                   Cancel
                 </button>
                 <button
-                  disabled={addingCustomer || !newCustomer.name}
+                  disabled={addingCustomer || !newCustomer.name.trim()}
                   onClick={async () => {
-                    if (!newCustomer.name) return;
+                    if (!newCustomer.name.trim()) return;
 
                     setAddingCustomer(true);
                     try {
