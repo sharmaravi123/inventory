@@ -1022,7 +1022,7 @@ export default function AdminPurchaseManager() {
 
                                 <div className="p-3 max-h-[70vh] overflow-y-auto overflow-x-hidden">
                                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-3">
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 flex-col">
                                             <select
                                                 value={dealerId}
                                                 onChange={(e) => setDealerId(e.target.value)}
@@ -1035,11 +1035,12 @@ export default function AdminPurchaseManager() {
                                                     </option>
                                                 ))}
                                             </select>
+                                                <div className="flex gap-3">
 
                                             <button
                                                 type="button"
                                                 onClick={openDealerCreateModal}
-                                                className="px-2 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
+                                                className="px-2 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 p-3"
                                             >
                                                 + Add
                                             </button>
@@ -1047,10 +1048,11 @@ export default function AdminPurchaseManager() {
                                                 type="button"
                                                 onClick={openDealerEditModal}
                                                 disabled={!dealerId}
-                                                className="px-2 rounded-xl bg-amber-600 text-white font-semibold hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                                                className="px-2 rounded-xl bg-amber-600 text-white font-semibold hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-slate-400 p-3"
                                             >
                                                 Edit
                                             </button>
+                                            </div>
                                         </div>
 
                                         <div>
