@@ -20,6 +20,7 @@ import { fetchInventory } from "@/store/inventorySlice";
 import { fetchProducts } from "@/store/productSlice";
 import { fetchDrivers } from "@/store/driverSlice";
 import { useListBillsQuery, Bill } from "@/store/billingApi";
+import { normalizeInventoryUnitPrices } from "@/lib/inventoryPricing";
 
 type ReturnRecord = {
   _id: string;
@@ -98,10 +99,8 @@ const getProductPrices = (
     (x) => String(x._id ?? x.id) === String(productId)
   );
   if (!p) return {};
-  return {
-    purchase: p.purchasePrice ?? p.price,
-    selling: p.sellingPrice ?? p.price,
-  };
+  const { purchase, selling } = normalizeInventoryUnitPrices(p);
+  return { purchase, selling };
 };
 
 function isWithinDateRange(dateStr: string, from: string, to: string): boolean {
@@ -414,7 +413,10 @@ export default function ReportsPage() {
 
     inventory.forEach((inv: InventoryItem) => {
       const perBox = getProductPerBox(inv, products as Product[]);
-      const qty = Number(inv.boxes ?? 0) * perBox + Number(inv.looseItems ?? 0);
+      const qty =
+        typeof inv.totalItems === "number"
+          ? inv.totalItems
+          : Number(inv.boxes ?? 0) * perBox + Number(inv.looseItems ?? 0);
 
       const pid = extractId(inv.productId ?? inv.product);
       const prices = getProductPrices(pid, products as Product[]);

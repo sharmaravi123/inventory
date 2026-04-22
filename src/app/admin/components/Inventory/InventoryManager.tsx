@@ -21,6 +21,7 @@ import {
 } from "@/store/inventorySlice";
 import { fetchProducts } from "@/store/productSlice";
 import { fetchWarehouses } from "@/store/warehouseSlice";
+import { normalizeInventoryUnitPrices } from "@/lib/inventoryPricing";
 
 type Product = {
   _id?: string | number;
@@ -203,8 +204,7 @@ const AdminInventoryManager: React.FC = () => {
         (x) => String(x._id ?? x.id) === String(productId)
       );
       if (!p) return {};
-      const purchase = p.purchasePrice ?? p.price;
-      const selling = p.sellingPrice ?? p.price;
+      const { purchase, selling } = normalizeInventoryUnitPrices(p);
       return { purchase, selling };
     },
     [products]
@@ -243,6 +243,18 @@ const AdminInventoryManager: React.FC = () => {
     [products, extractId]
   );
 
+  const getInventoryQuantity = useCallback(
+    (inv: InventoryItem): number => {
+      if (typeof inv.totalItems === "number" && Number.isFinite(inv.totalItems)) {
+        return inv.totalItems;
+      }
+
+      const perBox = getProductPerBox(inv);
+      return inv.boxes * perBox + inv.looseItems;
+    },
+    [getProductPerBox]
+  );
+
   const currency = useMemo(
     () =>
       new Intl.NumberFormat("en-IN", {
@@ -255,8 +267,7 @@ const AdminInventoryManager: React.FC = () => {
   const filteredItems = useMemo(() => {
     return items.filter((inv) => {
       const perBox = getProductPerBox(inv);
-      const total =
-        inv.boxes * perBox + inv.looseItems;
+      const total = getInventoryQuantity(inv);
 
       const pname = getProductName(inv).toLowerCase();
       const wname = getWarehouseName(inv).toLowerCase();
@@ -305,6 +316,7 @@ const AdminInventoryManager: React.FC = () => {
     getWarehouseName,
     extractId,
     getProductPerBox,
+    getInventoryQuantity,
   ]);
 
   const sortedFilteredItems = useMemo(
@@ -322,20 +334,14 @@ const AdminInventoryManager: React.FC = () => {
 
   const totalItemsCount = useMemo(
     () =>
-      items.reduce((acc, inv) => {
-        const perBox = getProductPerBox(inv);
-        const total =
-          inv.boxes * perBox + inv.looseItems;
-        return acc + total;
-      }, 0),
-    [items, getProductPerBox]
+      items.reduce((acc, inv) => acc + getInventoryQuantity(inv), 0),
+    [items, getInventoryQuantity]
   );
 
   const statusColor = useCallback(
     (inv: InventoryItem) => {
       const perBox = getProductPerBox(inv);
-      const total =
-        inv.boxes * perBox + inv.looseItems;
+      const total = getInventoryQuantity(inv);
       const lowTotal =
         (inv.lowStockBoxes ?? 0) * perBox +
         (inv.lowStockItems ?? 0);
@@ -344,7 +350,7 @@ const AdminInventoryManager: React.FC = () => {
       if (total <= lowTotal) return "var(--color-warning)";
       return "var(--color-success)";
     },
-    [getProductPerBox]
+    [getInventoryQuantity, getProductPerBox]
   );
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -570,8 +576,7 @@ const AdminInventoryManager: React.FC = () => {
                   const invWithRefs = inv as InventoryWithRefs;
                   const pid = extractId(inv.productId ?? invWithRefs.product);
                   const prices = getProductPrices(pid);
-                  const perBox = getProductPerBox(inv);
-                  const totalItems = inv.boxes * perBox + inv.looseItems;
+                  const totalItems = getInventoryQuantity(inv);
                   return sum + (prices.purchase ? totalItems * prices.purchase : 0);
                 }, 0)
               )}
@@ -594,8 +599,7 @@ const AdminInventoryManager: React.FC = () => {
                   const invWithRefs = inv as InventoryWithRefs;
                   const pid = extractId(inv.productId ?? invWithRefs.product);
                   const prices = getProductPrices(pid);
-                  const perBox = getProductPerBox(inv);
-                  const totalItems = inv.boxes * perBox + inv.looseItems;
+                  const totalItems = getInventoryQuantity(inv);
                   return sum + (prices.selling ? totalItems * prices.selling : 0);
                 }, 0)
               )}
@@ -766,8 +770,7 @@ const AdminInventoryManager: React.FC = () => {
                       const perBox = getProductPerBox(inv);
                       const taxPercent =
                         getProductTaxPercent(inv);
-                      const total =
-                        inv.boxes * perBox + inv.looseItems;
+                      const total = getInventoryQuantity(inv);
                       const badgeColor = statusColor(inv);
 
                       return (
