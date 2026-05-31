@@ -35,6 +35,8 @@ type CustomerAgg = {
   name: string;
   shopName?: string;
   phone: string;
+  address?: string;
+  gstNumber?: string;
   bills: Bill[];
   totalOrders: number;
   totalBilled: number;
@@ -303,6 +305,8 @@ export default function PaymentsDashboardPage() {
           name: cust.name || "Unknown",
           shopName: cust.shopName || "",
           phone: cust.phone || "-",
+          address: cust.address || "",
+          gstNumber: cust.gstNumber || "",
           bills: [],
           totalOrders: 0,
           totalBilled: 0,
@@ -329,6 +333,8 @@ export default function PaymentsDashboardPage() {
           name: info.name || "Unknown",
           shopName: info.shopName || "",
           phone: cid,
+          address: info.address || "",
+          gstNumber: info.gstNumber || "",
           bills: [],
           totalOrders: 0,
           totalBilled: 0,
@@ -344,6 +350,12 @@ export default function PaymentsDashboardPage() {
       const entry = map.get(cid)!;
       if (!entry.shopName && info.shopName) {
         entry.shopName = info.shopName;
+      }
+      if (!entry.address && info.address) {
+        entry.address = info.address;
+      }
+      if (!entry.gstNumber && info.gstNumber) {
+        entry.gstNumber = info.gstNumber;
       }
       entry.bills.push(bill);
 
@@ -450,6 +462,20 @@ export default function PaymentsDashboardPage() {
     setSelectedCustomerId(customerId);
     setPaymentSplit({ cashAmount: 0, upiAmount: 0, cardAmount: 0 });
     setError("");
+  };
+
+  const handleOpenNewBill = (customer: CustomerAgg) => {
+    const params = new URLSearchParams();
+    const customerId = customer.dbId || customer.customerId;
+
+    if (customerId) params.set("customerId", customerId);
+    if (customer.name && customer.name !== "Unknown") params.set("name", customer.name);
+    if (customer.shopName) params.set("shopName", customer.shopName);
+    if (customer.phone && customer.phone !== "-") params.set("phone", customer.phone);
+    if (customer.address) params.set("address", customer.address);
+    if (customer.gstNumber) params.set("gstNumber", customer.gstNumber);
+
+    router.push(`/admin/billing?${params.toString()}`, { scroll: true });
   };
 
   const resetCustomerDialog = () => {
@@ -818,6 +844,12 @@ export default function PaymentsDashboardPage() {
                     <ChevronRight className="h-3.5 w-3.5" />
                   </button>
                   <button
+                    onClick={() => handleOpenNewBill(c)}
+                    className="inline-flex items-center rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                  >
+                    New Bill
+                  </button>
+                  <button
                     onClick={() =>
                       router.push(
                         `/admin/payment/customer/${encodeURIComponent(c.dbId || c.customerId)}`
@@ -905,6 +937,12 @@ export default function PaymentsDashboardPage() {
                         >
                           Collect
                           <ChevronRight className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleOpenNewBill(c)}
+                          className="inline-flex items-center rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                        >
+                          New Bill
                         </button>
                         <button
                           onClick={() =>

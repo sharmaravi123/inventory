@@ -5,7 +5,9 @@ import React, {
   useMemo,
   useState,
   useCallback,
+  useRef,
 } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   useListBillsQuery,
   useUpdateBillMutation,
@@ -102,6 +104,13 @@ const initialPayment: CreateBillPaymentInput = {
   cardAmount: 0,
 };
 
+const scrollBillingPageToTop = () => {
+  window.scrollTo({ top: 0, behavior: "auto" });
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+  document.querySelector("main")?.scrollTo({ top: 0, behavior: "auto" });
+};
+
 const emptyItem = (): BillFormItemState => ({
   id: randomId(),
   productSearch: "",
@@ -123,6 +132,8 @@ const extractId = (ref: unknown): string | undefined => {
 };
 
 export default function BillingAdminPage() {
+  const searchParams = useSearchParams();
+  const initialBillCustomerApplied = useRef(false);
   const dispatch = useAppDispatch();
   const inventory = useAppSelector((s) => s.inventory.items);
   const inventoryLoading = useAppSelector((s) => s.inventory.loading);
@@ -273,13 +284,62 @@ export default function BillingAdminPage() {
 
 
   useEffect(() => {
-    if (customerSearch.length < 2) return;
+    if (initialBillCustomerApplied.current) return;
+
+    const customerId = searchParams.get("customerId") ?? "";
+    const name = searchParams.get("name") ?? "";
+    const shopName = searchParams.get("shopName") ?? "";
+    const phone = searchParams.get("phone") ?? "";
+    const address = searchParams.get("address") ?? "";
+    const gstNumber = searchParams.get("gstNumber") ?? "";
+
+    if (!customerId && !name && !shopName && !phone && !address && !gstNumber) {
+      return;
+    }
+
+    initialBillCustomerApplied.current = true;
+    setBillForEdit(undefined);
+    setShowForm(true);
+    setCustomer({
+      _id: customerId || undefined,
+      name,
+      shopName,
+      phone,
+      address,
+      gstNumber,
+    });
+    setCustomerSearch(shopName.trim() || name.trim() || phone.trim());
+    setSelectedCustomerId(customerId);
+    setItems([emptyItem()]);
+    setPayment(initialPayment);
+    setCustomerSavedPrices({});
+    setBillDate(todayISO());
+    setManualRoundOffTarget(null);
+    scrollBillingPageToTop();
+    requestAnimationFrame(() => {
+      scrollBillingPageToTop();
+      requestAnimationFrame(scrollBillingPageToTop);
+    });
+  }, [searchParams]);
+
+  useEffect(() => {
+    const shouldShowInitialCustomers =
+      showForm && !billForEdit && !selectedCustomerId;
+
+    if (customerSearch.length < 2 && !shouldShowInitialCustomers) return;
+
     const t = setTimeout(
       () => triggerCustomerSearch(customerSearch),
-      350
+      customerSearch.length < 2 ? 0 : 350
     );
     return () => clearTimeout(t);
-  }, [customerSearch, triggerCustomerSearch]);
+  }, [
+    billForEdit,
+    customerSearch,
+    selectedCustomerId,
+    showForm,
+    triggerCustomerSearch,
+  ]);
 
   const onCustomerSelect = useCallback(
     (id: string) => {
