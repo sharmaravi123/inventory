@@ -111,6 +111,14 @@ const scrollBillingPageToTop = () => {
   document.querySelector("main")?.scrollTo({ top: 0, behavior: "auto" });
 };
 
+const scheduleScrollBillingPageToTop = () => {
+  scrollBillingPageToTop();
+  requestAnimationFrame(() => {
+    scrollBillingPageToTop();
+    requestAnimationFrame(scrollBillingPageToTop);
+  });
+};
+
 const emptyItem = (): BillFormItemState => ({
   id: randomId(),
   productSearch: "",
@@ -315,11 +323,7 @@ export default function BillingAdminPage() {
     setCustomerSavedPrices({});
     setBillDate(todayISO());
     setManualRoundOffTarget(null);
-    scrollBillingPageToTop();
-    requestAnimationFrame(() => {
-      scrollBillingPageToTop();
-      requestAnimationFrame(scrollBillingPageToTop);
-    });
+    scheduleScrollBillingPageToTop();
   }, [searchParams]);
 
   useEffect(() => {
@@ -750,6 +754,7 @@ export default function BillingAdminPage() {
   const loadBillForEdit = (bill: Bill) => {
     setBillForEdit(bill);
     setShowForm(true);
+    scheduleScrollBillingPageToTop();
     setManualRoundOffTarget(
       typeof bill.grandTotal === "number" ? bill.grandTotal : null
     );
@@ -845,8 +850,14 @@ export default function BillingAdminPage() {
             <button
               className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-200 hover:from-sky-400 hover:to-blue-400 transition"
               onClick={() => {
-                setShowForm((prev) => !prev);
-                if (!showForm) resetForm();
+                if (showForm) {
+                  setShowForm(false);
+                  return;
+                }
+
+                resetForm();
+                setShowForm(true);
+                scheduleScrollBillingPageToTop();
               }}
             >
               {showForm ? "Close" : "New Bill"}

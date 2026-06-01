@@ -1,12 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import CustomerModel, {
-  CustomerDocument,
   ensureCustomerPhoneIndex,
 } from "@/models/Customer";
+import BillModel from "@/models/Bill";
 
 type CustomersResponse = {
-  customers: CustomerDocument[];
+  customers: CustomerListItem[];
+};
+
+type CustomerListItem = {
+  _id?: string;
+  name: string;
+  shopName?: string;
+  phone?: string;
+  address: string;
+  gstNumber?: string;
+  customPrices?: { product: string; price: number }[];
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+type BillCustomerSnapshot = {
+  customerInfo?: {
+    customer?: unknown;
+    name?: string;
+    shopName?: string;
+    phone?: string;
+    address?: string;
+    gstNumber?: string;
+  };
+};
+
+const normalizeText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
+
+const toIdString = (value: unknown) => {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value !== null && "toString" in value) {
+    return value.toString();
+  }
+  return "";
+};
+
+const makeSnapshotKey = (info: NonNullable<BillCustomerSnapshot["customerInfo"]>) => {
+  const phone = normalizeText(info.phone);
+  if (phone) return `phone:${phone}`;
+
+  const shopName = normalizeText(info.shopName).toLowerCase();
+  const name = normalizeText(info.name).toLowerCase();
+  return `snapshot:${shopName || name}:${name}`;
 };
 
 export async function POST(req: NextRequest) {
@@ -105,12 +149,79 @@ export async function GET(
       ];
     }
 
-    const customers = await CustomerModel.find(filter)
+    const savedCustomers = await CustomerModel.find(filter)
       .sort({ createdAt: -1 })
-      .limit(20)
+      .lean<CustomerListItem[]>()
       .exec();
 
-    return NextResponse.json({ customers });
+    const customersByKey = new Map<string, CustomerListItem>();
+    const keyByCustomerId = new Map<string, string>();
+    const keyByPhone = new Map<string, string>();
+
+    for (const customer of savedCustomers) {
+      const id = toIdString(customer._id);
+      const key = id ? `id:${id}` : makeSnapshotKey(customer);
+      const item = {
+        ...customer,
+        _id: id || customer._id,
+        address: customer.address || "",
+      };
+
+      customersByKey.set(key, item);
+      if (id) keyByCustomerId.set(id, key);
+
+      const phone = normalizeText(customer.phone);
+      if (phone) keyByPhone.set(phone, key);
+    }
+
+    const billFilter: Record<string, unknown> = {};
+    if (q.length > 0) {
+      billFilter["$or"] = [
+        { "customerInfo.name": { $regex: q, $options: "i" } },
+        { "customerInfo.shopName": { $regex: q, $options: "i" } },
+        { "customerInfo.phone": { $regex: q, $options: "i" } },
+      ];
+    }
+
+    const billCustomers = await BillModel.find(billFilter)
+      .select("customerInfo createdAt")
+      .sort({ createdAt: -1 })
+      .lean<BillCustomerSnapshot[]>()
+      .exec();
+
+    for (const bill of billCustomers) {
+      const info = bill.customerInfo;
+      if (!info) continue;
+
+      const name = normalizeText(info.name);
+      const shopName = normalizeText(info.shopName);
+      const phone = normalizeText(info.phone);
+      if (!name && !shopName && !phone) continue;
+
+      const customerId = toIdString(info.customer);
+      const existingKey =
+        (customerId && keyByCustomerId.get(customerId)) ||
+        (phone && keyByPhone.get(phone)) ||
+        "";
+      const key = existingKey || makeSnapshotKey(info);
+
+      if (customersByKey.has(key)) continue;
+
+      const item: CustomerListItem = {
+        _id: customerId || key,
+        name: name || shopName || "Unknown",
+        shopName,
+        phone,
+        address: normalizeText(info.address),
+        gstNumber: normalizeText(info.gstNumber),
+      };
+
+      customersByKey.set(key, item);
+      if (customerId) keyByCustomerId.set(customerId, key);
+      if (phone) keyByPhone.set(phone, key);
+    }
+
+    return NextResponse.json({ customers: Array.from(customersByKey.values()) });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown error";
