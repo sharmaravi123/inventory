@@ -1,24 +1,25 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "@/store/store";
 import {
-  BarChart3,
-  Calendar,
-  Package,
-  Truck,
-  Users,
-  AlertTriangle,
-  ShoppingCart,
-  IndianRupee,
   ArrowRight,
+  BarChart3,
+  CalendarDays,
+  ClipboardList,
+  Download,
+  Package,
+  ReceiptIndianRupee,
+  RefreshCw,
+  RotateCcw,
+  ShoppingBag,
+  Wallet,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { fetchWarehouses } from "@/store/warehouseSlice";
 import { fetchInventory } from "@/store/inventorySlice";
 import { fetchProducts } from "@/store/productSlice";
-import { fetchDrivers } from "@/store/driverSlice";
+import { fetchPurchases, Purchase } from "@/store/purchaseSlice";
 import { useListBillsQuery, Bill } from "@/store/billingApi";
 import { normalizeInventoryUnitPrices } from "@/lib/inventoryPricing";
 
@@ -43,13 +44,13 @@ type ReturnRecord = {
 type Product = {
   _id?: string;
   id?: string;
+  name?: string;
   perBoxItem?: number;
   purchasePrice?: number;
   sellingPrice?: number;
   price?: number;
 };
 
-// Fixed InventoryItem to match store types exactly
 type InventoryItem = {
   _id?: string;
   id?: string;
@@ -57,17 +58,49 @@ type InventoryItem = {
   product?: unknown;
   boxes?: number | string;
   looseItems?: number | string;
+  totalItems?: number;
   lowStockBoxes?: number | string | null;
   lowStockItems?: number | string | null;
 };
 
-type BillItem = {
-  quantityBoxes?: number;
-  itemsPerBox?: number;
-  quantityLoose?: number;
-  quantity?: number;
-  sellingPrice?: number;
-  taxPercent?: number;
+type PurchaseItem = {
+  boxes?: number;
+  looseItems?: number;
+  perBoxItem?: number;
+  totalQty?: number;
+  totalAmount?: number;
+  taxableAmount?: number;
+  taxAmount?: number;
+  productId?: {
+    _id?: string;
+    name?: string;
+    perBoxItem?: number;
+  } | string;
+};
+
+type SummaryCardProps = {
+  title: string;
+  value: string;
+  note: string;
+  icon: React.ReactNode;
+  tone: "slate" | "emerald" | "sky" | "amber" | "rose" | "indigo";
+};
+
+type StockStats = {
+  totalItems: number;
+  purchaseValue: number;
+  sellingValue: number;
+  lowStock: number;
+  outOfStock: number;
+};
+
+const toneClasses: Record<SummaryCardProps["tone"], string> = {
+  slate: "border-slate-200 bg-white text-slate-900",
+  emerald: "border-emerald-100 bg-emerald-50 text-emerald-900",
+  sky: "border-sky-100 bg-sky-50 text-sky-900",
+  amber: "border-amber-100 bg-amber-50 text-amber-900",
+  rose: "border-rose-100 bg-rose-50 text-rose-900",
+  indigo: "border-indigo-100 bg-indigo-50 text-indigo-900",
 };
 
 const extractId = (ref: unknown): string | undefined => {
@@ -76,946 +109,658 @@ const extractId = (ref: unknown): string | undefined => {
   if (typeof ref === "object") {
     const obj = ref as Record<string, unknown>;
     const id = obj._id ?? obj.id;
-    if (!id) return undefined;
-    return String(id);
+    return id ? String(id) : undefined;
   }
   return undefined;
 };
 
+const toNumber = (value: unknown): number => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const toInputDate = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const getCurrentYearRange = () => {
+  const now = new Date();
+  return {
+    from: toInputDate(new Date(now.getFullYear(), 0, 1)),
+    to: toInputDate(new Date(now.getFullYear(), 11, 31)),
+  };
+};
+
+const formatDisplayDate = (date: string) =>
+  new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(date));
+
+const formatCurrency = (value: number): string =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(value);
+
+const formatNumber = (value: number): string =>
+  new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(value);
+
+const isWithinDateRange = (dateStr: string | undefined, from: string, to: string) => {
+  if (!dateStr) return false;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return false;
+
+  const fromDate = new Date(from);
+  fromDate.setHours(0, 0, 0, 0);
+  const toDate = new Date(to);
+  toDate.setHours(23, 59, 59, 999);
+
+  return date >= fromDate && date <= toDate;
+};
+
+const getPurchaseDate = (purchase: Purchase) =>
+  purchase.purchaseDate || purchase.createdAt;
+
 const getProductPerBox = (inv: InventoryItem, products: Product[]): number => {
+  const productFromInventory = inv.product as Product | undefined;
+  if (typeof productFromInventory?.perBoxItem === "number" && productFromInventory.perBoxItem > 0) {
+    return productFromInventory.perBoxItem;
+  }
+
   const pid = extractId(inv.productId ?? inv.product);
-  if (!pid) return 1;
-  const p = products.find((x) => String(x._id ?? x.id) === pid);
-  const perBox = typeof p?.perBoxItem === "number" ? p.perBoxItem : 1;
-  return perBox > 0 ? perBox : 1;
+  const product = products.find((p) => String(p._id ?? p.id) === pid);
+  return product?.perBoxItem && product.perBoxItem > 0 ? product.perBoxItem : 1;
 };
 
-const getProductPrices = (
-  productId: string | undefined,
-  products: Product[]
-): { purchase?: number; selling?: number } => {
-  if (!productId) return {};
-  const p = products.find(
-    (x) => String(x._id ?? x.id) === String(productId)
+const getProductPrices = (inv: InventoryItem, products: Product[]) => {
+  const productFromInventory = inv.product as Product | undefined;
+  const pid = extractId(inv.productId ?? inv.product);
+  const product =
+    productFromInventory ??
+    products.find((p) => String(p._id ?? p.id) === String(pid));
+
+  return product ? normalizeInventoryUnitPrices(product) : { purchase: 0, selling: 0 };
+};
+
+const getReturnAmount = (record: ReturnRecord): number => {
+  if (typeof record.totalAmount === "number") return record.totalAmount;
+
+  return record.items.reduce((sum, item) => {
+    if (typeof item.lineAmount === "number") return sum + item.lineAmount;
+    return sum + toNumber(item.unitPrice) * toNumber(item.totalItems);
+  }, 0);
+};
+
+function SummaryCard({ title, value, note, icon, tone }: SummaryCardProps) {
+  return (
+    <div className={`rounded-lg border p-4 shadow-sm ${toneClasses[tone]}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
+            {title}
+          </p>
+          <p className="mt-2 break-words text-2xl font-semibold">{value}</p>
+        </div>
+        <div className="rounded-md bg-white/80 p-2 shadow-sm">{icon}</div>
+      </div>
+      <p className="mt-3 text-xs leading-5 opacity-75">{note}</p>
+    </div>
   );
-  if (!p) return {};
-  const { purchase, selling } = normalizeInventoryUnitPrices(p);
-  return { purchase, selling };
-};
-
-function isWithinDateRange(dateStr: string, from: string, to: string): boolean {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return false;
-
-  if (from) {
-    const fromDate = new Date(from);
-    fromDate.setHours(0, 0, 0, 0);
-    if (d < fromDate) return false;
-  }
-
-  if (to) {
-    const toDate = new Date(to);
-    toDate.setHours(23, 59, 59, 999);
-    if (d > toDate) return false;
-  }
-
-  return true;
 }
 
 export default function ReportsPage() {
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
+  const defaultRange = useMemo(getCurrentYearRange, []);
 
   const { products } = useSelector((s: RootState) => s.product);
-  const { list: warehouses } = useSelector((s: RootState) => s.warehouse);
   const { items: inventory } = useSelector((s: RootState) => s.inventory);
-  const { items: drivers } = useSelector((s: RootState) => s.driver);
+  const { list: purchases, loading: purchasesLoading } = useSelector(
+    (s: RootState) => s.purchase
+  );
+
+  const [fromDate, setFromDate] = useState(defaultRange.from);
+  const [toDate, setToDate] = useState(defaultRange.to);
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
 
-  useEffect(() => {
-    fetch("/api/returns")
-      .then((r) => r.json())
-      .then((d) => setReturns(d.returns ?? []))
-      .catch(() => {});
-  }, []);
-
-  const computeReturnAmount = (r: ReturnRecord): number => {
-    if (typeof r.totalAmount === "number") return r.totalAmount;
-
-    return r.items.reduce((sum, item) => {
-      if (typeof item.lineAmount === "number") {
-        return sum + item.lineAmount;
-      }
-      if (typeof item.unitPrice === "number") {
-        return sum + item.unitPrice * item.totalItems;
-      }
-      return sum;
-    }, 0);
-  };
-
   const { data: billsData, isLoading: billsLoading, refetch } =
-    useListBillsQuery({
-      search: "",
-    });
+    useListBillsQuery({ search: "" });
 
   const bills = useMemo(() => billsData?.bills ?? [], [billsData]);
 
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-
   useEffect(() => {
     dispatch(fetchProducts());
-    dispatch(fetchWarehouses());
     dispatch(fetchInventory());
-    dispatch(fetchDrivers());
+    dispatch(fetchPurchases());
   }, [dispatch]);
 
-  // ----- FILTERED BILLS BY DATE -----
-  const filteredBills = useMemo(() => {
-    if (!fromDate && !toDate) return bills;
-    return bills.filter((b) => isWithinDateRange(b.billDate, fromDate, toDate));
-  }, [bills, fromDate, toDate]);
+  useEffect(() => {
+    fetch("/api/returns")
+      .then((res) => res.json())
+      .then((data) => setReturns(data.returns ?? []))
+      .catch(() => setReturns([]));
+  }, []);
 
-  // ----- TOP LEVEL ORDER + PAYMENT METRICS -----
-  const orderStats = useMemo(() => {
-    let totalRevenue = 0;
-    let totalCollected = 0;
-    let totalOutstanding = 0;
+  const selectedRangeLabel = `${formatDisplayDate(fromDate)} to ${formatDisplayDate(toDate)}`;
 
-    let totalOrders = 0;
-    let deliveredCount = 0;
-    let partiallyPaidCount = 0;
-    let pendingStatusCount = 0;
+  const filteredBills = useMemo(
+    () => bills.filter((bill) => isWithinDateRange(bill.billDate, fromDate, toDate)),
+    [bills, fromDate, toDate]
+  );
 
-    let cashAmount = 0;
-    let upiAmount = 0;
-    let cardAmount = 0;
+  const filteredPurchases = useMemo(
+    () =>
+      purchases.filter((purchase) =>
+        isWithinDateRange(getPurchaseDate(purchase), fromDate, toDate)
+      ),
+    [purchases, fromDate, toDate]
+  );
 
-    filteredBills.forEach((bill) => {
-      totalOrders += 1;
-      totalRevenue += bill.grandTotal;
-      totalCollected += bill.amountCollected;
-      totalOutstanding += bill.balanceAmount;
+  const filteredReturns = useMemo(
+    () => returns.filter((record) => isWithinDateRange(record.createdAt, fromDate, toDate)),
+    [returns, fromDate, toDate]
+  );
 
-      if (bill.status === "DELIVERED") deliveredCount += 1;
-      else if (bill.status === "PARTIALLY_PAID") partiallyPaidCount += 1;
-      else pendingStatusCount += 1;
+  const salesStats = useMemo(() => {
+    return filteredBills.reduce(
+      (acc, bill: Bill) => {
+        acc.billCount += 1;
+        acc.grossSales += toNumber(bill.grandTotal);
+        acc.collected += toNumber(bill.amountCollected);
+        acc.outstanding += toNumber(bill.balanceAmount);
+        acc.tax += toNumber(bill.totalTax);
+        acc.itemsSold += toNumber(bill.totalItems);
+        acc.cash += toNumber(bill.payment?.cashAmount);
+        acc.upi += toNumber(bill.payment?.upiAmount);
+        acc.card += toNumber(bill.payment?.cardAmount);
 
-      cashAmount += bill.payment.cashAmount ?? 0;
-      upiAmount += bill.payment.upiAmount ?? 0;
-      cardAmount += bill.payment.cardAmount ?? 0;
-    });
+        bill.items.forEach((item) => {
+          const key = item.productName || extractId(item.product) || "Unknown product";
+          const current = acc.productMap.get(key) ?? {
+            name: key,
+            qty: 0,
+            amount: 0,
+          };
+          current.qty += toNumber(item.totalItems);
+          current.amount += toNumber(item.lineTotal);
+          acc.productMap.set(key, current);
+        });
 
-    const avgOrderValue =
-      totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-    return {
-      totalOrders,
-      totalRevenue,
-      totalCollected,
-      totalOutstanding,
-      deliveredCount,
-      partiallyPaidCount,
-      pendingStatusCount,
-      avgOrderValue,
-      cashAmount,
-      upiAmount,
-      cardAmount,
-    };
+        return acc;
+      },
+      {
+        billCount: 0,
+        grossSales: 0,
+        collected: 0,
+        outstanding: 0,
+        tax: 0,
+        itemsSold: 0,
+        cash: 0,
+        upi: 0,
+        card: 0,
+        productMap: new Map<string, { name: string; qty: number; amount: number }>(),
+      }
+    );
   }, [filteredBills]);
 
-  // ----- INVENTORY ALERTS (only counts, sample section removed) -----
-  const inventoryAlerts = useMemo(() => {
-    if (!inventory.length || !products.length) {
-      return { lowStockCount: 0, outOfStockCount: 0 };
-    }
+  const purchaseStats = useMemo(() => {
+    return filteredPurchases.reduce(
+      (acc, purchase) => {
+        acc.purchaseCount += 1;
+        acc.totalPurchase += toNumber(purchase.grandTotal);
 
-    let lowStockCount = 0;
-    let outOfStockCount = 0;
+        (purchase.items as PurchaseItem[]).forEach((item) => {
+          const perBox = toNumber(item.perBoxItem) || 1;
+          const qty =
+            toNumber(item.totalQty) ||
+            toNumber(item.boxes) * perBox + toNumber(item.looseItems);
+          acc.itemsPurchased += qty;
+          acc.tax += toNumber(item.taxAmount);
+        });
 
-    const getItemsPerBox = (productId?: string): number => {
-      if (!productId) return 1;
-
-      const p = products.find(
-        (prod) => String(prod._id ?? prod.id) === String(productId)
-      );
-
-      return p?.perBoxItem ?? 1;
-    };
-
-    inventory.forEach((item) => {
-      const perBox = getItemsPerBox(extractId(item.productId ?? item.product));
-
-      const boxes = Number(item.boxes ?? 0);
-      const loose = Number(item.looseItems ?? 0);
-
-      const totalItems = boxes * perBox + loose;
-
-      // sensible default: 1 box = low stock if not defined
-      const lowStockThreshold =
-        (Number(item.lowStockBoxes ?? 1) * perBox) +
-        Number(item.lowStockItems ?? 0);
-
-      if (totalItems === 0) {
-        outOfStockCount += 1;
-      } else if (totalItems <= lowStockThreshold) {
-        lowStockCount += 1;
+        return acc;
+      },
+      {
+        purchaseCount: 0,
+        totalPurchase: 0,
+        itemsPurchased: 0,
+        tax: 0,
       }
-    });
-
-    return { lowStockCount, outOfStockCount };
-  }, [inventory, products]);
+    );
+  }, [filteredPurchases]);
 
   const returnStats = useMemo(() => {
-    let totalReturned = 0;
+    return filteredReturns.reduce(
+      (acc, record) => {
+        acc.returnCount += 1;
+        acc.returnAmount += getReturnAmount(record);
+        acc.returnItems += record.items.reduce(
+          (sum, item) => sum + toNumber(item.totalItems),
+          0
+        );
+        return acc;
+      },
+      { returnCount: 0, returnAmount: 0, returnItems: 0 }
+    );
+  }, [filteredReturns]);
 
-    returns.forEach((r) => {
-      const d = new Date(r.createdAt);
+  const stockStats = useMemo(() => {
+    return (inventory as InventoryItem[]).reduce<StockStats>(
+      (acc, inv) => {
+        const perBox = getProductPerBox(inv, products as Product[]);
+        const totalItems =
+          typeof inv.totalItems === "number"
+            ? inv.totalItems
+            : toNumber(inv.boxes) * perBox + toNumber(inv.looseItems);
+        const prices = getProductPrices(inv, products as Product[]);
+        const lowStockLimit = toNumber(inv.lowStockBoxes ?? 1) * perBox + toNumber(inv.lowStockItems);
 
-      if (fromDate) {
-        const f = new Date(fromDate);
-        f.setHours(0, 0, 0, 0);
-        if (d < f) return;
-      }
+        acc.totalItems += totalItems;
+        acc.purchaseValue += totalItems * toNumber(prices.purchase);
+        acc.sellingValue += totalItems * toNumber(prices.selling);
+        if (totalItems === 0) acc.outOfStock += 1;
+        else if (totalItems <= lowStockLimit) acc.lowStock += 1;
 
-      if (toDate) {
-        const t = new Date(toDate);
-        t.setHours(23, 59, 59, 999);
-        if (d > t) return;
-      }
-
-      totalReturned += computeReturnAmount(r);
-    });
-
-    return {
-      totalReturned,
-    };
-  }, [returns, fromDate, toDate]);
-
-  // ----- DRIVER PERFORMANCE -----
-  const driverSummary = useMemo(() => {
-    const summary: {
-      driverId: string;
-      name: string;
-      orders: number;
-      delivered: number;
-      collected: number;
-      outstanding: number;
-    }[] = [];
-
-    drivers.forEach((d) => {
-      const driverBills = filteredBills.filter((b) => b.driver === d._id);
-
-      if (driverBills.length === 0) return;
-
-      let orders = 0;
-      let delivered = 0;
-      let collected = 0;
-      let outstanding = 0;
-
-      driverBills.forEach((b) => {
-        orders += 1;
-        collected += b.amountCollected;
-        outstanding += b.balanceAmount;
-        if (b.status === "DELIVERED") delivered += 1;
-      });
-
-      summary.push({
-        driverId: d._id,
-        name: d.name,
-        orders,
-        delivered,
-        collected,
-        outstanding,
-      });
-    });
-
-    summary.sort((a, b) => b.collected - a.collected);
-    return summary.slice(0, 5);
-  }, [drivers, filteredBills]);
-
-  // ----- TOP CUSTOMERS (top 5) -----
-  const topCustomers = useMemo(() => {
-    const map = new Map<
-      string,
+        return acc;
+      },
       {
-        name: string;
-        phone: string;
-        total: number;
-        orders: number;
-        outstanding: number;
+        totalItems: 0,
+        purchaseValue: 0,
+        sellingValue: 0,
+        lowStock: 0,
+        outOfStock: 0,
       }
-    >();
-
-    filteredBills.forEach((b) => {
-      const key = b.customerInfo.phone || b.customerInfo.name;
-      const existing = map.get(key);
-      if (!existing) {
-        map.set(key, {
-          name: b.customerInfo.name,
-          phone: b.customerInfo.phone,
-          total: b.grandTotal,
-          orders: 1,
-          outstanding: b.balanceAmount,
-        });
-      } else {
-        existing.total += b.grandTotal;
-        existing.orders += 1;
-        existing.outstanding += b.balanceAmount;
-      }
-    });
-
-    const arr = Array.from(map.values());
-    arr.sort((a, b) => b.total - a.total);
-    return arr.slice(0, 5);
-  }, [filteredBills]);
-
-  const formatCurrency = (value: number): string =>
-    `₹${value.toFixed(2)}`;
-
-  const handleRefresh = useCallback((): void => {
-    // Refresh + date reset as you asked
-    setFromDate("");
-    setToDate("");
-    refetch();
-  }, [refetch]);
-
-  const gstReport = useMemo(() => {
-    let totalGST = 0;
-
-    filteredBills.forEach((bill) => {
-      bill.items.forEach((item: BillItem) => {
-        const qty =
-          (item.quantityBoxes ?? 0) * (item.itemsPerBox ?? 1) +
-          (item.quantityLoose ?? item.quantity ?? 0);
-
-        const price = item.sellingPrice ?? 0;
-        const taxPercent = item.taxPercent ?? 0;
-
-        const taxableAmount = qty * price;
-        const gstAmount = (taxableAmount * taxPercent) / 100;
-
-        totalGST += gstAmount;
-      });
-    });
-
-    return {
-      totalGST,
-      cgst: totalGST / 2,
-      sgst: totalGST / 2,
-    };
-  }, [filteredBills]);
-
-  const reportInventoryTotals = useMemo(() => {
-    let totalItems = 0;
-    let totalPurchaseValue = 0;
-    let totalSellingValue = 0;
-
-    inventory.forEach((inv: InventoryItem) => {
-      const perBox = getProductPerBox(inv, products as Product[]);
-      const qty =
-        typeof inv.totalItems === "number"
-          ? inv.totalItems
-          : Number(inv.boxes ?? 0) * perBox + Number(inv.looseItems ?? 0);
-
-      const pid = extractId(inv.productId ?? inv.product);
-      const prices = getProductPrices(pid, products as Product[]);
-
-      totalItems += qty;
-      totalPurchaseValue += prices.purchase
-        ? qty * prices.purchase
-        : 0;
-      totalSellingValue += prices.selling
-        ? qty * prices.selling
-        : 0;
-    });
-
-    return {
-      totalItems,
-      totalPurchaseValue,
-      totalSellingValue,
-    };
+    );
   }, [inventory, products]);
 
-  const recentReturns = useMemo(() => {
-    return returns
-      .filter((r) => {
-        const d = new Date(r.createdAt);
+  const netSales = salesStats.grossSales - returnStats.returnAmount;
 
-        if (fromDate) {
-          const f = new Date(fromDate);
-          f.setHours(0, 0, 0, 0);
-          if (d < f) return false;
-        }
+  const monthRows = useMemo(() => {
+    const map = new Map<
+      string,
+      { label: string; bills: number; sales: number; purchases: number; returns: number }
+    >();
 
-        if (toDate) {
-          const t = new Date(toDate);
-          t.setHours(23, 59, 59, 999);
-          if (d > t) return false;
-        }
-
-        return true;
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() -
-          new Date(a.createdAt).getTime()
-      )
-      .slice(0, 5);
-  }, [returns, fromDate, toDate]);
-
-  const monthWiseBills = useMemo(() => {
-    const map = new Map<string, { bills: number; amount: number }>();
-
-    filteredBills.forEach((b) => {
-      const d = new Date(b.billDate);
-      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
-
+    const ensureMonth = (dateStr: string) => {
+      const date = new Date(dateStr);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
       if (!map.has(key)) {
-        map.set(key, { bills: 0, amount: 0 });
+        map.set(key, {
+          label: new Intl.DateTimeFormat("en-IN", {
+            month: "short",
+            year: "numeric",
+          }).format(date),
+          bills: 0,
+          sales: 0,
+          purchases: 0,
+          returns: 0,
+        });
       }
+      return map.get(key)!;
+    };
 
-      const m = map.get(key)!;
-      m.bills += 1;
-      m.amount += b.grandTotal;
+    filteredBills.forEach((bill) => {
+      const row = ensureMonth(bill.billDate);
+      row.bills += 1;
+      row.sales += toNumber(bill.grandTotal);
     });
 
-    return Array.from(map.entries());
-  }, [filteredBills]);
+    filteredPurchases.forEach((purchase) => {
+      const row = ensureMonth(getPurchaseDate(purchase));
+      row.purchases += toNumber(purchase.grandTotal);
+    });
+
+    filteredReturns.forEach((record) => {
+      const row = ensureMonth(record.createdAt);
+      row.returns += getReturnAmount(record);
+    });
+
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, row]) => row);
+  }, [filteredBills, filteredPurchases, filteredReturns]);
+
+  const topProducts = useMemo(() => {
+    return Array.from(salesStats.productMap.values())
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 6);
+  }, [salesStats.productMap]);
+
+  const resetToCurrentYear = useCallback(() => {
+    setFromDate(defaultRange.from);
+    setToDate(defaultRange.to);
+  }, [defaultRange.from, defaultRange.to]);
+
+  const refreshAll = useCallback(() => {
+    refetch();
+    dispatch(fetchPurchases());
+    dispatch(fetchInventory());
+  }, [dispatch, refetch]);
+
+  const quickSetThisMonth = () => {
+    const now = new Date();
+    setFromDate(toInputDate(new Date(now.getFullYear(), now.getMonth(), 1)));
+    setToDate(toInputDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
+  };
 
   return (
-    <div className="space-y-6 min-h-screen bg-slate-50 px-3 py-4 sm:px-6 sm:py-6">
-      {/* HEADER */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-h-screen bg-slate-50 px-3 py-4 text-slate-900 sm:px-6 sm:py-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Reports & Analytics
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Admin report
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+            Business Performance Report
           </h1>
-          <p className="mt-1 text-xs text-slate-500">
-            Consolidated overview of orders, payments, drivers & inventory.
+          <p className="mt-2 text-sm text-slate-600">
+            Simple totals for bills, sales, purchases, stock value, outstanding, and refunds for {selectedRangeLabel}.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <Calendar className="h-4 w-4 text-[color:var(--color-primary)]" />
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col">
-                <span className="text-[10px] uppercase tracking-wide text-slate-400">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-slate-500">
                   From
                 </span>
                 <input
                   type="date"
                   value={fromDate}
+                  max={toDate}
                   onChange={(e) => setFromDate(e.target.value)}
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-[color:var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[color:var(--color-primary)]"
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                 />
-              </div>
-              <span className="text-slate-400">—</span>
-              <div className="flex flex-col">
-                <span className="text-[10px] uppercase tracking-wide text-slate-400">
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-slate-500">
                   To
                 </span>
                 <input
                   type="date"
                   value={toDate}
+                  min={fromDate}
                   onChange={(e) => setToDate(e.target.value)}
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-[color:var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[color:var(--color-primary)]"
+                  className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                 />
-              </div>
+              </label>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={handleRefresh}
-            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium text-slate-700 shadow-sm hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
+            onClick={quickSetThisMonth}
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:border-sky-300 hover:text-sky-700"
           >
-            Refresh & clear dates
+            <CalendarDays className="h-4 w-4" />
+            This month
+          </button>
+          <button
+            type="button"
+            onClick={resetToCurrentYear}
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:border-sky-300 hover:text-sky-700"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Current year
+          </button>
+          <button
+            type="button"
+            onClick={refreshAll}
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-slate-900 px-3 text-sm font-medium text-white shadow-sm hover:bg-slate-800"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
           </button>
         </div>
       </div>
 
-      {/* TOP SUMMARY CARDS */}
-      <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-5">
-        {/* ORDERS */}
-        <div className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 flex items-center gap-1">
-              <ShoppingCart className="h-3.5 w-3.5 text-[color:var(--color-primary)]" />
-              Orders (filtered)
-            </p>
-            <p className="mt-2 text-3xl font-semibold text-slate-900">
-              {orderStats.totalOrders}
-            </p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Delivered:{" "}
-              <span className="font-semibold text-emerald-600">
-                {orderStats.deliveredCount}
-              </span>{" "}
-              • Partially paid:{" "}
-              <span className="font-semibold text-amber-600">
-                {orderStats.partiallyPaidCount}
-              </span>
-            </p>
-          </div>
-          <div className="mt-3 flex justify-end">
-            <button
-              type="button"
-              onClick={() => router.push("/admin/orders")}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
-            >
-              View all orders
-              <ArrowRight className="h-3 w-3" />
-            </button>
-          </div>
-        </div>
-
-        {/* REVENUE */}
-        <div className="group rounded-2xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm transition hover:shadow-md">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700 flex items-center gap-1">
-            <BarChart3 className="h-3.5 w-3.5 text-emerald-500" />
-            Revenue
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-emerald-700">
-            {formatCurrency(orderStats.totalRevenue)}
-          </p>
-          <p className="mt-1 text-[11px] text-emerald-700/80">
-            Avg order:{" "}
-            <span className="font-semibold">
-              {formatCurrency(orderStats.avgOrderValue)}
-            </span>
-          </p>
-        </div>
-
-        {/* COLLECTED */}
-        <div className="group rounded-2xl border border-sky-100 bg-sky-50 p-4 shadow-sm transition hover:shadow-md">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-sky-700 flex items-center gap-1">
-            <IndianRupee className="h-3.5 w-3.5 text-emerald-500" />
-            Collected
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-sky-800">
-            {formatCurrency(orderStats.totalCollected)}
-          </p>
-          <p className="mt-1 text-[11px] text-sky-800/80">
-            Cash:{" "}
-            <span className="font-semibold">
-              {formatCurrency(orderStats.cashAmount)}
-            </span>{" "}
-            • UPI:{" "}
-            <span className="font-semibold">
-              {formatCurrency(orderStats.upiAmount)}
-            </span>{" "}
-            • Card:{" "}
-            <span className="font-semibold">
-              {formatCurrency(orderStats.cardAmount)}
-            </span>
-          </p>
-        </div>
-
-        {/* OUTSTANDING */}
-        <div className="group rounded-2xl border border-rose-100 bg-rose-50 p-4 shadow-sm transition hover:shadow-md">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-rose-700 flex items-center gap-1">
-            <IndianRupee className="h-3.5 w-3.5 text-rose-500" />
-            Outstanding dues
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-rose-700">
-            {formatCurrency(orderStats.totalOutstanding)}
-          </p>
-          <p className="mt-1 text-[11px] text-rose-700/80">
-            Pending orders:{" "}
-            <span className="font-semibold">
-              {orderStats.pendingStatusCount}
-            </span>
-          </p>
-        </div>
-
-        {/* RETURNED */}
-        <div className="group rounded-2xl border border-amber-100 bg-amber-50 p-4 shadow-sm transition hover:shadow-md">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-amber-700 flex items-center gap-1">
-            <IndianRupee className="h-3.5 w-3.5 text-amber-500" />
-            Returned amount
-          </p>
-          <p className="mt-2 text-2xl font-semibold text-amber-700">
-            {formatCurrency(returnStats.totalReturned)}
-          </p>
-          <p className="mt-1 text-[11px] text-amber-700/80">
-            Amount already returned to customers
-          </p>
-        </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <SummaryCard
+          title="Total bills"
+          value={formatNumber(salesStats.billCount)}
+          note="Bills created in the selected date range."
+          icon={<ReceiptIndianRupee className="h-5 w-5 text-slate-600" />}
+          tone="slate"
+        />
+        <SummaryCard
+          title="Total sell"
+          value={formatCurrency(netSales)}
+          note={`After refund deduction. Gross sell: ${formatCurrency(salesStats.grossSales)}.`}
+          icon={<BarChart3 className="h-5 w-5 text-emerald-600" />}
+          tone="emerald"
+        />
+        <SummaryCard
+          title="Total purchase"
+          value={formatCurrency(purchaseStats.totalPurchase)}
+          note={`${formatNumber(purchaseStats.purchaseCount)} purchase bills in the selected date range.`}
+          icon={<ShoppingBag className="h-5 w-5 text-sky-600" />}
+          tone="sky"
+        />
+        <SummaryCard
+          title="Stock value"
+          value={formatCurrency(stockStats.sellingValue)}
+          note={`${formatNumber(stockStats.totalItems)} items available now. Purchase value: ${formatCurrency(stockStats.purchaseValue)}.`}
+          icon={<Package className="h-5 w-5 text-indigo-600" />}
+          tone="indigo"
+        />
+        <SummaryCard
+          title="Outstanding"
+          value={formatCurrency(salesStats.outstanding)}
+          note={`Collected ${formatCurrency(salesStats.collected)} from customers.`}
+          icon={<Wallet className="h-5 w-5 text-rose-600" />}
+          tone="rose"
+        />
+        <SummaryCard
+          title="Refund amount"
+          value={formatCurrency(returnStats.returnAmount)}
+          note={`${formatNumber(returnStats.returnCount)} returns in the selected date range.`}
+          icon={<Download className="h-5 w-5 text-amber-600" />}
+          tone="amber"
+        />
       </div>
 
-      {/* RESOURCES OVERVIEW */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* PRODUCTS + WAREHOUSE */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold text-slate-900 flex items-center gap-2">
-            <Package className="h-4 w-4 text-[color:var(--color-primary)]" />
-            Products & Stores
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+      <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-[11px] text-slate-500">Products</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {products.length}
+              <h2 className="text-sm font-semibold">Sales and Purchase Summary</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Month-wise totals inside the selected date range.
               </p>
             </div>
-            <div>
-              <p className="text-[11px] text-slate-500">Stores</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {warehouses.length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* INVENTORY ALERT COUNTS */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold text-slate-900 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-            Inventory alerts
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-[11px] text-slate-500">Low stock</p>
-              <p className="mt-1 text-2xl font-semibold text-amber-600">
-                {inventoryAlerts.lowStockCount}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-500">Out of stock</p>
-              <p className="mt-1 text-2xl font-semibold text-rose-600">
-                {inventoryAlerts.outOfStockCount}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* DRIVERS SUMMARY */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-900 flex items-center gap-2">
-              <Truck className="h-4 w-4 text-[color:var(--color-primary)]" />
-              Drivers
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-[11px] text-slate-500">Total drivers</p>
-                <p className="mt-1 text-2xl font-semibold text-slate-900">
-                  {drivers.length}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] text-slate-500">Active (has orders)</p>
-                <p className="mt-1 text-2xl font-semibold text-emerald-600">
-                  {driverSummary.length}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="mt-3 flex justify-end">
             <button
               type="button"
-              onClick={() => router.push("/admin/driver")}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
+              onClick={() => router.push("/admin/purchase")}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:border-sky-300 hover:text-sky-700"
             >
-              View all drivers
-              <ArrowRight className="h-3 w-3" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* GST SUMMARY */}
-        {/* <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[11px] text-slate-500">Total GST</p>
-            <p className="mt-2 text-xl font-semibold text-slate-900">
-              {formatCurrency(gstReport.totalGST)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[11px] text-slate-500">CGST</p>
-            <p className="mt-2 text-xl font-semibold text-slate-900">
-              {formatCurrency(gstReport.cgst)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[11px] text-slate-500">SGST</p>
-            <p className="mt-2 text-xl font-semibold text-slate-900">
-              {formatCurrency(gstReport.sgst)}
-            </p>
-          </div>
-        </div> */}
-
-        {/* INVENTORY REPORT */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[11px] text-slate-500">Total items available</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">
-              {reportInventoryTotals.totalItems}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[11px] text-slate-500">Total purchase value</p>
-            <p className="mt-2 text-xl font-semibold text-slate-900">
-              ₹{reportInventoryTotals.totalPurchaseValue.toFixed(2)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[11px] text-slate-500">Total selling value</p>
-            <p className="mt-2 text-xl font-semibold text-slate-900">
-              ₹{reportInventoryTotals.totalSellingValue.toFixed(2)}
-            </p>
-          </div>
-        </div>
-
-        {/* RECENT RETURNS */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-900">Recent returns</p>
-            <button
-              onClick={() => router.push("/admin/returns")}
-              className="text-xs border border-slate-200 bg-slate-50 px-2 py-0.5 rounded-full text-slate-700 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
-            >
-              View all
+              Purchase page
+              <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          {recentReturns.length === 0 ? (
-            <p className="text-xs text-slate-500">No returns</p>
-          ) : (
-            <div className="max-h-56 overflow-auto">
-              <table className="w-full text-[11px]">
-                <thead className="sticky top-0 bg-slate-50">
-                  <tr className="text-left text-slate-500">
-                    <th className="py-1.5">Customer</th>
-                    <th className="py-1.5">Product</th>
-                    <th className="py-1.5 text-right">Qty</th>
-                    <th className="py-1.5 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentReturns.map((r) =>
-                    r.items.map((it, idx) => (
-                      <tr
-                        key={`${r._id}-${idx}`}
-                        className="border-t border-slate-100 text-slate-700"
-                      >
-                        <td className="py-2 align-top">
-                          {r.customerInfo.name}
-                          <div className="text-[10px] text-slate-400">
-                            {r.customerInfo.phone}
-                          </div>
-                        </td>
-                        <td className="py-2 align-top">{it.productName}</td>
-                        <td className="py-2 text-right align-top">
-                          {it.totalItems}
-                        </td>
-                        <td className="py-2 text-right align-top">
-                          ₹
-                          {(
-                            typeof it.lineAmount === "number"
-                              ? it.lineAmount
-                              : (it.unitPrice ?? 0) * it.totalItems
-                          ).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* MONTH WISE BILLS */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-semibold text-slate-900 mb-2">
-            Month-wise bills
-          </p>
-          <div className="max-h-56 overflow-auto">
-            <table className="w-full text-[11px]">
-              <thead className="sticky top-0 bg-slate-50">
-                <tr className="text-left text-slate-500">
-                  <th className="py-1.5">Month</th>
-                  <th className="py-1.5 text-right">Bills</th>
-                  <th className="py-1.5 text-right">Revenue</th>
+          <div className="mt-4 overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">Month</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Bills</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Total sell</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Total purchase</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Refund</th>
                 </tr>
               </thead>
               <tbody>
-                {monthWiseBills.map(([k, v]) => (
-                  <tr
-                    key={k}
-                    className="border-t border-slate-100 text-slate-700"
-                  >
-                    <td className="py-2">{k}</td>
-                    <td className="py-2 text-right">{v.bills}</td>
-                    <td className="py-2 text-right">
-                      {formatCurrency(v.amount)}
+                {monthRows.length === 0 ? (
+                  <tr>
+                    <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={5}>
+                      No report data found for this date range.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  monthRows.map((row) => {
+                    const netMonthSales = row.sales - row.returns;
+                    return (
+                      <tr key={row.label} className="border-t border-slate-100">
+                        <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-800">
+                          {row.label}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right">
+                          {formatNumber(row.bills)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right text-emerald-700">
+                          {formatCurrency(netMonthSales)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right text-sky-700">
+                          {formatCurrency(row.purchases)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right text-amber-700">
+                          {formatCurrency(row.returns)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Cash Flow Snapshot</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Payment collection and liabilities for the selected period.
+              </p>
+            </div>
+            <ClipboardList className="h-5 w-5 text-slate-400" />
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {[
+              ["Cash collected", salesStats.cash],
+              ["UPI collected", salesStats.upi],
+              ["Card collected", salesStats.card],
+              ["Customer outstanding", salesStats.outstanding],
+              ["Purchase total", purchaseStats.totalPurchase],
+              ["Refund total", returnStats.returnAmount],
+            ].map(([label, value]) => (
+              <div
+                key={label as string}
+                className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-2"
+              >
+                <span className="text-sm text-slate-600">{label}</span>
+                <span className="text-sm font-semibold text-slate-900">
+                  {formatCurrency(value as number)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
 
-      {/* DRIVERS & CUSTOMERS */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* DRIVER PERFORMANCE TABLE */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-900 flex items-center gap-2">
-              <Truck className="h-4 w-4 text-[color:var(--color-primary)]" />
-              Top drivers (by collection)
-            </p>
-          </div>
-
-          {driverSummary.length === 0 && (
-            <p className="text-xs text-slate-500">
-              No driver order data in selected range.
-            </p>
-          )}
-
-          {driverSummary.length > 0 && (
-            <div className="max-h-60 overflow-y-auto">
-              <table className="min-w-full border-collapse text-[11px]">
-                <thead className="bg-slate-50 text-slate-500 sticky top-0">
-                  <tr>
-                    <th className="border-b border-slate-200 px-2 py-1 text-left">
-                      Driver
-                    </th>
-                    <th className="border-b border-slate-200 px-2 py-1 text-right">
-                      Orders
-                    </th>
-                    <th className="border-b border-slate-200 px-2 py-1 text-right">
-                      Delivered
-                    </th>
-                    <th className="border-b border-slate-200 px-2 py-1 text-right">
-                      Collected
-                    </th>
-                    <th className="border-b border-slate-200 px-2 py-1 text-right">
-                      Outstanding
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {driverSummary.map((d) => (
-                    <tr key={d.driverId} className="text-slate-700">
-                      <td className="border-b border-slate-100 px-2 py-1 text-left">
-                        {d.name}
-                      </td>
-                      <td className="border-b border-slate-100 px-2 py-1 text-right">
-                        {d.orders}
-                      </td>
-                      <td className="border-b border-slate-100 px-2 py-1 text-right">
-                        {d.delivered}
-                      </td>
-                      <td className="border-b border-slate-100 px-2 py-1 text-right">
-                        {formatCurrency(d.collected)}
-                      </td>
-                      <td className="border-b border-slate-100 px-2 py-1 text-right">
-                        {formatCurrency(d.outstanding)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold">Top Selling Products</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Products ranked by billed amount.
+              </p>
             </div>
-          )}
-
-          <div className="mt-3 flex justify-end text-[11px] text-slate-500">
             <button
               type="button"
-              onClick={() => router.push("/admin/drivers")}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
+              onClick={() => router.push("/admin/orders")}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:border-sky-300 hover:text-sky-700"
             >
-              Manage drivers
-              <ArrowRight className="h-3 w-3" />
+              Orders
+              <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
-        </div>
 
-        {/* TOP CUSTOMERS */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-900 flex items-center gap-2">
-              <Users className="h-4 w-4 text-[color:var(--color-primary)]" />
-              Top customers (by billing)
-            </p>
-          </div>
-
-          {topCustomers.length === 0 && (
-            <p className="text-xs text-slate-500">
-              No customer data in selected range.
-            </p>
-          )}
-
-          {topCustomers.length > 0 && (
-            <div className="max-h-60 overflow-y-auto">
-              <table className="min-w-full border-collapse text-[11px]">
-                <thead className="bg-slate-50 text-slate-500 sticky top-0">
+          <div className="mt-4 overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Product</th>
+                  <th className="px-3 py-2 text-right font-semibold">Sold qty</th>
+                  <th className="px-3 py-2 text-right font-semibold">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topProducts.length === 0 ? (
                   <tr>
-                    <th className="border-b border-slate-200 px-2 py-1 text-left">
-                      Customer
-                    </th>
-                    <th className="border-b border-slate-200 px-2 py-1 text-right">
-                      Orders
-                    </th>
-                    <th className="border-b border-slate-200 px-2 py-1 text-right">
-                      Total
-                    </th>
-                    <th className="border-b border-slate-200 px-2 py-1 text-right">
-                      Outstanding
-                    </th>
+                    <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={3}>
+                      No product sales found.
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {topCustomers.map((c, idx) => (
-                    <tr key={`${c.phone}-${idx}`} className="text-slate-700">
-                      <td className="border-b border-slate-100 px-2 py-1 text-left">
-                        <div className="flex flex-col">
-                          <span>{c.name}</span>
-                          <span className="text-[10px] text-slate-400">
-                            {c.phone}
-                          </span>
-                        </div>
+                ) : (
+                  topProducts.map((product) => (
+                    <tr key={product.name} className="border-t border-slate-100">
+                      <td className="px-3 py-3 font-medium text-slate-800">
+                        {product.name}
                       </td>
-                      <td className="border-b border-slate-100 px-2 py-1 text-right">
-                        {c.orders}
+                      <td className="px-3 py-3 text-right">
+                        {formatNumber(product.qty)}
                       </td>
-                      <td className="border-b border-slate-100 px-2 py-1 text-right">
-                        {formatCurrency(c.total)}
-                      </td>
-                      <td className="border-b border-slate-100 px-2 py-1 text-right">
-                        {formatCurrency(c.outstanding)}
+                      <td className="px-3 py-3 text-right font-semibold">
+                        {formatCurrency(product.amount)}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
-            <span>Top 5 customers in selected period.</span>
-            <button
-              type="button"
-              onClick={() => router.push("/admin/payment")}
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
-            >
-              View all customers (orders)
-              <ArrowRight className="h-3 w-3" />
-            </button>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Current Stock Health</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Stock availability is current live inventory, not historical.
+              </p>
+            </div>
+            <Package className="h-5 w-5 text-slate-400" />
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-md bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Available items</p>
+              <p className="mt-1 text-2xl font-semibold">{formatNumber(stockStats.totalItems)}</p>
+            </div>
+            <div className="rounded-md bg-rose-50 p-3">
+              <p className="text-xs text-rose-600">Out of stock products</p>
+              <p className="mt-1 text-2xl font-semibold text-rose-700">
+                {formatNumber(stockStats.outOfStock)}
+              </p>
+            </div>
+            <div className="rounded-md bg-amber-50 p-3">
+              <p className="text-xs text-amber-700">Low stock products</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-800">
+                {formatNumber(stockStats.lowStock)}
+              </p>
+            </div>
+            <div className="rounded-md bg-emerald-50 p-3">
+              <p className="text-xs text-emerald-700">Estimated selling value</p>
+              <p className="mt-1 text-lg font-semibold text-emerald-800">
+                {formatCurrency(stockStats.sellingValue)}
+              </p>
+            </div>
+          </div>
+        </section>
       </div>
 
-      {billsLoading && (
-        <p className="text-[11px] text-slate-500">Loading billing data...</p>
+      {(billsLoading || purchasesLoading) && (
+        <p className="mt-4 text-xs text-slate-500">Loading latest report data...</p>
       )}
     </div>
   );

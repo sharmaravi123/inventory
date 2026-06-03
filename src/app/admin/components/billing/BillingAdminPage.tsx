@@ -33,6 +33,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
 import { roundGrandTotal } from "@/lib/rounding";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 
 type WithId = {
@@ -518,7 +519,7 @@ export default function BillingAdminPage() {
           <p><b>Action:</b> ${billTypeLabel}</p>
           <p><b>Customer:</b> ${escapeHtml(customer.name || "-")} (${escapeHtml(customer.phone || "-")})</p>
           <p><b>Shop:</b> ${escapeHtml(customer.shopName || "-")}</p>
-          <p><b>Date:</b> ${escapeHtml(billDate)}</p>
+          <p><b>Date:</b> ${escapeHtml(formatDisplayDate(billDate))}</p>
           <p><b>Payment Mode:</b> ${escapeHtml(paymentMode)}</p>
           <p><b>Payment Split:</b> Cash ${formatMoney(Number(payment.cashAmount || 0))}, UPI ${formatMoney(Number(payment.upiAmount || 0))}, Card ${formatMoney(Number(payment.cardAmount || 0))}</p>
 

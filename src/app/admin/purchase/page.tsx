@@ -16,6 +16,7 @@ import {
 } from "@/store/purchaseSlice";
 import { useRouter } from "next/navigation";
 import { roundGrandTotal } from "@/lib/rounding";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 type PurchaseItem = {
     productId: string;
@@ -452,7 +453,7 @@ export default function AdminPurchaseManager() {
             <div style="text-align:left;font-size:13px;">
                 <p><b>Dealer:</b> ${dealerName}</p>
                 <p><b>Invoice:</b> ${purchaseInvoiceNumber.trim()}</p>
-                <p><b>Date:</b> ${purchaseDate || "-"}</p>
+                <p><b>Date:</b> ${formatDisplayDate(purchaseDate)}</p>
                 <p><b>Store:</b> ${storeName}</p>
                 <p><b>Selected items:</b></p>
                 <ul style="margin:0;padding-left:18px;">${lines.join("")}</ul>
@@ -577,13 +578,6 @@ export default function AdminPurchaseManager() {
         setOpen(true);
     };
 
-    const formatDateShort = useCallback((dt: Date) => {
-        const day = String(dt.getDate()).padStart(2, "0");
-        const month = dt.toLocaleString("en-IN", { month: "short" });
-        const year = String(dt.getFullYear()).slice(-2);
-        return `${day}-${month}-${year}`;
-    }, []);
-
     const buildGSTPurchaseReport = useCallback(() => {
         const rows: any[] = [];
 
@@ -636,7 +630,7 @@ export default function AdminPurchaseManager() {
                     : effectiveGrossTotal - (purchaseAmount + totalTax);
 
             rows.push({
-                Date: formatDateShort(date),
+                Date: formatDisplayDate(date),
                 Particulars: dealer?.name || "",
                 "Voucher Type": "Purchase",
                 "Supplier Invoice No.": invoiceNumber,
@@ -651,7 +645,7 @@ export default function AdminPurchaseManager() {
         });
 
         return rows;
-    }, [filteredPurchases, getProductById, resolveDealer, company, formatDateShort, calcItem]);
+    }, [filteredPurchases, getProductById, resolveDealer, company, calcItem]);
 
     const getFiscalYearLabel = (dt: Date) => {
         const year = dt.getFullYear();
@@ -667,19 +661,17 @@ export default function AdminPurchaseManager() {
         if (filterType === "thisMonth") {
             const start = new Date(now.getFullYear(), now.getMonth(), 1);
             const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-            return `${formatDateShort(start)} to ${formatDateShort(end)}`;
+            return `${formatDisplayDate(start)} to ${formatDisplayDate(end)}`;
         }
 
         if (filterType === "lastMonth") {
             const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             const lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-            return `${formatDateShort(lastStart)} to ${formatDateShort(lastEnd)}`;
+            return `${formatDisplayDate(lastStart)} to ${formatDisplayDate(lastEnd)}`;
         }
 
         if (filterType === "custom" && fromDate && toDate) {
-            const from = new Date(fromDate);
-            const to = new Date(toDate);
-            return `${formatDateShort(from)} to ${formatDateShort(to)}`;
+            return `${formatDisplayDate(fromDate)} to ${formatDisplayDate(toDate)}`;
         }
 
         const dates = filteredPurchases
@@ -690,7 +682,7 @@ export default function AdminPurchaseManager() {
 
         const from = dates[0];
         const to = dates[dates.length - 1];
-        return `${formatDateShort(from)} to ${formatDateShort(to)}`;
+        return `${formatDisplayDate(from)} to ${formatDisplayDate(to)}`;
     };
 
 
@@ -941,7 +933,7 @@ export default function AdminPurchaseManager() {
                                                     </span>
                                                 </td>
                                                 <td className="px-2 py-3 text-center text-sm font-medium text-slate-900">
-                                                    {new Date(purchase.purchaseDate ?? purchase.createdAt).toLocaleDateString("en-IN")}
+                                                    {formatDisplayDate(purchase.purchaseDate ?? purchase.createdAt)}
                                                 </td>
                                                 <td className="px-2 py-3 text-center text-sm font-medium text-slate-900">
                                                     {purchase.invoiceNumber || purchase.purchaseNumber || "-"}

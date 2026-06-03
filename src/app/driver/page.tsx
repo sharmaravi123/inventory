@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useListBillsQuery, Bill } from "@/store/billingApi";
 import { useRouter } from "next/navigation";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 type DriverMe = {
   _id: string;
@@ -107,15 +108,6 @@ export default function DriverDashboardPage() {
       totalPendingAmount: pendingAmount,
     };
   }, [driverTodayBills]);
-
-  const formatDate = (iso: string): string => {
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
 
   const formatStatus = (bill: Bill): string => {
     if (bill.status === "DELIVERED") return "Delivered";
@@ -305,7 +297,7 @@ export default function DriverDashboardPage() {
                     Invoice: {bill.invoiceNumber || "-"}
                   </p>
                   <p className="text-[11px] text-slate-500">
-                    {formatDate(bill.billDate)}
+                    {formatDisplayDate(bill.billDate)}
                   </p>
                 </div>
                 <div className="text-right">

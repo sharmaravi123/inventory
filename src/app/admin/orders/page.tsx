@@ -15,6 +15,7 @@ import { fetchDrivers } from "@/store/driverSlice";
 import { Search, Calendar } from "lucide-react";
 import Swal from "sweetalert2";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 const BillPreview = dynamic(
   () => import("@/app/admin/components/billing/BillPreview"),
@@ -153,22 +154,15 @@ export default function OrdersPage() {
       return;
     }
 
-    const formatDateShort = (dt: Date): string => {
-      const day = String(dt.getDate()).padStart(2, "0");
-      const month = dt.toLocaleString("en-IN", { month: "short" });
-      const year = String(dt.getFullYear()).slice(-2);
-      return `${day}-${month}-${year}`;
-    };
-
     const getMonthRangeLabel = (value: Date) => {
       const start = new Date(value.getFullYear(), value.getMonth(), 1);
       const end = new Date(value.getFullYear(), value.getMonth() + 1, 0);
-      return `${formatDateShort(start)} to ${formatDateShort(end)}`;
+      return `${formatDisplayDate(start)} to ${formatDisplayDate(end)}`;
     };
 
     const reportPeriod =
       filterType === "custom" && fromDate && toDate
-        ? `${formatDateShort(new Date(fromDate))} to ${formatDateShort(new Date(toDate))}`
+        ? `${formatDisplayDate(fromDate)} to ${formatDisplayDate(toDate)}`
         : filterType === "thisMonth"
           ? getMonthRangeLabel(new Date())
           : filterType === "lastMonth"
@@ -208,7 +202,7 @@ export default function OrdersPage() {
       );
 
       return {
-        Date: formatDateShort(new Date(bill.billDate)),
+        Date: formatDisplayDate(bill.billDate),
         Particulars: bill.customerInfo.shopName || bill.customerInfo.name || "",
         "Voucher Type": "Sales",
         "Voucher No.": bill.invoiceNumber || "",

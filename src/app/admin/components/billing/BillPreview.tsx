@@ -7,6 +7,7 @@ import { fetchProducts, ProductType } from "@/store/productSlice";
 import { useRouter } from "next/navigation";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
 import Swal from "sweetalert2";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 type BillPreviewProps = {
   bill?: Bill;
@@ -351,8 +352,7 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
               <div className="text-right">
                 <div>Invoice No: {bill.invoiceNumber}</div>
                 <div>
-                  Date:{" "}
-                  {new Date(bill.billDate).toLocaleDateString("en-IN")}
+                  Date: {formatDisplayDate(bill.billDate)}
                 </div>
                 <div>FY: {fyLabel}</div>
               </div>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 type LedgerResponse = {
   customer: {
@@ -146,9 +147,7 @@ export default function CustomerDetailsPreviewPage() {
         return `<tr>
           <td>${index + 1}</td>
           <td>${safeHtml(bill.invoiceNumber)}</td>
-          <td>${safeHtml(
-            bill.billDate ? new Date(bill.billDate).toLocaleDateString("en-IN") : "-"
-          )}</td>
+          <td>${safeHtml(formatDisplayDate(bill.billDate))}</td>
           <td style="text-align:right;">${safeHtml(formatMoney(bill.grandTotal))}</td>
           <td style="text-align:right;">${safeHtml(formatMoney(bill.amountCollected))}</td>
           <td style="text-align:right;color:#b91c1c;font-weight:700;">${safeHtml(
@@ -453,7 +452,7 @@ export default function CustomerDetailsPreviewPage() {
                     <td className="border border-black px-2 py-2">{index + 1}</td>
                     <td className="border border-black px-2 py-2">#{bill.invoiceNumber}</td>
                     <td className="border border-black px-2 py-2">
-                      {bill.billDate ? new Date(bill.billDate).toLocaleDateString("en-IN") : "-"}
+                      {formatDisplayDate(bill.billDate)}
                     </td>
                     <td className="border border-black px-2 py-2 text-right">{formatMoney(bill.grandTotal)}</td>
                     <td className="border border-black px-2 py-2 text-right">{formatMoney(bill.amountCollected)}</td>

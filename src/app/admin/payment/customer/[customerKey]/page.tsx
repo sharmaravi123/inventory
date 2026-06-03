@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 type PeriodType = "all" | "thisMonth" | "lastMonth" | "custom";
 
@@ -259,7 +260,7 @@ export default function CustomerDetailsPage() {
                   <tr key={bill.id}>
                     <td className="py-3 pl-4 pr-2 font-medium text-slate-900">#{bill.invoiceNumber}</td>
                     <td className="px-2 py-3 text-slate-600">
-                      {bill.billDate ? new Date(bill.billDate).toLocaleDateString("en-IN") : "-"}
+                      {formatDisplayDate(bill.billDate)}
                     </td>
                     <td className="px-2 py-3 text-right font-semibold text-slate-900">{formatMoney(bill.grandTotal)}</td>
                     <td className="px-2 py-3 text-right font-semibold text-emerald-700">{formatMoney(bill.amountCollected)}</td>

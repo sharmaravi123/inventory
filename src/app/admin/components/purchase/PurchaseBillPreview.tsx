@@ -7,6 +7,7 @@ import { fetchCompanyProfile } from "@/store/companyProfileSlice";
 import { useRef } from "react";
 import Swal from "sweetalert2";
 import { roundGrandTotal } from "@/lib/rounding";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 /* ================== TYPES ================== */
 
@@ -319,7 +320,7 @@ export default function PurchaseBillPreview({
 
                         <div className="text-right">
                             <div>Invoice No: {bill.invoiceNumber}</div>
-                            <div>Date: {new Date(bill.purchaseDate).toLocaleDateString("en-IN")}</div>
+                            <div>Date: {formatDisplayDate(bill.purchaseDate)}</div>
                         </div>
                     </div>
 

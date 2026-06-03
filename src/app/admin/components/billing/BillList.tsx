@@ -4,6 +4,7 @@ import React from "react";
 import { Bill } from "@/store/billingApi";
 import { Driver } from "@/store/driverSlice";
 import { useRouter } from "next/navigation";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 type BillListProps = {
   bills: Bill[];
@@ -17,15 +18,6 @@ type BillListProps = {
   onAssignDriver?: (bill: Bill, driverId: string | null) => void;
   onMarkDelivered?: (bill: Bill) => void;
   hideEditOrderButton?: boolean;
-};
-
-const formatDate = (iso: string): string => {
-  const date = new Date(iso);
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
 };
 
 function formatCsvValue(value: string | number | null | undefined): string {
@@ -87,12 +79,7 @@ export default function BillList({
     rows.push(header.map((h) => formatCsvValue(h)).join(","));
 
     bills.forEach((bill) => {
-      const billDateObj = new Date(bill.billDate);
-      const billDate = billDateObj.toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      });
+      const billDate = formatDisplayDate(bill.billDate);
 
       const balance = bill.balanceAmount;
       const paymentStatusLabel =
@@ -279,7 +266,7 @@ export default function BillList({
                     Bal: ₹{balance.toFixed(2)}
                   </p>
                   <p className="mt-1 text-[11px] text-slate-500">
-                    {formatDate(bill.billDate)}
+                    {formatDisplayDate(bill.billDate)}
                   </p>
                 </div>
               </div>
