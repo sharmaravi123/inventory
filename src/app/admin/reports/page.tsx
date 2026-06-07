@@ -22,6 +22,7 @@ import { fetchProducts } from "@/store/productSlice";
 import { fetchPurchases, Purchase } from "@/store/purchaseSlice";
 import { useListBillsQuery, Bill } from "@/store/billingApi";
 import { normalizeInventoryUnitPrices } from "@/lib/inventoryPricing";
+import { ddMmYyyyToIso, isoToDdMmYyyy } from "@/lib/ddMmYyyyInput";
 
 type ReturnRecord = {
   _id: string;
@@ -227,7 +228,15 @@ export default function ReportsPage() {
 
   const [fromDate, setFromDate] = useState(defaultRange.from);
   const [toDate, setToDate] = useState(defaultRange.to);
+  const [fromDateText, setFromDateText] = useState(() =>
+    isoToDdMmYyyy(defaultRange.from)
+  );
+  const [toDateText, setToDateText] = useState(() =>
+    isoToDdMmYyyy(defaultRange.to)
+  );
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
+  const [cashBreakdownOpen, setCashBreakdownOpen] = useState(false);
+  const [upiBreakdownOpen, setUpiBreakdownOpen] = useState(false);
 
   const { data: billsData, isLoading: billsLoading, refetch } =
     useListBillsQuery({ search: "" });
@@ -248,6 +257,32 @@ export default function ReportsPage() {
   }, []);
 
   const selectedRangeLabel = `${formatDisplayDate(fromDate)} to ${formatDisplayDate(toDate)}`;
+
+  useEffect(() => {
+    setFromDateText(isoToDdMmYyyy(fromDate));
+  }, [fromDate]);
+
+  useEffect(() => {
+    setToDateText(isoToDdMmYyyy(toDate));
+  }, [toDate]);
+
+  const applyFromDateText = () => {
+    const iso = ddMmYyyyToIso(fromDateText);
+    if (!iso) {
+      window.alert("Invalid From date. Use DD/MM/YYYY.");
+      return;
+    }
+    setFromDate(iso);
+  };
+
+  const applyToDateText = () => {
+    const iso = ddMmYyyyToIso(toDateText);
+    if (!iso) {
+      window.alert("Invalid To date. Use DD/MM/YYYY.");
+      return;
+    }
+    setToDate(iso);
+  };
 
   const filteredBills = useMemo(
     () => bills.filter((bill) => isWithinDateRange(bill.billDate, fromDate, toDate)),
@@ -381,6 +416,36 @@ export default function ReportsPage() {
 
   const netSales = salesStats.grossSales - returnStats.returnAmount;
 
+  const cashCollectedBreakdown = useMemo(() => {
+    const m = new Map<string, number>();
+    filteredBills.forEach((bill) => {
+      const c = toNumber(bill.payment?.cashAmount);
+      if (c <= 0) return;
+      const label = (
+        bill.customerInfo.shopName ||
+        bill.customerInfo.name ||
+        "Customer"
+      ).trim();
+      m.set(label, (m.get(label) ?? 0) + c);
+    });
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+  }, [filteredBills]);
+
+  const upiCollectedBreakdown = useMemo(() => {
+    const m = new Map<string, number>();
+    filteredBills.forEach((bill) => {
+      const c = toNumber(bill.payment?.upiAmount);
+      if (c <= 0) return;
+      const label = (
+        bill.customerInfo.shopName ||
+        bill.customerInfo.name ||
+        "Customer"
+      ).trim();
+      m.set(label, (m.get(label) ?? 0) + c);
+    });
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+  }, [filteredBills]);
+
   const monthRows = useMemo(() => {
     const map = new Map<
       string,
@@ -423,7 +488,11 @@ export default function ReportsPage() {
 
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, row]) => row);
+      .map(([, row]) => {
+        const netSell = row.sales - row.returns;
+        const purchaseVsSalesBalance = Math.max(0, row.purchases - netSell);
+        return { ...row, purchaseVsSalesBalance };
+      });
   }, [filteredBills, filteredPurchases, filteredReturns]);
 
   const topProducts = useMemo(() => {
@@ -469,27 +538,49 @@ export default function ReportsPage() {
             <div className="flex flex-wrap items-end gap-2">
               <label className="block">
                 <span className="mb-1 block text-[11px] font-medium text-slate-500">
-                  From
+                  From <span className="font-normal text-slate-400">(DD/MM/YYYY)</span>
                 </span>
-                <input
-                  type="date"
-                  value={fromDate}
-                  max={toDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                />
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="DD/MM/YYYY"
+                    value={fromDateText}
+                    onChange={(e) => setFromDateText(e.target.value)}
+                    onBlur={applyFromDateText}
+                    className="h-9 w-36 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyFromDateText}
+                    className="h-9 rounded-md border border-slate-200 px-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Apply
+                  </button>
+                </div>
               </label>
               <label className="block">
                 <span className="mb-1 block text-[11px] font-medium text-slate-500">
-                  To
+                  To <span className="font-normal text-slate-400">(DD/MM/YYYY)</span>
                 </span>
-                <input
-                  type="date"
-                  value={toDate}
-                  min={fromDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                />
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="DD/MM/YYYY"
+                    value={toDateText}
+                    onChange={(e) => setToDateText(e.target.value)}
+                    onBlur={applyToDateText}
+                    className="h-9 w-36 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyToDateText}
+                    className="h-9 rounded-md border border-slate-200 px-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Apply
+                  </button>
+                </div>
               </label>
             </div>
           </div>
@@ -572,7 +663,10 @@ export default function ReportsPage() {
             <div>
               <h2 className="text-sm font-semibold">Sales and Purchase Summary</h2>
               <p className="mt-1 text-xs text-slate-500">
-                Month-wise totals inside the selected date range.
+                Month-wise totals inside the selected date range.{" "}
+                <span className="text-slate-400">
+                  &quot;Est. purchase stock&quot; is max(0, month purchases − net month sales); it is a rough indicator, not full inventory costing.
+                </span>
               </p>
             </div>
             <button
@@ -594,12 +688,15 @@ export default function ReportsPage() {
                   <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Total sell</th>
                   <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Total purchase</th>
                   <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Refund</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">
+                    Est. purchase stock (₹)
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {monthRows.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={5}>
+                    <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={6}>
                       No report data found for this date range.
                     </td>
                   </tr>
@@ -623,6 +720,9 @@ export default function ReportsPage() {
                         <td className="whitespace-nowrap px-3 py-3 text-right text-amber-700">
                           {formatCurrency(row.returns)}
                         </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-right text-slate-700">
+                          {formatCurrency(row.purchaseVsSalesBalance)}
+                        </td>
                       </tr>
                     );
                   })
@@ -644,9 +744,75 @@ export default function ReportsPage() {
           </div>
 
           <div className="mt-4 space-y-3">
+            <div className="rounded-md bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setCashBreakdownOpen((o) => !o)}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-100/80"
+              >
+                <span className="text-sm text-slate-600">Cash collected</span>
+                <span className="text-sm font-semibold text-slate-900">
+                  {formatCurrency(salesStats.cash)}
+                </span>
+              </button>
+              {cashBreakdownOpen && (
+                <div className="border-t border-slate-200 px-3 py-2 text-xs">
+                  {cashCollectedBreakdown.length === 0 ? (
+                    <p className="text-slate-500">No cash payments in this range.</p>
+                  ) : (
+                    <ul className="max-h-48 space-y-1 overflow-y-auto">
+                      {cashCollectedBreakdown.map(([name, amt]) => (
+                        <li
+                          key={`cash-${name}`}
+                          className="flex justify-between gap-2 text-slate-700"
+                        >
+                          <span className="truncate">{name}</span>
+                          <span className="shrink-0 font-medium">
+                            {formatCurrency(amt)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-md bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setUpiBreakdownOpen((o) => !o)}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-100/80"
+              >
+                <span className="text-sm text-slate-600">UPI collected</span>
+                <span className="text-sm font-semibold text-slate-900">
+                  {formatCurrency(salesStats.upi)}
+                </span>
+              </button>
+              {upiBreakdownOpen && (
+                <div className="border-t border-slate-200 px-3 py-2 text-xs">
+                  {upiCollectedBreakdown.length === 0 ? (
+                    <p className="text-slate-500">No UPI payments in this range.</p>
+                  ) : (
+                    <ul className="max-h-48 space-y-1 overflow-y-auto">
+                      {upiCollectedBreakdown.map(([name, amt]) => (
+                        <li
+                          key={`upi-${name}`}
+                          className="flex justify-between gap-2 text-slate-700"
+                        >
+                          <span className="truncate">{name}</span>
+                          <span className="shrink-0 font-medium">
+                            {formatCurrency(amt)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
             {[
-              ["Cash collected", salesStats.cash],
-              ["UPI collected", salesStats.upi],
               ["Card collected", salesStats.card],
               ["Customer outstanding", salesStats.outstanding],
               ["Purchase total", purchaseStats.totalPurchase],

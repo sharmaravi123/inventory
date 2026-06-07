@@ -8,11 +8,13 @@ import type { RootState, AppDispatch } from "@/store/store";
 import Select from "react-select";
 import { createDealer, fetchDealers } from "@/store/dealerSlice";
 import { fetchProducts } from "@/store/productSlice";
+import { fetchInventory } from "@/store/inventorySlice";
 import { fetchWarehouses } from "@/store/warehouseSlice";
 import {
     fetchPurchases,
     createPurchase,
     updatePurchase,
+    deletePurchase,
 } from "@/store/purchaseSlice";
 import { useRouter } from "next/navigation";
 import { roundGrandTotal } from "@/lib/rounding";
@@ -578,6 +580,36 @@ export default function AdminPurchaseManager() {
         setOpen(true);
     };
 
+    const handleDeletePurchase = async (purchase: any) => {
+        const invLabel =
+            purchase.invoiceNumber || purchase.purchaseNumber || String(purchase._id);
+        const confirm = await Swal.fire({
+            title: "Delete this purchase?",
+            text: `Invoice ${invLabel} will be removed and stock quantities will be reduced accordingly.`,
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#dc2626",
+            confirmButtonText: "Delete",
+            cancelButtonText: "Cancel",
+        });
+        if (!confirm.isConfirmed) return;
+        try {
+            await dispatch(deletePurchase(String(purchase._id))).unwrap();
+            await Swal.fire({
+                icon: "success",
+                title: "Deleted successfully",
+                timer: 1800,
+                showConfirmButton: false,
+            });
+            await dispatch(fetchPurchases()).unwrap();
+            await dispatch(fetchInventory()).unwrap();
+        } catch (err: unknown) {
+            const msg =
+                err instanceof Error ? err.message : "Failed to delete purchase";
+            Swal.fire("Error", msg, "error");
+        }
+    };
+
     const buildGSTPurchaseReport = useCallback(() => {
         const rows: any[] = [];
 
@@ -714,6 +746,31 @@ export default function AdminPurchaseManager() {
         const fiscalYear = getFiscalYearLabel(now);
         const dateRangeLabel = getDateRangeLabel();
 
+        const parseAmt = (v: unknown) => {
+            const n = parseFloat(String(v ?? "0").replace(/,/g, ""));
+            return Number.isFinite(n) ? n : 0;
+        };
+
+        const sumCol = (rows: Record<string, string>[], key: string) =>
+            rows.reduce((a, r) => a + parseAmt(r[key]), 0);
+
+        const footerPurchase =
+            data.length > 0
+                ? {
+                      Date: "",
+                      Particulars: "TOTAL",
+                      "Voucher Type": "",
+                      "Supplier Invoice No.": "",
+                      "GSTIN/UIN": "",
+                      "Gross Total": sumCol(data, "Gross Total").toFixed(2),
+                      "Purchase Account": sumCol(data, "Purchase Account").toFixed(2),
+                      "SGST INPUT @ 9% PUR": sumCol(data, "SGST INPUT @ 9% PUR").toFixed(2),
+                      "CGST INPUT @ 9% PUR": sumCol(data, "CGST INPUT @ 9% PUR").toFixed(2),
+                      Round: sumCol(data, "Round").toFixed(2),
+                      "IGST-INPUT@18 % PUR": sumCol(data, "IGST-INPUT@18 % PUR").toFixed(2),
+                  }
+                : null;
+
         const worksheet = XLSX.utils.aoa_to_sheet([]);
         const workbook = XLSX.utils.book_new();
 
@@ -734,7 +791,7 @@ export default function AdminPurchaseManager() {
             { origin: "A1" }
         );
 
-        XLSX.utils.sheet_add_json(worksheet, data, {
+        XLSX.utils.sheet_add_json(worksheet, footerPurchase ? [...data, footerPurchase] : data, {
             skipHeader: false,
             origin: "A10",
         });
@@ -945,6 +1002,12 @@ export default function AdminPurchaseManager() {
                                                             className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-blue-500 hover:text-blue-600"
                                                         >
                                                             Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeletePurchase(purchase)}
+                                                            className="rounded-md border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-600 hover:text-white"
+                                                        >
+                                                            Delete
                                                         </button>
                                                         <button
                                                             onClick={() => router.push(`/print/purchase-bill/${purchase._id}`)}

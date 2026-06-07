@@ -6,12 +6,14 @@ import {
   useListBillsQuery,
   useAssignBillDriverMutation,
   useMarkBillDeliveredMutation,
+  useDeleteBillMutation,
   Bill,
 } from "@/store/billingApi";
 import BillList from "@/app/admin/components/billing/BillList";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "@/store/store";
 import { fetchDrivers } from "@/store/driverSlice";
+import { fetchInventory } from "@/store/inventorySlice";
 import { Search, Calendar } from "lucide-react";
 import Swal from "sweetalert2";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
@@ -30,6 +32,11 @@ const EditPaymentModal = dynamic(
 
 type DateFilter = "all" | "thisMonth" | "lastMonth" | "custom";
 
+const toNum = (v: unknown, fb = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fb;
+};
+
 export default function OrdersPage() {
   const dispatch = useDispatch<AppDispatch>();
   const { data, isLoading, refetch } = useListBillsQuery(
@@ -46,6 +53,7 @@ export default function OrdersPage() {
 
   const [assignBillDriver] = useAssignBillDriverMutation();
   const [markBillDelivered] = useMarkBillDeliveredMutation();
+  const [deleteBill] = useDeleteBillMutation();
 
   const [filterType, setFilterType] = useState<DateFilter>("thisMonth");
   const [fromDate, setFromDate] = useState("");
@@ -201,6 +209,10 @@ export default function OrdersPage() {
         )
       );
 
+      const cashAmt = toNum(bill.payment?.cashAmount);
+      const upiAmt = toNum(bill.payment?.upiAmount);
+      const cardAmt = toNum(bill.payment?.cardAmount);
+
       return {
         Date: formatDisplayDate(bill.billDate),
         Particulars: bill.customerInfo.shopName || bill.customerInfo.name || "",
@@ -215,8 +227,47 @@ export default function OrdersPage() {
         "SGST OUTPUT @ 2.5% SALES": sgst.toFixed(2),
         Round: roundValue.toFixed(2),
         "GST 5%": igst.toFixed(2),
+        "Cash (₹)": cashAmt.toFixed(2),
+        "UPI (₹)": upiAmt.toFixed(2),
+        "Card (₹)": cardAmt.toFixed(2),
       };
     });
+
+    const parseAmt = (v: unknown) => {
+      const n = parseFloat(String(v ?? "0").replace(/,/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    const sumCol = (rows: Record<string, string>[], key: string) =>
+      rows.reduce((a, r) => a + parseAmt(r[key]), 0);
+
+    const footerSales =
+      salesRows.length > 0
+        ? {
+            Date: "",
+            Particulars: "TOTAL",
+            "Voucher Type": "",
+            "Voucher No.": "",
+            "Voucher Ref. No.": "",
+            "GSTIN/UIN": "",
+            "Gross Total": sumCol(salesRows, "Gross Total").toFixed(2),
+            "Tax Rate": "",
+            Sales: sumCol(salesRows, "Sales").toFixed(2),
+            "CGST OUTPUT @ 2.5% SALES": sumCol(
+              salesRows,
+              "CGST OUTPUT @ 2.5% SALES"
+            ).toFixed(2),
+            "SGST OUTPUT @ 2.5% SALES": sumCol(
+              salesRows,
+              "SGST OUTPUT @ 2.5% SALES"
+            ).toFixed(2),
+            Round: sumCol(salesRows, "Round").toFixed(2),
+            "GST 5%": sumCol(salesRows, "GST 5%").toFixed(2),
+            "Cash (₹)": sumCol(salesRows, "Cash (₹)").toFixed(2),
+            "UPI (₹)": sumCol(salesRows, "UPI (₹)").toFixed(2),
+            "Card (₹)": sumCol(salesRows, "Card (₹)").toFixed(2),
+          }
+        : null;
 
     const XLSX = await import("xlsx");
     const worksheet = XLSX.utils.aoa_to_sheet([]);
@@ -239,7 +290,7 @@ export default function OrdersPage() {
       { origin: "A1" }
     );
 
-    XLSX.utils.sheet_add_json(worksheet, salesRows, {
+    XLSX.utils.sheet_add_json(worksheet, footerSales ? [...salesRows, footerSales] : salesRows, {
       skipHeader: false,
       origin: "A11",
     });
@@ -323,6 +374,32 @@ export default function OrdersPage() {
           onSelectBill={setSelectedBill}
           onEditPayment={setPaymentBill}
           onEditOrder={setSelectedBill}
+          onDeleteBill={async (bill) => {
+            const confirm = await Swal.fire({
+              title: "Delete this bill?",
+              text: `Invoice ${bill.invoiceNumber ?? ""} will be removed and stock will be restored.`,
+              icon: "warning",
+              showCancelButton: true,
+              confirmButtonColor: "#dc2626",
+              confirmButtonText: "Delete",
+              cancelButtonText: "Cancel",
+            });
+            if (!confirm.isConfirmed) return;
+            try {
+              await deleteBill(bill._id).unwrap();
+              await Swal.fire({
+                icon: "success",
+                title: "Deleted successfully",
+                timer: 1800,
+                showConfirmButton: false,
+              });
+              void dispatch(fetchInventory());
+              refetch();
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : "Delete failed";
+              Swal.fire({ icon: "error", title: "Error", text: msg });
+            }
+          }}
           onAssignDriver={async (bill, driverId) => {
             if (!driverId) return;
             await assignBillDriver({ billId: bill._id, driverId }).unwrap();

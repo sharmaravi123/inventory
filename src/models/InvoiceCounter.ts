@@ -26,21 +26,3 @@ const InvoiceCounterModel: Model<InvoiceCounterDocument> =
   );
 
 export default InvoiceCounterModel;
-
-export async function getNextInvoiceNumber(): Promise<string> {
-  const counter = await InvoiceCounterModel.findOneAndUpdate(
-    { name: "default" },
-    { $inc: { seq: 1 } },
-    { new: true, upsert: true }
-  ).exec();
-
-  if (!counter) {
-    throw new Error("Failed to generate invoice number");
-  }
-
-  const year = new Date().getFullYear();
-  const padded = String(counter.seq).padStart(6, "0");
-
-  return `INV-${year}-${padded}`;
-}
-

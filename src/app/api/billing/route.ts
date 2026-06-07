@@ -4,7 +4,7 @@ import BillModel from "@/models/Bill";
 import CustomerModel from "@/models/Customer";
 import Stock from "@/models/Stock";
 import { Types } from "mongoose";
-import { getNextInvoiceNumber } from "@/models/InvoiceCounter";
+import { getNextInvoiceNumber } from "@/lib/salesInvoiceNumber";
 import { roundGrandTotal } from "@/lib/rounding";
 
 export const dynamic = "force-dynamic";
@@ -164,10 +164,11 @@ async function reserveStock(items: BillingItemInput[]) {
     const remain = available - req;
     const newBoxes = Math.floor(remain / stockItemsPerBox);
     const newLoose = remain % stockItemsPerBox;
+    const newTotalItems = newBoxes * stockItemsPerBox + newLoose;
 
     await Stock.updateOne(
       { _id: it.stockId },
-      { $set: { boxes: newBoxes, looseItems: newLoose } }
+      { $set: { boxes: newBoxes, looseItems: newLoose, totalItems: newTotalItems } }
     );
   }
 }
@@ -282,7 +283,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const invoice = await getNextInvoiceNumber();
+    const billDateForInvoice = body.billDate
+      ? new Date(body.billDate)
+      : new Date();
+    const invoice = await getNextInvoiceNumber(billDateForInvoice);
 
     const collected = round2(
       toNum(pay.cashAmount) + toNum(pay.upiAmount) + toNum(pay.cardAmount)
@@ -291,7 +295,7 @@ export async function POST(req: NextRequest) {
 
     const bill = await BillModel.create({
       invoiceNumber: invoice,
-      billDate: body.billDate ? new Date(body.billDate) : new Date(),
+      billDate: billDateForInvoice,
       customerInfo: takeSnapshot(cust, body.customer),
       companyGstNumber: body.companyGstNumber,
       items,

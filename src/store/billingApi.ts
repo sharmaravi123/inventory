@@ -318,6 +318,14 @@ export const billingApi = createApi({
       ],
     }),
 
+    deleteBill: builder.mutation<{ success: boolean }, string>({
+      query: (id) => ({
+        url: `billing/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_r, _e, id) => [{ type: "Bill", id }, "BillList"],
+    }),
+
     // -------- assign / change driver --------
     assignBillDriver: builder.mutation<
       SimpleSuccessResponse,
@@ -407,6 +415,7 @@ export const {
   useListBillsQuery,
   useGetBillQuery,
   useUpdateBillMutation,
+  useDeleteBillMutation,
   useUpdateBillPaymentMutation,
   useCreateBillReturnMutation,
   useAssignBillDriverMutation,

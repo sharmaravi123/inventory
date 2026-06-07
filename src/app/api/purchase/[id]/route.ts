@@ -271,3 +271,79 @@ export async function PUT(
     );
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    await dbConnect();
+    const { id } = await context.params;
+
+    const existing = await Purchase.findById(id).lean();
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Purchase not found" },
+        { status: 404 }
+      );
+    }
+
+    const oldItems = Array.isArray(existing.items) ? existing.items : [];
+    const productIds = [
+      ...new Set(
+        oldItems.map((it: { productId?: unknown }) => String(it?.productId || "")).filter(Boolean)
+      ),
+    ];
+    const products = await Product.find({ _id: { $in: productIds } })
+      .select("_id perBoxItem")
+      .lean();
+    const productMap = new Map(
+      products.map((p) => [String((p as { _id: unknown })._id), p])
+    );
+
+    for (const oldItem of oldItems) {
+      const oldItemAny = oldItem as {
+        productId?: unknown;
+        boxes?: number;
+        looseItems?: number;
+        perBoxItem?: number;
+      };
+      const productId = String(oldItemAny.productId);
+      const warehouseId = String(existing.warehouseId);
+      const product = productMap.get(productId) as
+        | { perBoxItem?: number }
+        | undefined;
+      const perBox =
+        typeof oldItemAny.perBoxItem === "number" && oldItemAny.perBoxItem > 0
+          ? oldItemAny.perBoxItem
+          : product?.perBoxItem ?? 1;
+
+      const stock = await Stock.findOne({
+        productId,
+        warehouseId,
+      });
+
+      if (!stock) continue;
+
+      let newBoxes = stock.boxes - (oldItemAny.boxes ?? 0);
+      let newLoose = stock.looseItems - (oldItemAny.looseItems ?? 0);
+
+      if (newBoxes < 0) newBoxes = 0;
+      if (newLoose < 0) newLoose = 0;
+
+      stock.boxes = newBoxes;
+      stock.looseItems = newLoose;
+      stock.totalItems = newBoxes * perBox + newLoose;
+      await stock.save();
+    }
+
+    await Purchase.findByIdAndDelete(id);
+
+    return NextResponse.json({ success: true });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Failed to delete purchase";
+    console.error("PURCHASE DELETE ERROR:", error);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

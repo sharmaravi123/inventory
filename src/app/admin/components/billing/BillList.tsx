@@ -12,6 +12,7 @@ type BillListProps = {
   onSelectBill: (bill: Bill) => void;
   onEditPayment: (bill: Bill) => void;
   onEditOrder: (bill: Bill) => void;
+  onDeleteBill?: (bill: Bill) => void | Promise<void>;
 
   // optional – admin view ke liye
   drivers?: Driver[];
@@ -54,6 +55,7 @@ export default function BillList({
   onSelectBill,
   onEditPayment,
   onEditOrder,
+  onDeleteBill,
   drivers,
   onAssignDriver,
   onMarkDelivered,
@@ -318,6 +320,19 @@ export default function BillList({
                       className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] text-slate-700 hover:border-[color:var(--color-primary)] hover:text-[color:var(--color-primary)]"
                     >
                       Edit Order
+                    </button>
+                  )}
+
+                  {onDeleteBill && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onDeleteBill(bill);
+                      }}
+                      className="rounded-full border border-rose-300 px-2 py-0.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-600 hover:text-white"
+                    >
+                      Delete
                     </button>
                   )}
 

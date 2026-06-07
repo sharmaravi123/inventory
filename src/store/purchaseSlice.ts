@@ -86,6 +86,23 @@ export const updatePurchase = createAsyncThunk<
   return data;
 });
 
+export const deletePurchase = createAsyncThunk<string, string>(
+  "purchase/delete",
+  async (id) => {
+    const res = await fetch(`/api/purchase/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+      },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.error || "Failed to delete purchase");
+    }
+    return id;
+  }
+);
+
 const purchaseSlice = createSlice({
   name: "purchase",
   initialState,
@@ -104,6 +121,16 @@ const purchaseSlice = createSlice({
       })
       .addCase(updatePurchase.fulfilled, (state) => {
         state.loading = false;
+      })
+      .addCase(deletePurchase.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(deletePurchase.rejected, (state) => {
+        state.loading = false;
+      })
+      .addCase(deletePurchase.fulfilled, (state, action) => {
+        state.loading = false;
+        state.list = state.list.filter((p) => p._id !== action.payload);
       });
 
   },
