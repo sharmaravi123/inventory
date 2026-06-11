@@ -50,7 +50,7 @@ export default function CustomerDetailsPage() {
   const { customerKey } = useParams<{ customerKey: string }>();
   const router = useRouter();
 
-  const [period, setPeriod] = useState<PeriodType>("thisMonth");
+  const [period, setPeriod] = useState<PeriodType>("all");
   const [fromDate, setFromDate] = useState(() => formatDateInput(startOfMonth(new Date())));
   const [toDate, setToDate] = useState(() => formatDateInput(endOfMonth(new Date())));
   const [data, setData] = useState<LedgerResponse | null>(null);

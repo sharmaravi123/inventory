@@ -1,11 +1,15 @@
 /**
- * CLI: renumber all sales bills to INV-{FY}-000001 (Indian FY Apr–Mar) + sync counters.
+ * CLI: renumber sales bills — INV-{FY}-000001 (Indian FY Apr–Mar) + sync counters.
  *
- * Development (loads .env.local first, then MONGODB_URI):
- *   npm run migrate:invoices
+ * Default: only bills with financial year >= 2026 (Apr 2026–Mar 2027 onward) → INV-2026-000001…
  *
- * Production (set URI in shell; do not commit secrets):
- *   $env:MONGODB_URI="mongodb+srv://..."; npm run migrate:invoices
+ *   npm run migrate:invoices          # uses .env.local MONGODB_URI
+ *
+ * All years:
+ *   MIGRATE_MIN_FY=all npm run migrate:invoices
+ *
+ * Custom FY floor:
+ *   MIGRATE_MIN_FY=2025 npm run migrate:invoices
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -46,8 +50,24 @@ async function main(): Promise<void> {
 
   const { runMigrateFyInvoices } = await import("../src/lib/migrateFyInvoices");
 
-  console.log("Starting FY invoice migration…");
-  const result = await runMigrateFyInvoices();
+  const raw = process.env.MIGRATE_MIN_FY?.trim();
+  let opts: { minFinancialYear?: number } = { minFinancialYear: 2026 };
+  if (raw === "all" || raw === "0") {
+    opts = {};
+  } else if (raw) {
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n > 0) {
+      opts = { minFinancialYear: n };
+    }
+  }
+
+  console.log(
+    "Starting FY invoice migration…",
+    opts.minFinancialYear != null
+      ? `(only FY >= ${opts.minFinancialYear}; set MIGRATE_MIN_FY=all for every FY)`
+      : "(all financial years)"
+  );
+  const result = await runMigrateFyInvoices(opts);
   console.log(JSON.stringify(result, null, 2));
 
   const mongoose = (await import("mongoose")).default;

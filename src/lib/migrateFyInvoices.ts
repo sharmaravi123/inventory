@@ -6,30 +6,68 @@ import {
   getIndianFinancialYearStartYear,
 } from "./financialYear";
 
+export type MigrateFyInvoicesOptions = {
+  /**
+   * If set, only bills whose Indian FY (Apr–Mar) is >= this year are renumbered.
+   * Older bills keep their current `invoiceNumber`. Counters are updated only for touched FYs.
+   * Omit or use `all` / 0 in CLI for full renumber of every bill.
+   */
+  minFinancialYear?: number;
+};
+
 export type MigrateFyInvoicesResult = {
   ok: true;
   message: string;
   totalBills: number;
+  skippedBills: number;
   counts: Record<string, number>;
 };
 
 /**
- * Renumbers all bills by Indian FY — INV-YYYY-000001 per FY (Apr–Mar),
- * ordered by billDate then createdAt. Syncs per-FY InvoiceCounter seq.
+ * Renumbers bills by Indian FY — INV-YYYY-000001 per FY (Apr–Mar),
+ * ordered by billDate then createdAt. Syncs per-FY InvoiceCounter for touched FYs.
  */
-export async function runMigrateFyInvoices(): Promise<MigrateFyInvoicesResult> {
+export async function runMigrateFyInvoices(
+  options: MigrateFyInvoicesOptions = {}
+): Promise<MigrateFyInvoicesResult> {
   await dbConnect();
 
-  const bills = await BillModel.find({})
+  const minFy = options.minFinancialYear;
+
+  const allBills = await BillModel.find({})
     .sort({ billDate: 1, createdAt: 1 })
     .select("_id billDate")
     .lean();
 
-  if (bills.length === 0) {
+  if (allBills.length === 0) {
     return {
       ok: true,
       message: "No bills to migrate.",
       totalBills: 0,
+      skippedBills: 0,
+      counts: {},
+    };
+  }
+
+  const bills =
+    typeof minFy === "number" && Number.isFinite(minFy)
+      ? allBills.filter(
+          (b) =>
+            getIndianFinancialYearStartYear(new Date(b.billDate)) >= minFy
+        )
+      : allBills;
+
+  const skippedBills = allBills.length - bills.length;
+
+  if (bills.length === 0) {
+    return {
+      ok: true,
+      message:
+        typeof minFy === "number"
+          ? `No bills in financial year >= ${minFy}.`
+          : "No bills to migrate.",
+      totalBills: 0,
+      skippedBills,
       counts: {},
     };
   }
@@ -72,11 +110,16 @@ export async function runMigrateFyInvoices(): Promise<MigrateFyInvoicesResult> {
     /* ignore */
   });
 
+  const scope =
+    typeof minFy === "number"
+      ? `Financial year >= ${minFy} (Apr ${minFy}–Mar ${minFy + 1} and later FYs).`
+      : "All financial years.";
+
   return {
     ok: true,
-    message:
-      "All bills renumbered by Indian FY (Apr–Mar). New invoices use the same scheme.",
+    message: `Bills renumbered (${scope}) Skipped ${skippedBills} bill(s) not in scope.`,
     totalBills: bills.length,
+    skippedBills,
     counts,
   };
 }

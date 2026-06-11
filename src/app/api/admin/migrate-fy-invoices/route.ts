@@ -7,11 +7,14 @@ export const dynamic = "force-dynamic";
 
 type MigrateBody = {
   confirm?: boolean;
+  /** If true, renumber every bill (all FYs). Otherwise only FY >= minFinancialYear (default 2026). */
+  full?: boolean;
+  /** Indian FY start year, e.g. 2026 = Apr 2026–Mar 2027. Ignored when full is true. */
+  minFinancialYear?: number;
 };
 
 /**
- * Renumbers all bills by Indian FY — INV-YYYY-000001 per FY,
- * ordered by billDate then createdAt. Updates per-FY InvoiceCounter seq to last used.
+ * Renumbers bills by Indian FY — INV-YYYY-000001 per FY (default: FY >= 2026 only).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -22,14 +25,24 @@ export async function POST(req: NextRequest) {
     if (!body.confirm) {
       return NextResponse.json(
         {
-          error: 'Send JSON body { "confirm": true } to run migration.',
+          error:
+            'Send JSON body { "confirm": true }. Optional: "full": true for all FYs, or "minFinancialYear": 2026.',
         },
         { status: 400 }
       );
     }
 
     await dbConnect();
-    const result = await runMigrateFyInvoices();
+    const result =
+      body.full === true
+        ? await runMigrateFyInvoices({})
+        : await runMigrateFyInvoices({
+            minFinancialYear:
+              typeof body.minFinancialYear === "number" &&
+              Number.isFinite(body.minFinancialYear)
+                ? body.minFinancialYear
+                : 2026,
+          });
 
     return NextResponse.json(result);
   } catch (e: unknown) {
