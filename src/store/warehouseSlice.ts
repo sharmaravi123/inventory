@@ -1,5 +1,11 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
+import {
+  shouldSkipListFetch,
+  shouldSkipRecordFetch,
+  type FetchWithForce,
+} from "@/store/cachePolicy";
+import type { RootState } from "@/store/store";
 
 export interface Warehouse {
   _id: string;
@@ -14,20 +20,24 @@ interface WarehouseState {
   list: Warehouse[];
   loading: boolean;
   error: string | null;
+  lastFetchedAt: number | null;
 }
 
 const initialState: WarehouseState = {
   list: [],
   loading: false,
   error: null,
+  lastFetchedAt: null,
 };
 
 // 🟢 Fetch all warehouses
 export const fetchWarehouses = createAsyncThunk<
   Warehouse[],
-  void,
-  { rejectValue: string }
->("warehouse/fetchAll", async (_, { rejectWithValue }) => {
+  FetchWithForce,
+  { rejectValue: string; state: RootState }
+>(
+  "warehouse/fetchAll",
+  async (_, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem("token");
     const res = await axios.get("/api/warehouse", {
@@ -41,7 +51,14 @@ export const fetchWarehouses = createAsyncThunk<
         : "Failed to fetch warehouses";
     return rejectWithValue(message);
   }
-});
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { list, loading, lastFetchedAt } = getState().warehouse;
+      return !shouldSkipListFetch(loading, list.length, lastFetchedAt, arg);
+    },
+  }
+);
 
 // 🟢 Create new warehouse
 export const createWarehouse = createAsyncThunk<
@@ -120,6 +137,7 @@ const warehouseSlice = createSlice({
       .addCase(fetchWarehouses.fulfilled, (state, action: PayloadAction<Warehouse[]>) => {
         state.loading = false;
         state.list = action.payload;
+        state.lastFetchedAt = Date.now();
       })
       .addCase(fetchWarehouses.rejected, (state, action) => {
         state.loading = false;

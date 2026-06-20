@@ -18,6 +18,12 @@ import {
   FileText,
 } from "lucide-react";
 import { useListBillsQuery, Bill } from "@/store/billingApi";
+import Swal from "sweetalert2";
+import {
+  invalidateCustomersCache,
+  readCustomersCache,
+  writeCustomersCache,
+} from "@/lib/customersListCache";
 
 /* =============== TYPES =============== */
 
@@ -143,8 +149,14 @@ export default function PaymentsDashboardPage() {
   });
 
   const [addingCustomer, setAddingCustomer] = useState(false);
+  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(
+    null
+  );
 
-  const { data, isLoading, refetch } = useListBillsQuery({ search: "" });
+  const { data, isLoading, refetch } = useListBillsQuery({
+    search: "",
+    summary: true,
+  });
 
   const bills: Bill[] = data?.bills ?? [];
 
@@ -273,14 +285,23 @@ export default function PaymentsDashboardPage() {
 
   const [allCustomers, setAllCustomers] = useState<CustomerRow[]>([]);
 
-  const loadCustomers = useCallback(async () => {
+  const loadCustomers = useCallback(async (force = false) => {
+    if (!force) {
+      const cached = readCustomersCache();
+      if (cached) {
+        setAllCustomers(cached as CustomerRow[]);
+        return;
+      }
+    }
     try {
       const r = await fetch("/api/customers", { cache: "no-store" });
       if (!r.ok) {
         throw new Error("Failed to load customers");
       }
       const d = await r.json();
-      setAllCustomers((d.customers ?? []) as CustomerRow[]);
+      const rows = (d.customers ?? []) as CustomerRow[];
+      writeCustomersCache(rows);
+      setAllCustomers(rows);
     } catch {
       setAllCustomers([]);
     }
@@ -518,6 +539,85 @@ export default function PaymentsDashboardPage() {
     setShowAddCustomer(true);
   };
 
+  const handleDeleteCustomer = async (customer: CustomerAgg) => {
+    const dbId = customer.dbId;
+    if (!dbId) return;
+
+    const label = customer.shopName || customer.name || "Customer";
+    const billCount = customer.bills.length;
+
+    const choice = await Swal.fire({
+      title: "Delete customer?",
+      text:
+        billCount > 0
+          ? `Choose what to remove for "${label}". ${billCount} linked bill(s) found.`
+          : `Choose what to remove for "${label}".`,
+      icon: "warning",
+      showCancelButton: true,
+      showDenyButton: true,
+      confirmButtonText: "Customer + all bills",
+      denyButtonText: "Customer only",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#dc2626",
+      denyButtonColor: "#64748b",
+    });
+
+    if (!choice.isConfirmed && !choice.isDenied) return;
+
+    const deleteBills = choice.isConfirmed;
+
+    if (deleteBills && billCount > 0) {
+      const sure = await Swal.fire({
+        title: "Delete bills too?",
+        text: `${billCount} bill(s) will be permanently deleted and stock will be restored.`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, delete all",
+        confirmButtonColor: "#dc2626",
+        cancelButtonText: "Cancel",
+      });
+      if (!sure.isConfirmed) return;
+    }
+
+    setDeletingCustomerId(dbId);
+    try {
+      const res = await fetch(
+        `/api/customers/${encodeURIComponent(dbId)}?deleteBills=${deleteBills ? "true" : "false"}`,
+        { method: "DELETE" }
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to delete customer");
+      }
+
+      if (selectedCustomerId === customer.customerId) {
+        handleClosePayment();
+      }
+
+      invalidateCustomersCache();
+      await loadCustomers(true);
+      await refetch();
+
+      await Swal.fire({
+        icon: "success",
+        title: "Deleted successfully",
+        text: deleteBills
+          ? `Customer removed. ${json.billsDeleted ?? 0} bill(s) deleted.`
+          : "Customer removed. Bills were kept.",
+        timer: 2200,
+        showConfirmButton: false,
+      });
+    } catch (e: unknown) {
+      Swal.fire({
+        icon: "error",
+        title: "Delete failed",
+        text: e instanceof Error ? e.message : "Could not delete customer",
+      });
+    } finally {
+      setDeletingCustomerId(null);
+    }
+  };
+
   const handleClosePayment = () => {
     setSelectedCustomerId(null);
     setPaymentSplit({ cashAmount: 0, upiAmount: 0, cardAmount: 0 });
@@ -599,7 +699,7 @@ export default function PaymentsDashboardPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && bills.length === 0) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
         <div className="text-center space-y-4">
@@ -866,6 +966,13 @@ export default function PaymentsDashboardPage() {
                   >
                     Edit
                   </button>
+                  <button
+                    onClick={() => void handleDeleteCustomer(c)}
+                    disabled={!c.dbId || deletingCustomerId === c.dbId}
+                    className="inline-flex items-center rounded-xl border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {deletingCustomerId === c.dbId ? "Deleting…" : "Delete"}
+                  </button>
                 </div>
               </div>
             ))}
@@ -960,6 +1067,13 @@ export default function PaymentsDashboardPage() {
                           className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Edit
+                        </button>
+                        <button
+                          onClick={() => void handleDeleteCustomer(c)}
+                          disabled={!c.dbId || deletingCustomerId === c.dbId}
+                          className="inline-flex items-center rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {deletingCustomerId === c.dbId ? "Deleting…" : "Delete"}
                         </button>
                       </div>
                     </td>
@@ -1347,7 +1461,8 @@ export default function PaymentsDashboardPage() {
 
                       setShowAddCustomer(false);
                       resetCustomerDialog();
-                      await loadCustomers();
+                      invalidateCustomersCache();
+                      await loadCustomers(true);
                       await refetch();
                     } catch (e: unknown) {
                       setError(

@@ -1,4 +1,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import {
+  shouldSkipListFetch,
+  type FetchWithForce,
+} from "@/store/cachePolicy";
+import type { RootState } from "@/store/store";
 
 export interface Purchase {
   _id: string;
@@ -14,17 +19,23 @@ export interface Purchase {
 interface PurchaseState {
   list: Purchase[];
   loading: boolean;
+  lastFetchedAt: number | null;
 }
 
 const initialState: PurchaseState = {
   list: [],
   loading: false,
+  lastFetchedAt: null,
 };
 
 const getToken = () =>
   typeof window !== "undefined" ? localStorage.getItem("adminToken") : null;
 
-export const fetchPurchases = createAsyncThunk<Purchase[]>(
+export const fetchPurchases = createAsyncThunk<
+  Purchase[],
+  FetchWithForce,
+  { state: RootState }
+>(
   "purchase/fetch",
   async () => {
     const token = getToken();
@@ -40,6 +51,12 @@ export const fetchPurchases = createAsyncThunk<Purchase[]>(
     }
 
     return Array.isArray(data) ? data : [];
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { list, loading, lastFetchedAt } = getState().purchase;
+      return !shouldSkipListFetch(loading, list.length, lastFetchedAt, arg);
+    },
   }
 );
 
@@ -115,6 +132,7 @@ const purchaseSlice = createSlice({
       .addCase(fetchPurchases.fulfilled, (state, action) => {
         state.loading = false;
         state.list = action.payload;
+        state.lastFetchedAt = Date.now();
       })
       .addCase(createPurchase.fulfilled, (state) => {
         state.loading = false;

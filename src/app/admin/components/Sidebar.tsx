@@ -192,6 +192,7 @@ const Sidebar: React.FC = () => {
                       <li key={item.href}>
                         <Link
                           href={item.href}
+                          prefetch={true}
                           className={linkClass(item.href)}
                         >
                           <span className="truncate">{item.label}</span>

@@ -76,16 +76,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const payload: Record<string, string> = { name };
+    const payload: Record<string, string> = {
+      name,
+      address: address || "",
+    };
 
     if (normalizedPhone) {
       payload.phone = normalizedPhone;
     }
     if (shopName) {
       payload.shopName = shopName;
-    }
-    if (address) {
-      payload.address = address;
     }
     if (gstNumber) {
       payload.gstNumber = gstNumber;
@@ -261,7 +261,10 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const setPayload: Record<string, string> = { name };
+    const setPayload: Record<string, string> = {
+      name,
+      address: address || "",
+    };
     const unsetPayload: Record<string, 1> = {};
 
     if (phone) {
@@ -274,12 +277,6 @@ export async function PUT(req: NextRequest) {
       setPayload.shopName = shopName;
     } else {
       unsetPayload.shopName = 1;
-    }
-
-    if (address) {
-      setPayload.address = address;
-    } else {
-      unsetPayload.address = 1;
     }
 
     if (gstNumber) {

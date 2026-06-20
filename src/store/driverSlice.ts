@@ -1,5 +1,10 @@
 // src/store/driverSlice.ts
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
+import {
+  shouldSkipListFetch,
+  type FetchWithForce,
+} from "@/store/cachePolicy";
+import type { RootState } from "@/store/store";
 
 export type Driver = {
   _id: string;
@@ -74,6 +79,7 @@ type DriverState = {
   authToken: string | null;
   authLoading: boolean;
   authError: string | null;
+  lastFetchedAt: number | null;
 };
 
 const initialState: DriverState = {
@@ -86,14 +92,17 @@ const initialState: DriverState = {
   authToken: null,
   authLoading: false,
   authError: null,
+  lastFetchedAt: null,
 };
 
 // GET /api/driver
 export const fetchDrivers = createAsyncThunk<
   Driver[],
-  void,
-  { rejectValue: string }
->("drivers/fetchAll", async (_, { rejectWithValue }) => {
+  FetchWithForce,
+  { rejectValue: string; state: RootState }
+>(
+  "drivers/fetchAll",
+  async (_, { rejectWithValue }) => {
   try {
     const res = await fetch("/api/driver", { method: "GET" });
     const data = (await res.json()) as DriversResponse | { error?: string };
@@ -116,7 +125,14 @@ export const fetchDrivers = createAsyncThunk<
       err instanceof Error ? err.message : "Failed to fetch drivers";
     return rejectWithValue(message);
   }
-});
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { items, loading, lastFetchedAt } = getState().driver;
+      return !shouldSkipListFetch(loading, items.length, lastFetchedAt, arg);
+    },
+  }
+);
 
 // POST /api/driver/register
 export const createDriver = createAsyncThunk<
@@ -304,6 +320,7 @@ const driverSlice = createSlice({
         (state, action: PayloadAction<Driver[]>) => {
           state.loading = false;
           state.items = action.payload;
+          state.lastFetchedAt = Date.now();
         }
       )
       .addCase(fetchDrivers.rejected, (state, action) => {

@@ -36,7 +36,7 @@ export default function DashboardOverview() {
   const { items: drivers } = useSelector((state: RootState) => state.driver);
 
   // billing / orders
-  const { data: billsData } = useListBillsQuery({ search: "" });
+  const { data: billsData } = useListBillsQuery({ search: "", summary: true });
   const bills = billsData?.bills ?? [];
 
   useEffect(() => {

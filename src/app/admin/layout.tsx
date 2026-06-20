@@ -1,58 +1,15 @@
-// src/app/admin/layout.tsx
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import React from "react";
-import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
-import { verifyAppToken } from "@/lib/jwt";
+import AdminShell from "./components/AdminShell";
 
 export const metadata = {
   title: "Admin Panel | BlackOSInventory",
   description: "Admin dashboard",
 };
 
-export default async function AdminLayout({
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // 👇 yahan await lagao
-  const cookieStore = await cookies();
-
-  const token =
-    cookieStore.get("adminToken")?.value ??
-    cookieStore.get("token")?.value ??
-    null;
-
-  if (!token) {
-    redirect("/");
-  }
-
-  let payload: ReturnType<typeof verifyAppToken>;
-  try {
-    payload = verifyAppToken(token);
-  } catch {
-    redirect("/");
-  }
-
-  const role = typeof payload.role === "string" ? payload.role : "";
-  if (role.toLowerCase() !== "admin") {
-    redirect("/");
-  }
-
-  return (
-    <div className="h-screen overflow-hidden flex flex-col bg-[var(--color-neutral)]">
-      <div className="print-hide">
-        <Topbar />
-      </div>
-      <div className="flex flex-1 min-h-0">
-        <div className="print-hide">
-          <Sidebar />
-        </div>
-        <main className="flex-1 min-h-0 overflow-y-auto bg-[var(--color-neutral)] p-6 lg:ml-64">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
+  return <AdminShell>{children}</AdminShell>;
 }

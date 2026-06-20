@@ -1,4 +1,9 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import {
+  shouldSkipListFetch,
+  type FetchWithForce,
+} from "@/store/cachePolicy";
+import type { RootState } from "@/store/store";
 
 export interface ProductType {
   _id: string;
@@ -19,14 +24,26 @@ interface ProductState {
   products: ProductType[];
   loading: boolean;
   error: string | null;
+  lastFetchedAt: number | null;
 }
 
-const initialState: ProductState = { products: [], loading: false, error: null };
+const initialState: ProductState = {
+  products: [],
+  loading: false,
+  error: null,
+  lastFetchedAt: null,
+};
 
 const getToken = () => localStorage.getItem("token");
 
 // ✅ Fetch all products
-export const fetchProducts = createAsyncThunk("product/fetchProducts", async (_, { rejectWithValue }) => {
+export const fetchProducts = createAsyncThunk<
+  ProductType[],
+  FetchWithForce,
+  { rejectValue: string; state: RootState }
+>(
+  "product/fetchProducts",
+  async (_, { rejectWithValue }) => {
   const token = getToken();
   try {
     const res = await fetch("/api/products", { headers: { Authorization: `Bearer ${token}` } });
@@ -36,7 +53,19 @@ export const fetchProducts = createAsyncThunk("product/fetchProducts", async (_,
   } catch (err: unknown) {
     return rejectWithValue((err as Error).message);
   }
-});
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { products, loading, lastFetchedAt } = getState().product;
+      return !shouldSkipListFetch(
+        loading,
+        products.length,
+        lastFetchedAt,
+        arg
+      );
+    },
+  }
+);
 
 // ✅ Add product
 export const addProduct = createAsyncThunk(
@@ -103,7 +132,9 @@ export const productSlice = createSlice({
     builder
       .addCase(fetchProducts.pending, (state) => { state.loading = true; state.error = null; })
       .addCase(fetchProducts.fulfilled, (state, action: PayloadAction<ProductType[]>) => {
-        state.loading = false; state.products = action.payload;
+        state.loading = false;
+        state.products = action.payload;
+        state.lastFetchedAt = Date.now();
       })
       .addCase(fetchProducts.rejected, (state, action) => {
         state.loading = false; state.error = action.payload as string;

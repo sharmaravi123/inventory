@@ -39,14 +39,7 @@ const toNum = (v: unknown, fb = 0) => {
 
 export default function OrdersPage() {
   const dispatch = useDispatch<AppDispatch>();
-  const { data, isLoading, refetch } = useListBillsQuery(
-    { search: "" },
-    {
-      refetchOnMountOrArgChange: true,
-      refetchOnFocus: true,
-      refetchOnReconnect: true,
-    }
-  );
+  const { data, isLoading, refetch } = useListBillsQuery({ search: "" });
   const bills = data?.bills ?? [];
 
   const drivers = useSelector((s: RootState) => s.driver.items);
@@ -55,7 +48,7 @@ export default function OrdersPage() {
   const [markBillDelivered] = useMarkBillDeliveredMutation();
   const [deleteBill] = useDeleteBillMutation();
 
-  const [filterType, setFilterType] = useState<DateFilter>("thisMonth");
+  const [filterType, setFilterType] = useState<DateFilter>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [search, setSearch] = useState("");
@@ -369,7 +362,7 @@ export default function OrdersPage() {
         {/* LIST */}
         <BillList
           bills={filteredBills}
-          loading={isLoading}
+          loading={isLoading && bills.length === 0}
           drivers={drivers}
           onSelectBill={setSelectedBill}
           onEditPayment={setPaymentBill}
@@ -393,7 +386,7 @@ export default function OrdersPage() {
                 timer: 1800,
                 showConfirmButton: false,
               });
-              void dispatch(fetchInventory());
+              void dispatch(fetchInventory({ force: true }));
               refetch();
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : "Delete failed";

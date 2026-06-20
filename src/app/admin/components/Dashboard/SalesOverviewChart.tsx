@@ -25,7 +25,7 @@ const MONTHS = [
 ];
 
 export default function SalesOverviewChart() {
-  const { data, isLoading } = useListBillsQuery({ search: "" });
+  const { data, isLoading } = useListBillsQuery({ search: "", summary: true });
   const bills = data?.bills ?? [];
 
   const currentYear = new Date().getFullYear();

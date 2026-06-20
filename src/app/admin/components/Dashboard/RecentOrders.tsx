@@ -14,7 +14,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function RecentOrders() {
-  const { data, isLoading } = useListBillsQuery({ search: "" });
+  const { data, isLoading } = useListBillsQuery({ search: "", summary: true });
   const bills = data?.bills ?? [];
   const router = useRouter();
   const dispatch = useAppDispatch();

@@ -328,16 +328,26 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   await dbConnect();
+  const summary = req.nextUrl.searchParams.get("summary") === "1";
+
+  const fullSelect =
+    "invoiceNumber billDate customerInfo items totalItems totalBeforeTax totalTax roundOff grandTotal payment driver vehicleNumber amountCollected balanceAmount status createdAt";
+  const summarySelect =
+    "invoiceNumber billDate customerInfo totalItems totalBeforeTax totalTax roundOff grandTotal payment driver vehicleNumber amountCollected balanceAmount status createdAt";
+
   const bills = await BillModel.find()
     .sort({ createdAt: -1 })
-    .select(
-      "invoiceNumber billDate customerInfo items totalItems totalBeforeTax totalTax roundOff grandTotal payment driver vehicleNumber amountCollected balanceAmount status createdAt"
-    )
+    .select(summary ? summarySelect : fullSelect)
     .lean();
+
+  const normalized = summary
+    ? bills.map((b) => ({ ...b, items: [] }))
+    : bills;
+
   return NextResponse.json(
-    { bills },
+    { bills: normalized },
     { headers: { "Cache-Control": "no-store, max-age=0" } }
   );
 }

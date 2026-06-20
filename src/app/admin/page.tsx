@@ -1,5 +1,4 @@
 "use client";
-export const dynamic = "force-dynamic";
 import DashboardOverview from "./components/Dashboard/DashboardOverview";
 import { motion } from "framer-motion";
 import SalesOverviewChart from "./components/Dashboard/SalesOverviewChart";

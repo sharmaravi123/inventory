@@ -516,7 +516,7 @@ export default function AdminPurchaseManager() {
                     })
                 ).unwrap();
             }
-            await dispatch(fetchPurchases()).unwrap();
+            await dispatch(fetchPurchases({ force: true })).unwrap();
             setOpen(false);
             resetForm();
             Swal.fire("Success", editingPurchaseId ? "Purchase updated successfully" : "Purchase created successfully", "success");
@@ -601,8 +601,8 @@ export default function AdminPurchaseManager() {
                 timer: 1800,
                 showConfirmButton: false,
             });
-            await dispatch(fetchPurchases()).unwrap();
-            await dispatch(fetchInventory()).unwrap();
+            await dispatch(fetchPurchases({ force: true })).unwrap();
+            await dispatch(fetchInventory({ force: true })).unwrap();
         } catch (err: unknown) {
             const msg =
                 err instanceof Error ? err.message : "Failed to delete purchase";

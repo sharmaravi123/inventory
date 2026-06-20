@@ -508,8 +508,8 @@ export default function ReportsPage() {
 
   const refreshAll = useCallback(() => {
     refetch();
-    dispatch(fetchPurchases());
-    dispatch(fetchInventory());
+    dispatch(fetchPurchases({ force: true }));
+    dispatch(fetchInventory({ force: true }));
   }, [dispatch, refetch]);
 
   const quickSetThisMonth = () => {

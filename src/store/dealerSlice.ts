@@ -1,5 +1,10 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
+import {
+  shouldSkipListFetch,
+  type FetchWithForce,
+} from "@/store/cachePolicy";
+import type { RootState } from "@/store/store";
 
 export interface Dealer {
     _id: string;
@@ -14,23 +19,35 @@ export interface Dealer {
 interface DealerState {
     list: Dealer[];
     loading: boolean;
+    lastFetchedAt: number | null;
 }
 
 const initialState: DealerState = {
     list: [],
     loading: false,
+    lastFetchedAt: null,
 };
 
 const getToken = () =>
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-export const fetchDealers = createAsyncThunk<Dealer[]>(
+export const fetchDealers = createAsyncThunk<
+    Dealer[],
+    FetchWithForce,
+    { state: RootState }
+>(
     "dealer/fetch",
     async () => {
         const res = await axios.get("/api/dealers", {
             headers: { Authorization: `Bearer ${getToken()}` },
         });
         return res.data.dealers;
+    },
+    {
+        condition: (arg, { getState }) => {
+            const { list, loading, lastFetchedAt } = getState().dealer;
+            return !shouldSkipListFetch(loading, list.length, lastFetchedAt, arg);
+        },
     }
 );
 export const createDealer = createAsyncThunk<Dealer, Partial<Dealer>>(
@@ -59,6 +76,7 @@ const dealerSlice = createSlice({
                 (state, action: PayloadAction<Dealer[]>) => {
                     state.loading = false;
                     state.list = action.payload;
+                    state.lastFetchedAt = Date.now();
                 }
             );
     },

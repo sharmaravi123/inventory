@@ -403,7 +403,7 @@ const AdminInventoryManager: React.FC = () => {
     }
 
     setModalOpen(false);
-    dispatch(fetchInventory());
+    dispatch(fetchInventory({ force: true }));
   } catch (err) {
     const message =
       err instanceof Error

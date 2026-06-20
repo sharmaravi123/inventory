@@ -234,6 +234,8 @@ type CreateBillReturnResponse = { returnDoc: BillReturn };
 export type BillsListArgs = {
   search: string;
   warehouseId?: string;
+  /** Lighter payload without line items (payment, dashboard totals). */
+  summary?: boolean;
 };
 
 /* ---------------------------------------------
@@ -259,6 +261,9 @@ export const billingApi = createApi({
     baseUrl: "/api",
   }),
   tagTypes: ["Bill", "BillList", "BillReturn"],
+  keepUnusedDataFor: 300,
+  refetchOnFocus: false,
+  refetchOnReconnect: true,
   endpoints: (builder) => ({
     /* ---------- CREATE BILL ---------- */
     createBill: builder.mutation<CreateBillResponse, CreateBillPayload>({
@@ -272,7 +277,7 @@ export const billingApi = createApi({
 
     /* ---------- LIST BILLS WITH FILTERS ---------- */
     listBills: builder.query<BillsListResponse, BillsListArgs>({
-      query: ({ search, warehouseId }) => {
+      query: ({ search, warehouseId, summary }) => {
         const params: Record<string, string> = {};
 
         if (search.trim()) {
@@ -281,19 +286,11 @@ export const billingApi = createApi({
         }
 
         if (warehouseId) params.warehouseId = warehouseId;
+        if (summary) params.summary = "1";
 
         return { url: "billing", params };
       },
-      providesTags: (result) =>
-        result?.bills
-          ? [
-            ...result.bills.map((b) => ({
-              type: "Bill" as const,
-              id: b._id,
-            })),
-            "BillList",
-          ]
-          : ["BillList"],
+      providesTags: ["BillList"],
     }),
 
     /* ---------- GET SINGLE BILL ---------- */

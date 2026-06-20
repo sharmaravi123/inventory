@@ -25,7 +25,7 @@ const customerSchema = new Schema(
         return normalized || undefined;
       },
     },
-    address: { type: String, required: true },
+    address: { type: String, default: "" },
     gstNumber: { type: String },
     customPrices: { type: [CustomerPriceSchema], default: [] }, // <-- NEW
   },

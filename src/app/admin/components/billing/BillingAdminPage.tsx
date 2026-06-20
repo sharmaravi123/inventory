@@ -897,7 +897,7 @@ export default function BillingAdminPage() {
           <div>
             <BillList
               bills={bills}
-              loading={isLoading}
+              loading={isLoading && bills.length === 0}
               onSelectBill={(b) => setBillForPreview(b)}
               onEditPayment={(b) => setBillForPaymentEdit(b)}
               onEditOrder={loadBillForEdit}

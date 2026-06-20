@@ -1,5 +1,10 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
+import {
+  shouldSkipListFetch,
+  type FetchWithForce,
+} from "@/store/cachePolicy";
+import type { RootState } from "@/store/store";
 
 export interface InventoryItem {
   _id: string;
@@ -42,7 +47,11 @@ const getToken = (): string =>
     ? localStorage.getItem("token") ?? ""
     : "";
 
-export const fetchInventory = createAsyncThunk<InventoryItem[]>(
+export const fetchInventory = createAsyncThunk<
+  InventoryItem[],
+  FetchWithForce,
+  { state: RootState }
+>(
   "inventory/fetch",
   async () => {
     const token = getToken();
@@ -50,6 +59,12 @@ export const fetchInventory = createAsyncThunk<InventoryItem[]>(
       headers: { Authorization: `Bearer ${token}` },
     });
     return (res.data?.stocks ?? []) as InventoryItem[];
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { items, loading, lastFetchedAt } = getState().inventory;
+      return !shouldSkipListFetch(loading, items.length, lastFetchedAt, arg);
+    },
   }
 );
 
@@ -90,12 +105,14 @@ interface InventoryState {
   items: InventoryItem[];
   loading: boolean;
   error?: string | null;
+  lastFetchedAt: number | null;
 }
 
 const initialState: InventoryState = {
   items: [],
   loading: false,
   error: null,
+  lastFetchedAt: null,
 };
 
 const inventorySlice = createSlice({
@@ -112,6 +129,7 @@ const inventorySlice = createSlice({
         (state, action: PayloadAction<InventoryItem[]>) => {
           state.items = action.payload;
           state.loading = false;
+          state.lastFetchedAt = Date.now();
         }
       )
       .addCase(fetchInventory.rejected, (state, action) => {
