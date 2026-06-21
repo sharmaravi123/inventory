@@ -24,6 +24,19 @@ import {
   readCustomersCache,
   writeCustomersCache,
 } from "@/lib/customersListCache";
+import {
+  buildBillAwareAliasMap,
+  findDbCustomerIdForCanonical,
+  getBillPhone,
+  getCustomerCanonicalKey,
+  normalizeCustomerText,
+  resolveCustomerCanonicalKey,
+} from "@/lib/customerIdentity";
+import {
+  dropEmptyDuplicatePaymentRows,
+  mergePaymentCustomerEntries,
+} from "@/lib/mergePaymentCustomers";
+import { formatDisplayDate } from "@/lib/dateFormat";
 
 /* =============== TYPES =============== */
 
@@ -52,6 +65,7 @@ type CustomerAgg = {
   periodBilled: number;
   periodPaid: number;
   periodDue: number;
+  lastBillDate: string | null;
 };
 
 type CustomerRow = {
@@ -77,8 +91,8 @@ type BillWithDates = Bill & {
 };
 
 const getBillDate = (bill: Bill): Date | null => {
-  const b = bill as BillWithDates;
-  const raw = b.invoiceDate || b.updatedAt || b.createdAt;
+  const b = bill as BillWithDates & { billDate?: string };
+  const raw = b.billDate || b.invoiceDate || b.updatedAt || b.createdAt;
   if (!raw) return null;
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return null;
@@ -120,7 +134,7 @@ export default function PaymentsDashboardPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilterType, setDateFilterType] =
-    useState<DateFilterType>("thisMonth");
+    useState<DateFilterType>("all");
   const [fromDate, setFromDate] = useState(formatDateInput(startOfMonth()));
   const [toDate, setToDate] = useState(formatDateInput(endOfMonth()));
 
@@ -233,6 +247,7 @@ export default function PaymentsDashboardPage() {
           periodBilled: 0,
           periodPaid: 0,
           periodDue: 0,
+          lastBillDate: null,
         });
       }
 
@@ -284,13 +299,24 @@ export default function PaymentsDashboardPage() {
   /* =============== CUSTOMERS =============== */
 
   const [allCustomers, setAllCustomers] = useState<CustomerRow[]>([]);
+  const [customerIdAliases, setCustomerIdAliases] = useState<
+    Record<string, string>
+  >({});
 
   const loadCustomers = useCallback(async (force = false) => {
     if (!force) {
-      const cached = readCustomersCache();
+      const cached = readCustomersCache() as
+        | { customers?: CustomerRow[]; idAliases?: Record<string, string> }
+        | CustomerRow[]
+        | null;
       if (cached) {
-        setAllCustomers(cached as CustomerRow[]);
-        return;
+        if (Array.isArray(cached)) {
+          // Old cache shape — refetch for idAliases
+        } else {
+          setAllCustomers(cached.customers ?? []);
+          setCustomerIdAliases(cached.idAliases ?? {});
+          return;
+        }
       }
     }
     try {
@@ -300,10 +326,13 @@ export default function PaymentsDashboardPage() {
       }
       const d = await r.json();
       const rows = (d.customers ?? []) as CustomerRow[];
-      writeCustomersCache(rows);
+      const aliases = (d.idAliases ?? {}) as Record<string, string>;
+      writeCustomersCache({ customers: rows, idAliases: aliases });
       setAllCustomers(rows);
+      setCustomerIdAliases(aliases);
     } catch {
       setAllCustomers([]);
+      setCustomerIdAliases({});
     }
   }, []);
 
@@ -312,94 +341,102 @@ export default function PaymentsDashboardPage() {
   }, [loadCustomers]);
 
   const customersAggregated = useMemo(() => {
+    const aliases = buildBillAwareAliasMap(
+      allCustomers,
+      bills,
+      customerIdAliases
+    );
     const map = new Map<string, CustomerAgg>();
+    const seenCanonical = new Set<string>();
 
-    // Add all customers even without bills
-    for (const cust of allCustomers) {
-      const cid = cust.phone || cust._id || cust.name;
-      if (!cid) continue;
+    const emptyStats = {
+      totalOrders: 0,
+      totalBilled: 0,
+      totalPaid: 0,
+      totalDue: 0,
+      periodOrders: 0,
+      periodBilled: 0,
+      periodPaid: 0,
+      periodDue: 0,
+      lastBillDate: null as string | null,
+    };
 
-      if (!map.has(cid)) {
-        map.set(cid, {
-          customerId: cid,
-          dbId: cust._id,
-          name: cust.name || "Unknown",
-          shopName: cust.shopName || "",
-          phone: cust.phone || "-",
-          address: cust.address || "",
-          gstNumber: cust.gstNumber || "",
+    const ensureEntry = (
+      canonical: string,
+      seed?: Partial<CustomerAgg>
+    ): CustomerAgg => {
+      if (!map.has(canonical)) {
+        map.set(canonical, {
+          customerId: canonical,
+          name: seed?.name || "Unknown",
+          shopName: seed?.shopName || "",
+          phone: seed?.phone || "-",
+          address: seed?.address || "",
+          gstNumber: seed?.gstNumber || "",
+          dbId: seed?.dbId,
           bills: [],
-          totalOrders: 0,
-          totalBilled: 0,
-          totalPaid: 0,
-          totalDue: 0,
-          periodOrders: 0,
-          periodBilled: 0,
-          periodPaid: 0,
-          periodDue: 0,
+          ...emptyStats,
+          ...seed,
         });
+      } else if (seed) {
+        const entry = map.get(canonical)!;
+        const nextDbId = findDbCustomerIdForCanonical(canonical, allCustomers);
+        if (nextDbId) entry.dbId = nextDbId;
+        if (seed.shopName) entry.shopName = seed.shopName;
+        if (!entry.address && seed.address) entry.address = seed.address;
+        if (!entry.gstNumber && seed.gstNumber) entry.gstNumber = seed.gstNumber;
+        if (entry.phone === "-" && seed.phone) entry.phone = seed.phone;
       }
+      return map.get(canonical)!;
+    };
+
+    for (const cust of allCustomers) {
+      const id = normalizeCustomerText(cust._id);
+      if (!id) continue;
+      const canonical = aliases.get(id) || getCustomerCanonicalKey(cust);
+      if (!canonical || seenCanonical.has(canonical)) continue;
+      seenCanonical.add(canonical);
+
+      const primary =
+        allCustomers.find((c) => getCustomerCanonicalKey(c) === canonical) ||
+        allCustomers.find((c) => (aliases.get(c._id) || c._id) === canonical) ||
+        cust;
+
+      ensureEntry(canonical, {
+        dbId: primary._id,
+        name: primary.name || "Unknown",
+        shopName: primary.shopName || "",
+        phone: primary.phone || "-",
+        address: primary.address || "",
+        gstNumber: primary.gstNumber || "",
+      });
     }
 
-    // Merge bills
     for (const bill of bills) {
       const info = bill.customerInfo || {};
-      const cid = info.phone || info.customer || info.name;
-      if (!cid) continue;
+      const canonical = resolveCustomerCanonicalKey(info, aliases);
+      if (canonical === "unknown") continue;
 
-      if (!map.has(cid)) {
-        map.set(cid, {
-          customerId: cid,
-          dbId: info.customer || undefined,
-          name: info.name || "Unknown",
-          shopName: info.shopName || "",
-          phone: cid,
-          address: info.address || "",
-          gstNumber: info.gstNumber || "",
-          bills: [],
-          totalOrders: 0,
-          totalBilled: 0,
-          totalPaid: 0,
-          totalDue: 0,
-          periodOrders: 0,
-          periodBilled: 0,
-          periodPaid: 0,
-          periodDue: 0,
-        });
-      }
+      const entry = ensureEntry(canonical, {
+        dbId: findDbCustomerIdForCanonical(canonical, allCustomers),
+        name: info.name || "Unknown",
+        shopName: info.shopName || "",
+        phone: getBillPhone(info) || "-",
+        address: info.address || "",
+        gstNumber: info.gstNumber || "",
+      });
 
-      const entry = map.get(cid)!;
-      if (!entry.shopName && info.shopName) {
-        entry.shopName = info.shopName;
-      }
-      if (!entry.address && info.address) {
-        entry.address = info.address;
-      }
-      if (!entry.gstNumber && info.gstNumber) {
-        entry.gstNumber = info.gstNumber;
-      }
       entry.bills.push(bill);
-
-      const due = getBillDue(bill);
-      const paid = getBillPaid(bill);
-      const billed = due + paid;
-
-      entry.totalOrders += 1;
-      entry.totalBilled += billed;
-      entry.totalPaid += paid;
-      entry.totalDue += due;
-
-      if (isWithinRange(bill)) {
-        entry.periodOrders += 1;
-        entry.periodBilled += billed;
-        entry.periodPaid += paid;
-        entry.periodDue += due;
-      }
     }
 
-    let arr = Array.from(map.values());
+    let arr: CustomerAgg[] = dropEmptyDuplicatePaymentRows(
+      mergePaymentCustomerEntries(Array.from(map.values()), allCustomers, {
+        getBillDue,
+        getBillPaid,
+        isWithinRange,
+      })
+    );
 
-    // search
     if (searchTerm.trim()) {
       const st = searchTerm.toLowerCase();
       arr = arr.filter(
@@ -410,7 +447,6 @@ export default function PaymentsDashboardPage() {
       );
     }
 
-    // sort A-Z by display name (shop name first, then customer name)
     arr.sort((a, b) => {
       const nameA = (a.shopName || a.name || "").trim();
       const nameB = (b.shopName || b.name || "").trim();
@@ -424,7 +460,15 @@ export default function PaymentsDashboardPage() {
     });
 
     return arr;
-  }, [allCustomers, bills, searchTerm, dateFilterType, parsedFrom, parsedTo]);
+  }, [
+    allCustomers,
+    bills,
+    customerIdAliases,
+    searchTerm,
+    dateFilterType,
+    parsedFrom,
+    parsedTo,
+  ]);
 
   const selectedCustomer = useMemo(() => {
     if (!selectedCustomerId) return null;
@@ -487,7 +531,13 @@ export default function PaymentsDashboardPage() {
 
   const handleOpenNewBill = (customer: CustomerAgg) => {
     const params = new URLSearchParams();
-    const customerId = customer.dbId || customer.customerId;
+    const customerId =
+      customer.dbId ||
+      findDbCustomerIdForCanonical(customer.customerId, allCustomers) ||
+      (customer.customerId.startsWith("phone:") ||
+      customer.customerId.startsWith("snap:")
+        ? ""
+        : customer.customerId);
 
     if (customerId) params.set("customerId", customerId);
     if (customer.name && customer.name !== "Unknown") params.set("name", customer.name);
@@ -952,7 +1002,7 @@ export default function PaymentsDashboardPage() {
                   <button
                     onClick={() =>
                       router.push(
-                        `/admin/payment/customer/${encodeURIComponent(c.dbId || c.customerId)}`
+                        `/admin/payment/customer/${encodeURIComponent(c.customerId)}`
                       )
                     }
                     className="inline-flex items-center rounded-xl border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
@@ -985,6 +1035,7 @@ export default function PaymentsDashboardPage() {
                 <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <th className="py-3 pl-6 pr-2 text-left">Customer</th>
                   <th className="px-2 py-3 text-left">Phone</th>
+                  <th className="px-2 py-3 text-left">Last Bill</th>
                   <th className="px-2 py-3 text-center">Total Orders</th>
                   <th className="px-2 py-3 text-center">Orders (Period)</th>
                   <th className="px-2 py-3 text-right">Billed</th>
@@ -1011,6 +1062,9 @@ export default function PaymentsDashboardPage() {
                     </td>
                     <td className="px-2 py-3 text-xs font-mono text-slate-700">
                       {c.phone}
+                    </td>
+                    <td className="px-2 py-3 text-xs text-slate-700 whitespace-nowrap">
+                      {formatDisplayDate(c.lastBillDate)}
                     </td>
                     <td className="px-2 py-3 text-center text-sm font-semibold text-slate-900">
                       {c.totalOrders}
@@ -1054,7 +1108,7 @@ export default function PaymentsDashboardPage() {
                         <button
                           onClick={() =>
                             router.push(
-                              `/admin/payment/customer/${encodeURIComponent(c.dbId || c.customerId)}`
+                              `/admin/payment/customer/${encodeURIComponent(c.customerId)}`
                             )
                           }
                           className="inline-flex items-center rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"

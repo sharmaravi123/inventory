@@ -26,6 +26,7 @@ import { ddMmYyyyToIso, isoToDdMmYyyy } from "@/lib/ddMmYyyyInput";
 
 type ReturnRecord = {
   _id: string;
+  billId?: string;
   invoiceNumber?: string;
   customerInfo: {
     name: string;
@@ -374,14 +375,26 @@ export default function ReportsPage() {
     return filteredReturns.reduce(
       (acc, record) => {
         acc.returnCount += 1;
-        acc.returnAmount += getReturnAmount(record);
+        const amount = getReturnAmount(record);
+        acc.returnAmount += amount;
+        if (record.billId) {
+          acc.billLinkedReturnAmount += amount;
+        } else {
+          acc.manualReturnAmount += amount;
+        }
         acc.returnItems += record.items.reduce(
           (sum, item) => sum + toNumber(item.totalItems),
           0
         );
         return acc;
       },
-      { returnCount: 0, returnAmount: 0, returnItems: 0 }
+      {
+        returnCount: 0,
+        returnAmount: 0,
+        billLinkedReturnAmount: 0,
+        manualReturnAmount: 0,
+        returnItems: 0,
+      }
     );
   }, [filteredReturns]);
 
@@ -414,7 +427,18 @@ export default function ReportsPage() {
     );
   }, [inventory, products]);
 
-  const netSales = salesStats.grossSales - returnStats.returnAmount;
+  // Bill grandTotals are already reduced when a bill return is processed.
+  // Only manual returns (no linked bill) need a separate sales adjustment.
+  const netSales = salesStats.grossSales - returnStats.manualReturnAmount;
+
+  const periodFlow = useMemo(
+    () => ({
+      itemsPurchased: purchaseStats.itemsPurchased,
+      itemsSold: salesStats.itemsSold,
+      itemsInStock: stockStats.totalItems,
+    }),
+    [purchaseStats.itemsPurchased, salesStats.itemsSold, stockStats.totalItems]
+  );
 
   const cashCollectedBreakdown = useMemo(() => {
     const m = new Map<string, number>();
@@ -623,21 +647,21 @@ export default function ReportsPage() {
         <SummaryCard
           title="Total sell"
           value={formatCurrency(netSales)}
-          note={`After refund deduction. Gross sell: ${formatCurrency(salesStats.grossSales)}.`}
+          note={`Sales from ${formatNumber(salesStats.billCount)} bills in this period (${formatNumber(periodFlow.itemsSold)} items). This is money received from customers — not the same as stock value below.`}
           icon={<BarChart3 className="h-5 w-5 text-emerald-600" />}
           tone="emerald"
         />
         <SummaryCard
           title="Total purchase"
           value={formatCurrency(purchaseStats.totalPurchase)}
-          note={`${formatNumber(purchaseStats.purchaseCount)} purchase bills in the selected date range.`}
+          note={`${formatNumber(purchaseStats.purchaseCount)} purchase bills (${formatNumber(periodFlow.itemsPurchased)} items bought). Total paid to dealers in period — not current stock cost (see Stock value).`}
           icon={<ShoppingBag className="h-5 w-5 text-sky-600" />}
           tone="sky"
         />
         <SummaryCard
-          title="Stock value"
+          title="Stock value (unsold)"
           value={formatCurrency(stockStats.sellingValue)}
-          note={`${formatNumber(stockStats.totalItems)} items available now. Purchase value: ${formatCurrency(stockStats.purchaseValue)}.`}
+          note={`${formatNumber(stockStats.totalItems)} items in warehouse now. At purchase cost: ${formatCurrency(stockStats.purchaseValue)}. Live inventory — not period purchase/sales.`}
           icon={<Package className="h-5 w-5 text-indigo-600" />}
           tone="indigo"
         />
@@ -651,11 +675,64 @@ export default function ReportsPage() {
         <SummaryCard
           title="Refund amount"
           value={formatCurrency(returnStats.returnAmount)}
-          note={`${formatNumber(returnStats.returnCount)} returns in the selected date range.`}
+          note={
+            returnStats.billLinkedReturnAmount > 0
+              ? `${formatNumber(returnStats.returnCount)} returns. ${formatCurrency(returnStats.billLinkedReturnAmount)} already reduced in bill totals above.`
+              : `${formatNumber(returnStats.returnCount)} returns in the selected date range.`
+          }
           icon={<Download className="h-5 w-5 text-amber-600" />}
           tone="amber"
         />
       </div>
+
+      <section className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">
+          Why inventory and report totals differ
+        </h2>
+        <p className="mt-1 text-xs leading-5 text-slate-600">
+          Purchase and sell cards show <strong>period activity</strong> (money
+          spent or collected in the selected dates). Stock value shows{" "}
+          <strong>what is left in the warehouse today</strong> at product list
+          prices. Sold goods are no longer in stock, so these numbers are
+          expected to differ.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-md border border-sky-100 bg-white p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
+              Bought in period
+            </p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">
+              {formatCurrency(purchaseStats.totalPurchase)}
+            </p>
+            <p className="text-xs text-slate-500">
+              {formatNumber(periodFlow.itemsPurchased)} items from dealers
+            </p>
+          </div>
+          <div className="rounded-md border border-emerald-100 bg-white p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+              Sold in period
+            </p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">
+              {formatCurrency(netSales)}
+            </p>
+            <p className="text-xs text-slate-500">
+              {formatNumber(periodFlow.itemsSold)} items to customers
+            </p>
+          </div>
+          <div className="rounded-md border border-indigo-100 bg-white p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
+              In stock now
+            </p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">
+              {formatCurrency(stockStats.sellingValue)}
+            </p>
+            <p className="text-xs text-slate-500">
+              {formatNumber(periodFlow.itemsInStock)} items · cost{" "}
+              {formatCurrency(stockStats.purchaseValue)}
+            </p>
+          </div>
+        </div>
+      </section>
 
       <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">

@@ -4,9 +4,11 @@ import CustomerModel, {
   ensureCustomerPhoneIndex,
 } from "@/models/Customer";
 import BillModel from "@/models/Bill";
+import { makeCustomerSnapshotKey } from "@/lib/customerIdentity";
 
 type CustomersResponse = {
   customers: CustomerListItem[];
+  idAliases?: Record<string, string>;
 };
 
 type CustomerListItem = {
@@ -44,13 +46,14 @@ const toIdString = (value: unknown) => {
   return "";
 };
 
-const makeSnapshotKey = (info: NonNullable<BillCustomerSnapshot["customerInfo"]>) => {
+const makeSnapshotKey = (info: {
+  name?: string;
+  shopName?: string;
+  phone?: string;
+}) => {
   const phone = normalizeText(info.phone);
   if (phone) return `phone:${phone}`;
-
-  const shopName = normalizeText(info.shopName).toLowerCase();
-  const name = normalizeText(info.name).toLowerCase();
-  return `snapshot:${shopName || name}:${name}`;
+  return makeCustomerSnapshotKey(info);
 };
 
 export async function POST(req: NextRequest) {
@@ -157,21 +160,50 @@ export async function GET(
     const customersByKey = new Map<string, CustomerListItem>();
     const keyByCustomerId = new Map<string, string>();
     const keyByPhone = new Map<string, string>();
+    const snapshotPrimaryKey = new Map<string, string>();
+    const snapshotPrimaryId = new Map<string, string>();
+    const phonePrimaryId = new Map<string, string>();
+    const idAliases: Record<string, string> = {};
 
     for (const customer of savedCustomers) {
       const id = toIdString(customer._id);
-      const key = id ? `id:${id}` : makeSnapshotKey(customer);
+      const snap = makeSnapshotKey(customer);
+      const phone = normalizeText(customer.phone);
+
+      if (phone && phonePrimaryId.has(phone)) {
+        const primaryId = phonePrimaryId.get(phone)!;
+        if (id) {
+          idAliases[id] = primaryId;
+          keyByCustomerId.set(id, `id:${primaryId}`);
+        }
+        continue;
+      }
+
+      const key = id ? `id:${id}` : snap;
       const item = {
         ...customer,
         _id: id || customer._id,
         address: customer.address || "",
       };
 
+      const existingPrimary = snapshotPrimaryKey.get(snap);
+      const existingPrimaryId = snapshotPrimaryId.get(snap);
+      if (existingPrimary && existingPrimaryId && id) {
+        idAliases[id] = existingPrimaryId;
+        keyByCustomerId.set(id, existingPrimary);
+        if (phone) keyByPhone.set(phone, existingPrimary);
+        continue;
+      }
+
       customersByKey.set(key, item);
       if (id) keyByCustomerId.set(id, key);
+      snapshotPrimaryKey.set(snap, key);
+      if (id) snapshotPrimaryId.set(snap, id);
 
-      const phone = normalizeText(customer.phone);
-      if (phone) keyByPhone.set(phone, key);
+      if (phone) {
+        keyByPhone.set(phone, key);
+        if (id) phonePrimaryId.set(phone, id);
+      }
     }
 
     const billFilter: Record<string, unknown> = {};
@@ -221,7 +253,10 @@ export async function GET(
       if (phone) keyByPhone.set(phone, key);
     }
 
-    return NextResponse.json({ customers: Array.from(customersByKey.values()) });
+    return NextResponse.json({
+      customers: Array.from(customersByKey.values()),
+      idAliases,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown error";

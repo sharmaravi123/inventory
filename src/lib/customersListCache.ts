@@ -1,14 +1,18 @@
 import type { FetchWithForce } from "@/store/cachePolicy";
 import { isForceFetch, LIST_CACHE_MS } from "@/store/cachePolicy";
 
+type CustomersCachePayload =
+  | unknown[]
+  | { customers?: unknown[]; idAliases?: Record<string, string> };
+
 type CustomersCache = {
-  data: unknown[];
+  data: CustomersCachePayload;
   at: number;
 };
 
 let cache: CustomersCache | null = null;
 
-export function readCustomersCache(): unknown[] | null {
+export function readCustomersCache(): CustomersCachePayload | null {
   if (!cache) return null;
   if (Date.now() - cache.at > LIST_CACHE_MS) {
     cache = null;
@@ -17,7 +21,7 @@ export function readCustomersCache(): unknown[] | null {
   return cache.data;
 }
 
-export function writeCustomersCache(data: unknown[]): void {
+export function writeCustomersCache(data: CustomersCachePayload): void {
   cache = { data, at: Date.now() };
 }
 

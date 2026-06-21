@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
 import dbConnect from "@/lib/mongodb";
 import BillModel from "@/models/Bill";
 import CustomerModel from "@/models/Customer";
+import {
+  buildExpandedLedgerBillQuery,
+  buildLedgerBillQuery,
+  decodeCustomerKey,
+  filterLedgerBillsWithAliases,
+  resolveLedgerCustomerDocLookup,
+  resolveLedgerCustomerKey,
+} from "@/lib/customerLedgerMatch";
+import { getBillPhone } from "@/lib/customerIdentity";
 
 type PeriodType = "all" | "thisMonth" | "lastMonth" | "custom";
 
@@ -26,13 +34,67 @@ const toNumber = (value: unknown) => {
 const normalizeText = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
-const decodeParam = (value: string) => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
+function pickMostCommon(values: string[]): string {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    if (!value) continue;
+    counts.set(value, (counts.get(value) || 0) + 1);
   }
+
+  let best = "";
+  let bestCount = 0;
+  for (const [value, count] of counts) {
+    if (count > bestCount) {
+      best = value;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+type BillWithCustomerInfo = {
+  customerInfo?: {
+    name?: string;
+    shopName?: string;
+    phone?: string;
+    address?: string;
+    gstNumber?: string;
+    customer?: unknown;
+  };
 };
+
+function pickCustomerFieldsFromBills(bills: BillWithCustomerInfo[]) {
+  const shops: string[] = [];
+  const names: string[] = [];
+  const phones: string[] = [];
+  const addresses: string[] = [];
+  const gstNumbers: string[] = [];
+
+  for (const bill of bills) {
+    const info = bill.customerInfo;
+    if (!info) continue;
+
+    const shop = normalizeText(info.shopName);
+    const name = normalizeText(info.name);
+    const phone = getBillPhone(info);
+    const address = normalizeText(info.address);
+    const gstNumber = normalizeText(info.gstNumber);
+
+    if (shop) shops.push(shop);
+    if (name) names.push(name);
+    if (phone) phones.push(phone);
+    if (address) addresses.push(address);
+    if (gstNumber) gstNumbers.push(gstNumber);
+  }
+
+  return {
+    shopName: pickMostCommon(shops),
+    contactName: pickMostCommon(names),
+    phone: pickMostCommon(phones),
+    address: pickMostCommon(addresses),
+    gstNumber: pickMostCommon(gstNumbers),
+  };
+}
 
 export async function GET(
   req: NextRequest,
@@ -42,7 +104,7 @@ export async function GET(
     await dbConnect();
 
     const { customerKey } = await context.params;
-    const decodedKey = decodeParam(customerKey).trim();
+    let decodedKey = decodeCustomerKey(customerKey);
     if (!decodedKey) {
       return NextResponse.json({ error: "customerKey is required" }, { status: 400 });
     }
@@ -55,9 +117,41 @@ export async function GET(
     const fromParam = req.nextUrl.searchParams.get("from") || "";
     const toParam = req.nextUrl.searchParams.get("to") || "";
 
-    const keyValues = new Set<string>();
-    keyValues.add(decodedKey);
+    const billSelect =
+      "_id invoiceNumber billDate customerInfo grandTotal amountCollected balanceAmount status createdAt";
 
+    const savedCustomers = await CustomerModel.find()
+      .select("_id name shopName phone address gstNumber")
+      .lean();
+
+    const customerRows = savedCustomers.map((customer) => ({
+      _id: String(customer._id),
+      name: customer.name,
+      shopName: customer.shopName,
+      phone: customer.phone,
+    }));
+
+    let billQuery = buildLedgerBillQuery(decodedKey);
+    let rawBills = await BillModel.find(billQuery)
+      .select(billSelect)
+      .sort({ billDate: -1, createdAt: -1 })
+      .lean();
+
+    const resolvedKey = resolveLedgerCustomerKey(
+      decodedKey,
+      customerRows,
+      rawBills
+    );
+    if (resolvedKey !== decodedKey) {
+      decodedKey = resolvedKey;
+      billQuery = buildLedgerBillQuery(decodedKey);
+      rawBills = await BillModel.find(billQuery)
+        .select(billSelect)
+        .sort({ billDate: -1, createdAt: -1 })
+        .lean();
+    }
+
+    const lookup = resolveLedgerCustomerDocLookup(decodedKey);
     let customerDoc: {
       _id: unknown;
       name?: string;
@@ -67,36 +161,52 @@ export async function GET(
       gstNumber?: string;
     } | null = null;
 
-    if (mongoose.Types.ObjectId.isValid(decodedKey)) {
-      customerDoc = await CustomerModel.findById(decodedKey)
+    if (lookup.byId) {
+      customerDoc = await CustomerModel.findById(lookup.byId)
         .select("_id name shopName phone address gstNumber")
         .lean();
-      if (customerDoc) {
-        [customerDoc.phone, customerDoc.name, customerDoc.shopName]
-          .map((value) => normalizeText(value))
-          .filter(Boolean)
-          .forEach((value) => keyValues.add(value));
-      }
+    } else if (lookup.byPhone) {
+      customerDoc = await CustomerModel.findOne({ phone: lookup.byPhone })
+        .select("_id name shopName phone address gstNumber")
+        .lean();
+    } else if (lookup.byShop) {
+      const shopRegex = new RegExp(
+        `^\\s*${lookup.byShop.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+        "i"
+      );
+      customerDoc = await CustomerModel.findOne({
+        $or: [{ shopName: shopRegex }, { name: shopRegex }],
+      })
+        .select("_id name shopName phone address gstNumber")
+        .lean();
     }
 
-    const conditions: Record<string, unknown>[] = [];
-    if (mongoose.Types.ObjectId.isValid(decodedKey)) {
-      conditions.push({
-        "customerInfo.customer": new mongoose.Types.ObjectId(decodedKey),
+    if (
+      decodedKey.startsWith("shop:") ||
+      decodedKey.startsWith("phone:")
+    ) {
+      const expandedQuery = buildExpandedLedgerBillQuery(decodedKey, rawBills);
+      const expandedBills = await BillModel.find(expandedQuery)
+        .select(billSelect)
+        .sort({ billDate: -1, createdAt: -1 })
+        .lean();
+
+      const byId = new Map<string, (typeof rawBills)[number]>();
+      for (const bill of [...rawBills, ...expandedBills]) {
+        byId.set(String(bill._id), bill);
+      }
+      rawBills = Array.from(byId.values()).sort((a, b) => {
+        const aTime = new Date(a.billDate || a.createdAt || 0).getTime();
+        const bTime = new Date(b.billDate || b.createdAt || 0).getTime();
+        return bTime - aTime;
       });
     }
-    for (const key of keyValues) {
-      conditions.push({ "customerInfo.phone": key });
-      conditions.push({ "customerInfo.name": key });
-      conditions.push({ "customerInfo.shopName": key });
-    }
 
-    const bills = await BillModel.find({ $or: conditions })
-      .select(
-        "_id invoiceNumber billDate customerInfo grandTotal amountCollected balanceAmount status createdAt"
-      )
-      .sort({ billDate: -1, createdAt: -1 })
-      .lean();
+    const bills = filterLedgerBillsWithAliases(
+      decodedKey,
+      rawBills,
+      customerRows
+    );
 
     const now = new Date();
     const thisMonthStart = startOfMonth(now);
@@ -150,16 +260,37 @@ export async function GET(
     }
 
     const latestInfo = bills[0]?.customerInfo;
+    const fromBills = pickCustomerFieldsFromBills(bills);
+
+    const shopName =
+      fromBills.shopName || normalizeText(customerDoc?.shopName) || "";
+    const contactName =
+      fromBills.contactName ||
+      normalizeText(customerDoc?.name) ||
+      normalizeText(latestInfo?.name) ||
+      "Unknown";
+
     const customer = {
       id:
         typeof customerDoc?._id !== "undefined"
           ? String(customerDoc._id)
           : normalizeText(latestInfo?.customer) || decodedKey,
-      name: normalizeText(customerDoc?.name) || normalizeText(latestInfo?.name) || "Unknown",
-      shopName: normalizeText(customerDoc?.shopName) || normalizeText(latestInfo?.shopName),
-      phone: normalizeText(customerDoc?.phone) || normalizeText(latestInfo?.phone),
-      address: normalizeText(customerDoc?.address) || normalizeText(latestInfo?.address),
-      gstNumber: normalizeText(customerDoc?.gstNumber) || normalizeText(latestInfo?.gstNumber),
+      name: contactName,
+      shopName,
+      displayName: shopName || contactName,
+      phone:
+        fromBills.phone ||
+        getBillPhone({ phone: customerDoc?.phone }) ||
+        getBillPhone({ phone: latestInfo?.phone }) ||
+        "",
+      address:
+        fromBills.address ||
+        normalizeText(customerDoc?.address) ||
+        normalizeText(latestInfo?.address),
+      gstNumber:
+        fromBills.gstNumber ||
+        normalizeText(customerDoc?.gstNumber) ||
+        normalizeText(latestInfo?.gstNumber),
     };
 
     return NextResponse.json({

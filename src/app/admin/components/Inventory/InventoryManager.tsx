@@ -581,6 +581,12 @@ const AdminInventoryManager: React.FC = () => {
                 }, 0)
               )}
             </p>
+            <p
+              className="mt-1 text-[10px] leading-4"
+              style={{ color: "var(--color-sidebar)", opacity: 0.65 }}
+            >
+              Current unsold stock at product purchase price — not total purchase bills.
+            </p>
           </div>
 
           <div className="rounded-2xl border border-[var(--color-secondary)] bg-[var(--color-white)] p-4 shadow-sm">
@@ -603,6 +609,12 @@ const AdminInventoryManager: React.FC = () => {
                   return sum + (prices.selling ? totalItems * prices.selling : 0);
                 }, 0)
               )}
+            </p>
+            <p
+              className="mt-1 text-[10px] leading-4"
+              style={{ color: "var(--color-sidebar)", opacity: 0.65 }}
+            >
+              If all current stock is sold at list price — not period sales revenue.
             </p>
           </div>
         </section>

@@ -11,6 +11,7 @@ type LedgerResponse = {
     id: string;
     name: string;
     shopName?: string;
+    displayName?: string;
     phone?: string;
     address?: string;
     gstNumber?: string;
@@ -88,7 +89,12 @@ export default function CustomerDetailsPage() {
 
   const customerTitle = useMemo(() => {
     if (!data) return "Customer";
-    return data.customer.shopName || data.customer.name || "Customer";
+    return (
+      data.customer.displayName ||
+      data.customer.shopName ||
+      data.customer.name ||
+      "Customer"
+    );
   }, [data]);
 
   if (loading) {

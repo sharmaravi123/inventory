@@ -42,6 +42,15 @@ export async function DELETE(
         orFilter.push({ "customerInfo.phone": phone });
       }
 
+      const name = normalizeText(customer.name);
+      const shopName = normalizeText(customer.shopName);
+      if (shopName) {
+        orFilter.push({ "customerInfo.shopName": shopName });
+      }
+      if (name) {
+        orFilter.push({ "customerInfo.name": name });
+      }
+
       const bills = await BillModel.find({ $or: orFilter })
         .select("_id")
         .lean();
