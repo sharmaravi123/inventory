@@ -440,6 +440,12 @@ export default function ReportsPage() {
     [purchaseStats.itemsPurchased, salesStats.itemsSold, stockStats.totalItems]
   );
 
+  const remainingBalance = Math.max(0, purchaseStats.totalPurchase - netSales);
+  const remainingItems = Math.max(
+    0,
+    periodFlow.itemsPurchased - periodFlow.itemsSold
+  );
+
   const cashCollectedBreakdown = useMemo(() => {
     const m = new Map<string, number>();
     filteredBills.forEach((bill) => {
@@ -636,7 +642,35 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center">
+          <span>
+            <span className="text-slate-500">Purchase </span>
+            <span className="font-semibold text-sky-700">
+              {formatCurrency(purchaseStats.totalPurchase)}
+            </span>
+          </span>
+          <span className="text-slate-400">−</span>
+          <span>
+            <span className="text-slate-500">Sell </span>
+            <span className="font-semibold text-emerald-700">
+              {formatCurrency(netSales)}
+            </span>
+          </span>
+          <span className="text-slate-400">=</span>
+          <span>
+            <span className="text-slate-500">Remaining </span>
+            <span className="font-semibold text-indigo-700">
+              {formatCurrency(remainingBalance)}
+            </span>
+          </span>
+          <span className="text-xs text-slate-400">
+            ({formatNumber(periodFlow.itemsPurchased)} − {formatNumber(periodFlow.itemsSold)} = {formatNumber(remainingItems)} items)
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <SummaryCard
           title="Total bills"
           value={formatNumber(salesStats.billCount)}
@@ -647,21 +681,21 @@ export default function ReportsPage() {
         <SummaryCard
           title="Total sell"
           value={formatCurrency(netSales)}
-          note={`Sales from ${formatNumber(salesStats.billCount)} bills in this period (${formatNumber(periodFlow.itemsSold)} items). This is money received from customers — not the same as stock value below.`}
+          note={`${formatNumber(salesStats.billCount)} bills · ${formatNumber(periodFlow.itemsSold)} items sold.`}
           icon={<BarChart3 className="h-5 w-5 text-emerald-600" />}
           tone="emerald"
         />
         <SummaryCard
           title="Total purchase"
           value={formatCurrency(purchaseStats.totalPurchase)}
-          note={`${formatNumber(purchaseStats.purchaseCount)} purchase bills (${formatNumber(periodFlow.itemsPurchased)} items bought). Total paid to dealers in period — not current stock cost (see Stock value).`}
+          note={`${formatNumber(purchaseStats.purchaseCount)} purchase bills · ${formatNumber(periodFlow.itemsPurchased)} items bought.`}
           icon={<ShoppingBag className="h-5 w-5 text-sky-600" />}
           tone="sky"
         />
         <SummaryCard
-          title="Stock value (unsold)"
+          title="Stock value"
           value={formatCurrency(stockStats.sellingValue)}
-          note={`${formatNumber(stockStats.totalItems)} items in warehouse now. At purchase cost: ${formatCurrency(stockStats.purchaseValue)}. Live inventory — not period purchase/sales.`}
+          note={`Purchase − Sell = ${formatCurrency(remainingBalance)} (${formatNumber(remainingItems)} items). ${formatNumber(stockStats.totalItems)} items in stock. Purchase cost: ${formatCurrency(stockStats.purchaseValue)}.`}
           icon={<Package className="h-5 w-5 text-indigo-600" />}
           tone="indigo"
         />
@@ -677,62 +711,13 @@ export default function ReportsPage() {
           value={formatCurrency(returnStats.returnAmount)}
           note={
             returnStats.billLinkedReturnAmount > 0
-              ? `${formatNumber(returnStats.returnCount)} returns. ${formatCurrency(returnStats.billLinkedReturnAmount)} already reduced in bill totals above.`
+              ? `${formatNumber(returnStats.returnCount)} returns. ${formatCurrency(returnStats.billLinkedReturnAmount)} already in bill totals.`
               : `${formatNumber(returnStats.returnCount)} returns in the selected date range.`
           }
           icon={<Download className="h-5 w-5 text-amber-600" />}
           tone="amber"
         />
       </div>
-
-      <section className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Why inventory and report totals differ
-        </h2>
-        <p className="mt-1 text-xs leading-5 text-slate-600">
-          Purchase and sell cards show <strong>period activity</strong> (money
-          spent or collected in the selected dates). Stock value shows{" "}
-          <strong>what is left in the warehouse today</strong> at product list
-          prices. Sold goods are no longer in stock, so these numbers are
-          expected to differ.
-        </p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-md border border-sky-100 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
-              Bought in period
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">
-              {formatCurrency(purchaseStats.totalPurchase)}
-            </p>
-            <p className="text-xs text-slate-500">
-              {formatNumber(periodFlow.itemsPurchased)} items from dealers
-            </p>
-          </div>
-          <div className="rounded-md border border-emerald-100 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
-              Sold in period
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">
-              {formatCurrency(netSales)}
-            </p>
-            <p className="text-xs text-slate-500">
-              {formatNumber(periodFlow.itemsSold)} items to customers
-            </p>
-          </div>
-          <div className="rounded-md border border-indigo-100 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
-              In stock now
-            </p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">
-              {formatCurrency(stockStats.sellingValue)}
-            </p>
-            <p className="text-xs text-slate-500">
-              {formatNumber(periodFlow.itemsInStock)} items · cost{" "}
-              {formatCurrency(stockStats.purchaseValue)}
-            </p>
-          </div>
-        </div>
-      </section>
 
       <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
