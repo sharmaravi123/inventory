@@ -4,6 +4,7 @@ import {
   getIndianFinancialYearStartYear,
 } from "@/lib/financialYear";
 import BillModel from "@/models/Bill";
+import BillReturnModel from "@/models/BillReturn";
 import InvoiceCounterModel from "@/models/InvoiceCounter";
 
 /** Highest numeric suffix among bills INV-{fy}-NNNNNN. */
@@ -60,4 +61,61 @@ export async function getNextInvoiceNumber(
   }
 
   return formatSalesInvoiceNumber(fy, counter.seq);
+}
+
+/**
+ * After a bill is deleted, renumber remaining bills in the same Indian FY
+ * to INV-{FY}-000001, 000002, … (by billDate, then createdAt).
+ */
+export async function renumberSalesInvoicesForFinancialYear(
+  financialYearStart: number
+): Promise<number> {
+  await dbConnect();
+
+  const allInFy = await BillModel.find({})
+    .sort({ billDate: 1, createdAt: 1 })
+    .select("_id billDate createdAt invoiceNumber")
+    .lean();
+
+  const bills = allInFy.filter(
+    (b) =>
+      getIndianFinancialYearStartYear(
+        new Date(b.billDate || b.createdAt || Date.now())
+      ) === financialYearStart
+  );
+
+  if (bills.length === 0) {
+    await InvoiceCounterModel.findOneAndUpdate(
+      { name: `fy${financialYearStart}` },
+      { $set: { name: `fy${financialYearStart}`, seq: 0 } },
+      { upsert: true }
+    );
+    return 0;
+  }
+
+  for (const b of bills) {
+    await BillModel.updateOne(
+      { _id: b._id },
+      { invoiceNumber: `__REN__${String(b._id)}` }
+    );
+  }
+
+  let seq = 0;
+  for (const b of bills) {
+    seq += 1;
+    const inv = formatSalesInvoiceNumber(financialYearStart, seq);
+    await BillModel.updateOne({ _id: b._id }, { invoiceNumber: inv });
+    await BillReturnModel.updateMany(
+      { bill: b._id },
+      { $set: { invoiceNumber: inv } }
+    );
+  }
+
+  await InvoiceCounterModel.findOneAndUpdate(
+    { name: `fy${financialYearStart}` },
+    { $set: { name: `fy${financialYearStart}`, seq } },
+    { upsert: true }
+  );
+
+  return seq;
 }

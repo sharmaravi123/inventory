@@ -1,14 +1,27 @@
 import BillModel from "@/models/Bill";
 import BillReturn from "@/models/BillReturn";
 import Stock from "@/models/Stock";
+import { getIndianFinancialYearStartYear } from "@/lib/financialYear";
+import { renumberSalesInvoicesForFinancialYear } from "@/lib/salesInvoiceNumber";
 import { Types } from "mongoose";
+
+export type DeleteBillOptions = {
+  /** Renumber remaining bills in the same FY after delete (default true). */
+  renumberInvoices?: boolean;
+};
 
 /** Deletes one bill, restores stock, removes linked returns. Returns false if bill not found. */
 export async function deleteBillAndRestoreStock(
-  billId: string | Types.ObjectId
+  billId: string | Types.ObjectId,
+  options: DeleteBillOptions = {}
 ): Promise<boolean> {
+  const { renumberInvoices = true } = options;
   const bill = await BillModel.findById(billId).exec();
   if (!bill) return false;
+
+  const fy = getIndianFinancialYearStartYear(
+    new Date(bill.billDate || bill.createdAt || Date.now())
+  );
 
   for (const line of bill.items) {
     const productId = String(line.product);
@@ -34,5 +47,10 @@ export async function deleteBillAndRestoreStock(
 
   await BillReturn.deleteMany({ bill: bill._id });
   await bill.deleteOne();
+
+  if (renumberInvoices) {
+    await renumberSalesInvoicesForFinancialYear(fy);
+  }
+
   return true;
 }

@@ -4,6 +4,8 @@ import dbConnect from "@/lib/mongodb";
 import CustomerModel, { ensureCustomerPhoneIndex } from "@/models/Customer";
 import BillModel from "@/models/Bill";
 import { deleteBillAndRestoreStock } from "@/lib/deleteBill";
+import { getIndianFinancialYearStartYear } from "@/lib/financialYear";
+import { renumberSalesInvoicesForFinancialYear } from "@/lib/salesInvoiceNumber";
 
 const normalizeText = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
@@ -52,12 +54,27 @@ export async function DELETE(
       }
 
       const bills = await BillModel.find({ $or: orFilter })
-        .select("_id")
+        .select("_id billDate createdAt")
         .lean();
 
+      const fysToRenumber = new Set<number>();
+
       for (const bill of bills) {
-        const ok = await deleteBillAndRestoreStock(bill._id);
-        if (ok) billsDeleted += 1;
+        const ok = await deleteBillAndRestoreStock(bill._id, {
+          renumberInvoices: false,
+        });
+        if (ok) {
+          billsDeleted += 1;
+          fysToRenumber.add(
+            getIndianFinancialYearStartYear(
+              new Date(bill.billDate || bill.createdAt || Date.now())
+            )
+          );
+        }
+      }
+
+      for (const fy of fysToRenumber) {
+        await renumberSalesInvoicesForFinancialYear(fy);
       }
     }
 
