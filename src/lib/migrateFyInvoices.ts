@@ -1,10 +1,8 @@
 import dbConnect from "./mongodb";
 import BillModel from "../models/Bill";
 import InvoiceCounterModel from "../models/InvoiceCounter";
-import {
-  formatSalesInvoiceNumber,
-  getIndianFinancialYearStartYear,
-} from "./financialYear";
+import { getIndianFinancialYearStartYear } from "./financialYear";
+import { renumberSalesInvoicesForFinancialYear } from "./salesInvoiceNumber";
 
 export type MigrateFyInvoicesOptions = {
   /**
@@ -35,8 +33,7 @@ export async function runMigrateFyInvoices(
   const minFy = options.minFinancialYear;
 
   const allBills = await BillModel.find({})
-    .sort({ billDate: 1, createdAt: 1 })
-    .select("_id billDate")
+    .select("_id billDate createdAt invoiceNumber")
     .lean();
 
   if (allBills.length === 0) {
@@ -53,7 +50,9 @@ export async function runMigrateFyInvoices(
     typeof minFy === "number" && Number.isFinite(minFy)
       ? allBills.filter(
           (b) =>
-            getIndianFinancialYearStartYear(new Date(b.billDate)) >= minFy
+            getIndianFinancialYearStartYear(
+              new Date(b.billDate || b.createdAt || Date.now())
+            ) >= minFy
         )
       : allBills;
 
@@ -72,38 +71,18 @@ export async function runMigrateFyInvoices(
     };
   }
 
+  const fySet = new Set<number>();
   for (const b of bills) {
-    await BillModel.updateOne(
-      { _id: b._id },
-      { invoiceNumber: `__MIGR__${String(b._id)}` }
+    fySet.add(
+      getIndianFinancialYearStartYear(
+        new Date(b.billDate || b.createdAt || Date.now())
+      )
     );
   }
 
-  type LeanBill = (typeof bills)[number];
-  const byFy = new Map<number, LeanBill[]>();
-  for (const b of bills) {
-    const fy = getIndianFinancialYearStartYear(new Date(b.billDate));
-    if (!byFy.has(fy)) byFy.set(fy, []);
-    byFy.get(fy)!.push(b);
-  }
-
-  const fyYears = Array.from(byFy.keys()).sort((a, b) => a - b);
   const counts: Record<string, number> = {};
-
-  for (const fy of fyYears) {
-    const list = byFy.get(fy)!;
-    let seq = 0;
-    for (const b of list) {
-      seq += 1;
-      const inv = formatSalesInvoiceNumber(fy, seq);
-      await BillModel.updateOne({ _id: b._id }, { invoiceNumber: inv });
-    }
-    counts[`INV-${fy}`] = seq;
-    await InvoiceCounterModel.findOneAndUpdate(
-      { name: `fy${fy}` },
-      { $set: { name: `fy${fy}`, seq } },
-      { upsert: true }
-    );
+  for (const fy of Array.from(fySet).sort((a, b) => a - b)) {
+    counts[`INV-${fy}`] = await renumberSalesInvoicesForFinancialYear(fy);
   }
 
   await InvoiceCounterModel.deleteOne({ name: "default" }).catch(() => {
@@ -117,7 +96,7 @@ export async function runMigrateFyInvoices(
 
   return {
     ok: true,
-    message: `Bills renumbered (${scope}) Skipped ${skippedBills} bill(s) not in scope.`,
+    message: `Bills renumbered (${scope}) Skipped ${skippedBills} bill(s) not in scope. Fixed temp/__REN__ numbers.`,
     totalBills: bills.length,
     skippedBills,
     counts,

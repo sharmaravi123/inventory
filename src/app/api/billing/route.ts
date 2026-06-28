@@ -4,8 +4,13 @@ import BillModel from "@/models/Bill";
 import CustomerModel from "@/models/Customer";
 import Stock from "@/models/Stock";
 import { Types } from "mongoose";
-import { getNextInvoiceNumber } from "@/lib/salesInvoiceNumber";
+import {
+  assignInvoiceForNewBill,
+  makePendingInvoiceNumber,
+} from "@/lib/salesInvoiceNumber";
+import { getIndianFinancialYearStartYear } from "@/lib/financialYear";
 import { roundGrandTotal } from "@/lib/rounding";
+import { sortBillsForDisplay } from "@/lib/invoiceSort";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -286,36 +291,52 @@ export async function POST(req: NextRequest) {
     const billDateForInvoice = body.billDate
       ? new Date(body.billDate)
       : new Date();
-    const invoice = await getNextInvoiceNumber(billDateForInvoice);
 
     const collected = round2(
       toNum(pay.cashAmount) + toNum(pay.upiAmount) + toNum(pay.cardAmount)
     );
     const balanceAmount = Math.max(0, round2(finalGrandTotal - collected));
 
-    const bill = await BillModel.create({
-      invoiceNumber: invoice,
-      billDate: billDateForInvoice,
-      customerInfo: takeSnapshot(cust, body.customer),
-      companyGstNumber: body.companyGstNumber,
-      items,
-      totalItems,
-      totalBeforeTax: before,
-      totalTax: tax,
-      roundOff,
-      grandTotal: finalGrandTotal,
-      payment: pay,
-      amountCollected: collected,
-      balanceAmount,
-      status:
-        balanceAmount <= 0.01
-          ? "DELIVERED"
-          : collected > 0
-            ? "PARTIALLY_PAID"
-            : "PENDING",
-    });
+    let bill: Awaited<ReturnType<typeof BillModel.create>> | null = null;
 
-    return NextResponse.json({ bill });
+    try {
+      bill = await BillModel.create({
+        invoiceNumber: makePendingInvoiceNumber(),
+        billDate: billDateForInvoice,
+        customerInfo: takeSnapshot(cust, body.customer),
+        companyGstNumber: body.companyGstNumber,
+        items,
+        totalItems,
+        totalBeforeTax: before,
+        totalTax: tax,
+        roundOff,
+        grandTotal: finalGrandTotal,
+        payment: pay,
+        amountCollected: collected,
+        balanceAmount,
+        status:
+          balanceAmount <= 0.01
+            ? "DELIVERED"
+            : collected > 0
+              ? "PARTIALLY_PAID"
+              : "PENDING",
+      });
+
+      const invoiceNumber = await assignInvoiceForNewBill(
+        bill._id,
+        billDateForInvoice,
+        bill.createdAt ?? new Date()
+      );
+      bill.invoiceNumber = invoiceNumber;
+    } catch (createErr) {
+      if (bill?._id) {
+        await BillModel.deleteOne({ _id: bill._id }).catch(() => {});
+      }
+      throw createErr;
+    }
+
+    const refreshed = await BillModel.findById(bill._id).lean();
+    return NextResponse.json({ bill: refreshed ?? bill });
   }catch (e: any) {
   console.error("BILL CREATE ERROR:", e);
   return NextResponse.json(
@@ -337,10 +358,11 @@ export async function GET(req: NextRequest) {
   const summarySelect =
     "invoiceNumber billDate customerInfo totalItems totalBeforeTax totalTax roundOff grandTotal payment driver vehicleNumber amountCollected balanceAmount status createdAt";
 
-  const bills = await BillModel.find()
-    .sort({ createdAt: -1 })
-    .select(summary ? summarySelect : fullSelect)
-    .lean();
+  const bills = sortBillsForDisplay(
+    await BillModel.find()
+      .select(summary ? summarySelect : fullSelect)
+      .lean()
+  );
 
   const normalized = summary
     ? bills.map((b) => ({ ...b, items: [] }))

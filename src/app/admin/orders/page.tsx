@@ -18,6 +18,7 @@ import { Search, Calendar } from "lucide-react";
 import Swal from "sweetalert2";
 import { fetchCompanyProfile } from "@/store/companyProfileSlice";
 import { formatDisplayDate } from "@/lib/dateFormat";
+import { sortBillsForDisplay } from "@/lib/invoiceSort";
 
 const BillPreview = dynamic(
   () => import("@/app/admin/components/billing/BillPreview"),
@@ -102,7 +103,7 @@ export default function OrdersPage() {
     /* ================= FILTERED BILLS ================= */
 
   const filteredBills = useMemo(() => {
-    return bills.filter((b) => {
+    const filtered = bills.filter((b) => {
       const text = `${b.invoiceNumber} ${b.customerInfo.name} ${b.items
         .map((i) => i.productName)
         .join(" ")}`.toLowerCase();
@@ -111,6 +112,7 @@ export default function OrdersPage() {
       if (!matchDate(b.billDate)) return false;
       return true;
     });
+    return sortBillsForDisplay(filtered);
   }, [bills, search, matchDate]);
 
   /* ================= STATS ================= */

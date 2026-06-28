@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
+import { repositionBillInvoice } from "@/lib/salesInvoiceNumber";
 import BillModel from "@/models/Bill";
 import Stock from "@/models/Stock";
 import { deleteBillAndRestoreStock } from "@/lib/deleteBill";
@@ -229,7 +230,13 @@ export async function PUT(
       0,
       round2(finalGrandTotal - bill.amountCollected)
     );
-    bill.billDate = new Date(body.billDate);
+
+    const previousInvoice = String(bill.invoiceNumber || "");
+    const previousBillDate = bill.billDate
+      ? new Date(bill.billDate).getTime()
+      : 0;
+    const nextBillDate = new Date(body.billDate);
+    bill.billDate = nextBillDate;
     bill.updatedAt = new Date();
     if (bill.balanceAmount <= 0.01) {
       bill.status = "DELIVERED";
@@ -240,6 +247,20 @@ export async function PUT(
     }
 
     await bill.save();
+
+    if (
+      previousBillDate !== nextBillDate.getTime() &&
+      /^INV-\d{4}-\d{6}$/i.test(previousInvoice)
+    ) {
+      await repositionBillInvoice(
+        bill._id,
+        nextBillDate,
+        bill.createdAt ?? new Date(),
+        previousInvoice
+      );
+      const refreshed = await BillModel.findById(bill._id).lean();
+      return NextResponse.json({ success: true, bill: refreshed ?? bill });
+    }
 
     return NextResponse.json({ success: true, bill });
   } catch (e: unknown) {

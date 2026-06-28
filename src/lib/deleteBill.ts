@@ -2,7 +2,10 @@ import BillModel from "@/models/Bill";
 import BillReturn from "@/models/BillReturn";
 import Stock from "@/models/Stock";
 import { getIndianFinancialYearStartYear } from "@/lib/financialYear";
-import { renumberSalesInvoicesForFinancialYear } from "@/lib/salesInvoiceNumber";
+import {
+  assignInvoiceForNewBill,
+  compactInvoicesAfterDelete,
+} from "@/lib/salesInvoiceNumber";
 import { Types } from "mongoose";
 
 export type DeleteBillOptions = {
@@ -22,6 +25,7 @@ export async function deleteBillAndRestoreStock(
   const fy = getIndianFinancialYearStartYear(
     new Date(bill.billDate || bill.createdAt || Date.now())
   );
+  const deletedInvoice = String(bill.invoiceNumber || "");
 
   for (const line of bill.items) {
     const productId = String(line.product);
@@ -48,8 +52,8 @@ export async function deleteBillAndRestoreStock(
   await BillReturn.deleteMany({ bill: bill._id });
   await bill.deleteOne();
 
-  if (renumberInvoices) {
-    await renumberSalesInvoicesForFinancialYear(fy);
+  if (renumberInvoices && /^INV-\d{4}-\d{6}$/i.test(deletedInvoice)) {
+    await compactInvoicesAfterDelete(fy, deletedInvoice);
   }
 
   return true;
