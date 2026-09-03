@@ -164,7 +164,6 @@ export default function LoginPage() {
               <Swiper
                 modules={[Pagination]}
                 pagination={{ clickable: true }}
-                loop
               >
                 <SwiperSlide>
                   <div className="p-4">

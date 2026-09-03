@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import cookie from "cookie";
+import { serialize } from "cookie";
 
 /**
  * POST /api/auth/logout
@@ -8,7 +8,7 @@ import cookie from "cookie";
 export async function POST() {
   try {
     const isProd = process.env.NODE_ENV === "production";
-    const cookieStr = cookie.serialize("token", "", {
+    const cookieStr = serialize("token", "", {
       httpOnly: true,
       secure: isProd,
       sameSite: "lax",
@@ -19,7 +19,7 @@ export async function POST() {
     const res = NextResponse.json({ success: true });
     res.headers.append("Set-Cookie", cookieStr);
 
-    const adminCookie = cookie.serialize("adminToken", "", {
+    const adminCookie = serialize("adminToken", "", {
       httpOnly: true,
       secure: isProd,
       sameSite: "lax",
@@ -28,7 +28,7 @@ export async function POST() {
     });
     res.headers.append("Set-Cookie", adminCookie);
 
-    const userCookie = cookie.serialize("userToken", "", {
+    const userCookie = serialize("userToken", "", {
       httpOnly: true,
       secure: isProd,
       sameSite: "lax",
@@ -37,7 +37,7 @@ export async function POST() {
     });
     res.headers.append("Set-Cookie", userCookie);
 
-    const warehouseCookie = cookie.serialize("warehouseToken", "", {
+    const warehouseCookie = serialize("warehouseToken", "", {
       httpOnly: true,
       secure: isProd,
       sameSite: "lax",
@@ -46,7 +46,7 @@ export async function POST() {
     });
     res.headers.append("Set-Cookie", warehouseCookie);
 
-    const driverCookie = cookie.serialize("driverToken", "", {
+    const driverCookie = serialize("driverToken", "", {
       httpOnly: true,
       secure: isProd,
       sameSite: "lax",
