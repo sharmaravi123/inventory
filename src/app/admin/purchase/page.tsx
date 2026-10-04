@@ -661,6 +661,9 @@ export default function AdminPurchaseManager() {
                     ? purchase.roundOff
                     : effectiveGrossTotal - (purchaseAmount + totalTax);
 
+            const sgst = isIntraState ? totalTax / 2 : 0;
+            const cgst = isIntraState ? totalTax / 2 : 0;
+
             rows.push({
                 Date: formatDisplayDate(date),
                 Particulars: dealer?.name || "",
@@ -669,10 +672,10 @@ export default function AdminPurchaseManager() {
                 "GSTIN/UIN": dealer?.gstin || "",
                 "Gross Total": effectiveGrossTotal.toFixed(2),
                 "Purchase Account": purchaseAmount.toFixed(2),
-                "SGST INPUT @ 9% PUR": isIntraState ? (totalTax / 2).toFixed(2) : "0.00",
-                "CGST INPUT @ 9% PUR": isIntraState ? (totalTax / 2).toFixed(2) : "0.00",
+                "SGST INPUT @ 2.5% PUR": sgst.toFixed(2),
+                "CGST INPUT @ 2.5% PUR": cgst.toFixed(2),
                 Round: roundValue.toFixed(2),
-                "IGST-INPUT@18 % PUR": !isIntraState ? totalTax.toFixed(2) : "0.00",
+                "GST 5%": (cgst + sgst).toFixed(2),
             });
         });
 
@@ -764,10 +767,10 @@ export default function AdminPurchaseManager() {
                       "GSTIN/UIN": "",
                       "Gross Total": sumCol(data, "Gross Total").toFixed(2),
                       "Purchase Account": sumCol(data, "Purchase Account").toFixed(2),
-                      "SGST INPUT @ 9% PUR": sumCol(data, "SGST INPUT @ 9% PUR").toFixed(2),
-                      "CGST INPUT @ 9% PUR": sumCol(data, "CGST INPUT @ 9% PUR").toFixed(2),
+                      "SGST INPUT @ 2.5% PUR": sumCol(data, "SGST INPUT @ 2.5% PUR").toFixed(2),
+                      "CGST INPUT @ 2.5% PUR": sumCol(data, "CGST INPUT @ 2.5% PUR").toFixed(2),
                       Round: sumCol(data, "Round").toFixed(2),
-                      "IGST-INPUT@18 % PUR": sumCol(data, "IGST-INPUT@18 % PUR").toFixed(2),
+                      "GST 5%": sumCol(data, "GST 5%").toFixed(2),
                   }
                 : null;
 

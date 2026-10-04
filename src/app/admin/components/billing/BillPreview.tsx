@@ -12,6 +12,7 @@ import { formatDisplayDate } from "@/lib/dateFormat";
 type BillPreviewProps = {
   bill?: Bill;
   onClose: () => void;
+  showBankDetails?: boolean;
 };
 
 
@@ -87,11 +88,15 @@ function getFinancialYearLabel(dateValue: string | Date): string {
 
 /* ================== COMPONENT ================== */
 
-export default function BillPreview({ bill, onClose }: BillPreviewProps) {
+export default function BillPreview({
+  bill,
+  onClose,
+  showBankDetails: showBankDetailsProp = true,
+}: BillPreviewProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const invoiceRef = useRef<HTMLDivElement>(null);
-  const [showBankDetails, setShowBankDetails] = useState(true);
+  const [showBankDetails, setShowBankDetails] = useState(showBankDetailsProp);
   const companyProfile = useAppSelector(
     (state) => state.companyProfile.data
   );
@@ -333,7 +338,11 @@ export default function BillPreview({ bill, onClose }: BillPreviewProps) {
 
 
         {/* INVOICE */}
-        <div ref={invoiceRef} className="print-bill-root border border-black p-3">
+        <div
+          ref={invoiceRef}
+          data-ready={companyProfile ? "true" : "false"}
+          className="print-bill-root border border-black p-3"
+        >
           {/* HEADER */}
           <div className="border-b border-black pb-2">
             <div className="flex justify-between">

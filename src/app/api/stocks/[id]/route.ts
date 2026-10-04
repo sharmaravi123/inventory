@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import Stock from "@/models/Stock";
 import Product, { IProduct } from "@/models/Product";
+import { removeStockIfDeletedProductEmpty } from "@/lib/orphanEmptyStock";
 import { getUserFromTokenOrDb } from "@/lib/access";
 
 function normalize(n: unknown, fallback = 0): number {
@@ -125,6 +126,9 @@ export async function PUT(req: NextRequest, ctx: { params: unknown }) {
         : String(productIdValue ?? "");
 
     let perBox = 1;
+    const storedPerBox = Number(
+      (existing as { perBoxItem?: unknown }).perBoxItem
+    );
     if (productId) {
       const product = (await Product.findById(productId)
         .lean()
@@ -133,7 +137,9 @@ export async function PUT(req: NextRequest, ctx: { params: unknown }) {
         product &&
         typeof (product as { perBoxItem?: unknown }).perBoxItem === "number"
           ? (product as { perBoxItem: number }).perBoxItem
-          : 1;
+          : storedPerBox > 0
+            ? storedPerBox
+            : 1;
       perBox = perBoxItemFromProduct > 0 ? perBoxItemFromProduct : 1;
     }
 
@@ -175,6 +181,14 @@ export async function PUT(req: NextRequest, ctx: { params: unknown }) {
     existing.lowStockBoxes = lowStockBoxes ?? null;
 
     const saved = await existing.save();
+    await removeStockIfDeletedProductEmpty(saved._id);
+    const stillThere = await Stock.findById(saved._id).lean();
+    if (!stillThere) {
+      return NextResponse.json(
+        { _id: String(saved._id), removed: true },
+        { status: 200 }
+      );
+    }
     const out = saved.toObject();
 
     out._id = String(out._id);

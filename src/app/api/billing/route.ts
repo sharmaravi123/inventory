@@ -11,6 +11,7 @@ import {
 import { getIndianFinancialYearStartYear } from "@/lib/financialYear";
 import { roundGrandTotal } from "@/lib/rounding";
 import { sortBillsForDisplay } from "@/lib/invoiceSort";
+import { removeStockIfDeletedProductEmpty } from "@/lib/orphanEmptyStock";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -155,11 +156,18 @@ async function reserveStock(items: BillingItemInput[]) {
       boxes: number;
       looseItems: number;
       itemsPerBox?: number;
+      perBoxItem?: number;
     }>();
 
     if (!stock) throw new Error("Stock not found");
 
-    const stockItemsPerBox = stock.itemsPerBox ?? it.itemsPerBox ?? 1;
+    const stockItemsPerBox =
+      (typeof stock.perBoxItem === "number" && stock.perBoxItem > 0
+        ? stock.perBoxItem
+        : undefined) ??
+      stock.itemsPerBox ??
+      it.itemsPerBox ??
+      1;
 
     const available = stock.boxes * stockItemsPerBox + stock.looseItems;
     const req = it.quantityBoxes * stockItemsPerBox + it.quantityLoose;
@@ -175,6 +183,10 @@ async function reserveStock(items: BillingItemInput[]) {
       { _id: it.stockId },
       { $set: { boxes: newBoxes, looseItems: newLoose, totalItems: newTotalItems } }
     );
+
+    if (newTotalItems <= 0 && newBoxes <= 0 && newLoose <= 0) {
+      await removeStockIfDeletedProductEmpty(it.stockId);
+    }
   }
 }
 

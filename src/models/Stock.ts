@@ -8,6 +8,11 @@ export interface IStock extends Document {
   totalItems: number;
   lowStockItems?: number | null;
   lowStockBoxes?: number | null;
+  productName?: string | null;
+  purchasePrice?: number | null;
+  sellingPrice?: number | null;
+  perBoxItem?: number | null;
+  taxPercent?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,12 +28,25 @@ const StockSchema = new Schema<IStock>(
 
     lowStockItems: { type: Number, default: null },
     lowStockBoxes: { type: Number, default: null },
+    productName: { type: String, default: null },
+    purchasePrice: { type: Number, default: null },
+    sellingPrice: { type: Number, default: null },
+    perBoxItem: { type: Number, default: null },
+    taxPercent: { type: Number, default: null },
   },
   { timestamps: true }
 );
 
 // 1 stock per product + warehouse
 StockSchema.index({ productId: 1, warehouseId: 1 }, { unique: true });
+
+if (process.env.NODE_ENV === "development") {
+  try {
+    delete mongoose.models.Stock;
+  } catch {
+    // ignore stale model cleanup
+  }
+}
 
 const Stock: Model<IStock> =
   (mongoose.models.Stock as Model<IStock>) ||

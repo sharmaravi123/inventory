@@ -177,18 +177,18 @@ export default function BillingWarehousePage({
 
         const prod = getProduct(pid);
         const wh = getWarehouse(wid);
-
-        if (!prod) return undefined;
+        const productName = prod?.name || inv.productName;
+        if (!productName) return undefined;
 
         return {
           id: String(inv._id),
           productId: pid,
           warehouseId: wid,
-          productName: prod.name ?? "Unnamed Product",
+          productName,
           warehouseName: wh?.name ?? "Store",
-          sellingPrice: prod.sellingPrice ?? 0,
-          taxPercent: prod.taxPercent ?? 0,
-          itemsPerBox: prod.perBoxItem ?? 1,
+          sellingPrice: prod?.sellingPrice ?? inv.sellingPrice ?? 0,
+          taxPercent: prod?.taxPercent ?? inv.taxPercent ?? 0,
+          itemsPerBox: prod?.perBoxItem ?? inv.perBoxItem ?? 1,
           boxesAvailable: inv.boxes ?? 0,
           looseAvailable: inv.looseItems ?? 0,
         };
@@ -333,6 +333,7 @@ const totals: Totals = useMemo(() => {
 
     dispatch(clearBillingError());
     await dispatch(submitBill(payload)).unwrap();
+    dispatch(fetchInventory({ force: true }));
 
     Swal.fire({
   icon: "success",

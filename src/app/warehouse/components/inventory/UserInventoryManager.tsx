@@ -153,7 +153,11 @@ const UserInventoryManager: React.FC<Props> = ({
       if (prodObj?.name) return String(prodObj.name);
 
       const pid = extractId(inv.productId ?? prodObj) ?? "";
-      return products.find((x) => String(x._id ?? x.id) === pid)?.name ?? pid;
+      return (
+        products.find((x) => String(x._id ?? x.id) === pid)?.name ??
+        inv.productName ??
+        pid
+      );
     },
     [products, extractId]
   );
@@ -172,18 +176,24 @@ const UserInventoryManager: React.FC<Props> = ({
   );
 
   const getItemsPerBox = useCallback(
-    (inv: InventoryItem): number => inv.product?.perBoxItem ?? 1,
+    (inv: InventoryItem): number => {
+      const fromProduct = inv.product?.perBoxItem;
+      if (typeof fromProduct === "number" && fromProduct > 0) return fromProduct;
+      if (typeof inv.perBoxItem === "number" && inv.perBoxItem > 0) return inv.perBoxItem;
+      return 1;
+    },
     []
   );
 
   const getTaxPercent = useCallback(
-    (inv: InventoryItem): number => inv.product?.taxPercent ?? 0,
+    (inv: InventoryItem): number =>
+      inv.product?.taxPercent ?? inv.taxPercent ?? 0,
     []
   );
 
   const filteredItems = useMemo(() => {
     return items.filter((inv) => {
-      const itemsPerBox = inv.product?.perBoxItem ?? 1;
+      const itemsPerBox = getItemsPerBox(inv);
       const total = inv.boxes * itemsPerBox + inv.looseItems;
 
       const pname = getProductName(inv).toLowerCase();
@@ -223,6 +233,7 @@ const UserInventoryManager: React.FC<Props> = ({
     extractId,
     getProductName,
     getWarehouseName,
+    getItemsPerBox,
   ]);
 
   const normalizeLooseToBoxes = (
@@ -295,11 +306,11 @@ const UserInventoryManager: React.FC<Props> = ({
       productId: extractId(inv.productId ?? inv.product) ?? "",
       warehouseId: extractId(inv.warehouseId ?? inv.warehouse) ?? "",
       boxes: inv.boxes,
-      itemsPerBox: inv.product?.perBoxItem ?? 1,
+      itemsPerBox: inv.product?.perBoxItem ?? inv.perBoxItem ?? 1,
       looseItems: inv.looseItems,
       lowStockBoxes: inv.lowStockBoxes ?? 0,
       lowStockItems: inv.lowStockItems ?? 0,
-      tax: inv.product?.taxPercent ?? 0,
+      tax: inv.product?.taxPercent ?? inv.taxPercent ?? 0,
     });
     setModalOpen(true);
   };

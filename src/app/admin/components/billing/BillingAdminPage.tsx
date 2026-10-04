@@ -120,6 +120,66 @@ const scheduleScrollBillingPageToTop = () => {
   });
 };
 
+type BillDiscountType = "NONE" | "PERCENT" | "CASH";
+
+function lineBaseAmount(it: BillFormItemState) {
+  if (!it.selectedProduct) return 0;
+  const pieces =
+    it.quantityBoxes * it.selectedProduct.itemsPerBox + it.quantityLoose;
+  if (pieces <= 0) return 0;
+  return pieces * it.selectedProduct.sellingPrice;
+}
+
+function itemHasDiscount(it: BillFormItemState) {
+  return it.discountType !== "NONE" && it.discountValue > 0;
+}
+
+function allocateBillDiscount(
+  source: BillFormItemState[],
+  billDiscountType: BillDiscountType,
+  billDiscountValue: number
+) {
+  const amounts = new Map<string, number>();
+  if (
+    source.some(itemHasDiscount) ||
+    billDiscountType === "NONE" ||
+    billDiscountValue <= 0
+  ) {
+    return amounts;
+  }
+
+  const lines = source
+    .map((it) => ({ id: it.id, base: lineBaseAmount(it) }))
+    .filter((line) => line.base > 0);
+  const baseSum = lines.reduce((sum, line) => sum + line.base, 0);
+  if (baseSum <= 0) return amounts;
+
+  if (billDiscountType === "PERCENT") {
+    const percent = Math.min(billDiscountValue, 100);
+    for (const line of lines) {
+      amounts.set(line.id, Math.min(line.base, (line.base * percent) / 100));
+    }
+    return amounts;
+  }
+
+  const cash = Math.min(billDiscountValue, baseSum);
+  let used = 0;
+  lines.forEach((line, index) => {
+    if (index === lines.length - 1) {
+      amounts.set(
+        line.id,
+        Math.min(line.base, Math.round((cash - used) * 100) / 100)
+      );
+      return;
+    }
+    const share = Math.round(((line.base / baseSum) * cash) * 100) / 100;
+    const capped = Math.min(line.base, share);
+    used += capped;
+    amounts.set(line.id, capped);
+  });
+  return amounts;
+}
+
 const emptyItem = (): BillFormItemState => ({
   id: randomId(),
   productSearch: "",
@@ -174,6 +234,8 @@ export default function BillingAdminPage() {
     useState<CreateBillPaymentInput>(initialPayment);
   const [billDate, setBillDate] = useState(todayISO());
   const [manualRoundOffTarget, setManualRoundOffTarget] = useState<number | null>(null);
+  const [billDiscountType, setBillDiscountType] = useState<BillDiscountType>("NONE");
+  const [billDiscountValue, setBillDiscountValue] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [billSearch, setBillSearch] = useState("");
   const [billForEdit, setBillForEdit] = useState<Bill>();
@@ -251,7 +313,8 @@ export default function BillingAdminPage() {
       const wh = getWarehouse(wid);
 
       const perPiecePrice =
-        (prod?.sellingPrice as number) ?? 0;
+        (typeof prod?.sellingPrice === "number" ? prod.sellingPrice : undefined) ??
+        (typeof inv.sellingPrice === "number" ? inv.sellingPrice : 0);
 
       // yahan null‑safe cast
       const prodAny = (prod ?? {}) as {
@@ -265,18 +328,26 @@ export default function BillingAdminPage() {
         Number(
           prodAny.perBoxItem ??
           prodAny.itemsPerBox ??
+          inv.perBoxItem ??
           1
         ) || 1;
+
+      const taxPercent =
+        typeof prodAny.taxPercent === "number"
+          ? prodAny.taxPercent
+          : typeof inv.taxPercent === "number"
+            ? inv.taxPercent
+            : 0;
 
       return {
         id: String(invAny._id ?? ""),
         productId: pid,
         warehouseId: wid,
-        productName: prod?.name ?? "Unnamed Product",
+        productName: prod?.name || inv.productName || "Unnamed Product",
         warehouseName: wh?.name ?? "Unknown Store",
         basePrice: perPiecePrice,
         sellingPrice: perPiecePrice,
-        taxPercent: (prodAny.taxPercent as number) ?? 0,
+        taxPercent,
         itemsPerBox,
         boxesAvailable: invAny.boxes ?? 0,
         looseAvailable: invAny.looseItems ?? 0,
@@ -324,6 +395,8 @@ export default function BillingAdminPage() {
     setCustomerSavedPrices({});
     setBillDate(todayISO());
     setManualRoundOffTarget(null);
+    setBillDiscountType("NONE");
+    setBillDiscountValue(0);
     scheduleScrollBillingPageToTop();
   }, [searchParams]);
 
@@ -390,6 +463,11 @@ export default function BillingAdminPage() {
     let tax = 0;
     let total = 0;
     let discountTotal = 0;
+    const billDiscountAmounts = allocateBillDiscount(
+      items,
+      billDiscountType,
+      billDiscountValue
+    );
 
     items.forEach((it) => {
       if (!it.selectedProduct) return;
@@ -405,15 +483,16 @@ export default function BillingAdminPage() {
       // ✅ USE SELLING PRICE (USER EDITED)
       const baseTotal = totalPieces * p.sellingPrice;
 
-      let discountAmount = 0;
+      let discountAmount = billDiscountAmounts.get(it.id) ?? 0;
 
-      if (it.discountType === "PERCENT") {
-        discountAmount = (baseTotal * it.discountValue) / 100;
-      } else if (it.discountType === "CASH") {
-        discountAmount = it.discountValue;
+      if (!billDiscountAmounts.has(it.id)) {
+        if (it.discountType === "PERCENT") {
+          discountAmount = (baseTotal * it.discountValue) / 100;
+        } else if (it.discountType === "CASH") {
+          discountAmount = it.discountValue;
+        }
+        discountAmount = Math.min(discountAmount, baseTotal);
       }
-
-      discountAmount = Math.min(discountAmount, baseTotal);
 
       const lineBeforeTax = Math.max(0, baseTotal - discountAmount);
       const lineTax = (lineBeforeTax * p.taxPercent) / 100;
@@ -449,7 +528,7 @@ export default function BillingAdminPage() {
       grandTotal,
       discountTotal,
     };
-  }, [items, manualRoundOffTarget]);
+  }, [items, manualRoundOffTarget, billDiscountType, billDiscountValue]);
 
   const formatMoney = useCallback((value: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -596,6 +675,24 @@ export default function BillingAdminPage() {
       billDate: new Date(billDate).toISOString(),
       items: valid.map((it) => {
         const p = it.selectedProduct!;
+        const billDiscountAmounts = allocateBillDiscount(
+          valid,
+          billDiscountType,
+          billDiscountValue
+        );
+        const billAmount = billDiscountAmounts.get(it.id);
+        const discountType =
+          billAmount == null
+            ? it.discountType
+            : billDiscountType === "PERCENT"
+              ? "PERCENT"
+              : "CASH";
+        const discountValue =
+          billAmount == null
+            ? it.discountValue
+            : billDiscountType === "PERCENT"
+              ? Math.min(billDiscountValue, 100)
+              : billAmount;
         return {
           stockId: p.id,
           productId: p.productId,
@@ -606,8 +703,8 @@ export default function BillingAdminPage() {
           quantityBoxes: it.quantityBoxes,
           quantityLoose: it.quantityLoose,
           itemsPerBox: p.itemsPerBox,
-          discountType: it.discountType,
-          discountValue: it.discountValue,
+          discountType,
+          discountValue,
           overridePriceForCustomer:
             it.overridePriceForCustomer ?? false,
         };
@@ -631,6 +728,7 @@ export default function BillingAdminPage() {
     dispatch(clearBillingError());
     try {
       await dispatch(submitBill(payload)).unwrap();
+      dispatch(fetchInventory({ force: true }));
       Swal.fire({
         icon: "success",
         title: "Bill created",
@@ -691,6 +789,24 @@ export default function BillingAdminPage() {
       billDate: new Date(billDate).toISOString(),
       items: validItems.map(it => {
         const p = it.selectedProduct!;
+        const billDiscountAmounts = allocateBillDiscount(
+          validItems,
+          billDiscountType,
+          billDiscountValue
+        );
+        const billAmount = billDiscountAmounts.get(it.id);
+        const discountType =
+          billAmount == null
+            ? it.discountType
+            : billDiscountType === "PERCENT"
+              ? "PERCENT"
+              : "CASH";
+        const discountValue =
+          billAmount == null
+            ? it.discountValue
+            : billDiscountType === "PERCENT"
+              ? Math.min(billDiscountValue, 100)
+              : billAmount;
         return {
           stockId: p.id,
           productId: p.productId,
@@ -701,8 +817,8 @@ export default function BillingAdminPage() {
           quantityBoxes: it.quantityBoxes,
           quantityLoose: it.quantityLoose,
           itemsPerBox: p.itemsPerBox,
-          discountType: it.discountType,
-          discountValue: it.discountValue,
+          discountType,
+          discountValue,
           overridePriceForCustomer: true,
         };
       }),
@@ -815,6 +931,8 @@ export default function BillingAdminPage() {
     });
 
     setBillDate(new Date(bill.billDate).toISOString().slice(0, 10));
+    setBillDiscountType("NONE");
+    setBillDiscountValue(0);
   };
 
   const resetForm = () => {
@@ -826,6 +944,8 @@ export default function BillingAdminPage() {
     setCustomerSavedPrices({});
     setBillDate(todayISO());
     setManualRoundOffTarget(null);
+    setBillDiscountType("NONE");
+    setBillDiscountValue(0);
     setBillForEdit(undefined);
   };
 
@@ -885,6 +1005,12 @@ export default function BillingAdminPage() {
             billingProducts={billingProducts}
             inventoryLoading={inventoryLoading}
             totals={totals}
+            hideCardPayment={!billForEdit}
+            billDiscountType={billDiscountType}
+            billDiscountValue={billDiscountValue}
+            onBillDiscountTypeChange={setBillDiscountType}
+            onBillDiscountValueChange={setBillDiscountValue}
+            showBillDiscount={!items.some(itemHasDiscount)}
             onCustomerSelect={onCustomerSelect}
             onSubmit={billForEdit ? updateBillSubmit : createBill}
             isSubmitting={billingState.status === "loading"}

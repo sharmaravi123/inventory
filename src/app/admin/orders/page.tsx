@@ -206,7 +206,6 @@ export default function OrdersPage() {
 
       const cashAmt = toNum(bill.payment?.cashAmount);
       const upiAmt = toNum(bill.payment?.upiAmount);
-      const cardAmt = toNum(bill.payment?.cardAmount);
 
       return {
         Date: formatDisplayDate(bill.billDate),
@@ -221,10 +220,9 @@ export default function OrdersPage() {
         "CGST OUTPUT @ 2.5% SALES": cgst.toFixed(2),
         "SGST OUTPUT @ 2.5% SALES": sgst.toFixed(2),
         Round: roundValue.toFixed(2),
-        "GST 5%": igst.toFixed(2),
+        "GST 5%": (cgst + sgst).toFixed(2),
         "Cash (₹)": cashAmt.toFixed(2),
         "UPI (₹)": upiAmt.toFixed(2),
-        "Card (₹)": cardAmt.toFixed(2),
       };
     });
 
@@ -240,11 +238,11 @@ export default function OrdersPage() {
       salesRows.length > 0
         ? {
             Date: "",
-            Particulars: "TOTAL",
+            Particulars: "",
             "Voucher Type": "",
             "Voucher No.": "",
             "Voucher Ref. No.": "",
-            "GSTIN/UIN": "",
+            "GSTIN/UIN": "TOTAL",
             "Gross Total": sumCol(salesRows, "Gross Total").toFixed(2),
             "Tax Rate": "",
             Sales: sumCol(salesRows, "Sales").toFixed(2),
@@ -260,7 +258,6 @@ export default function OrdersPage() {
             "GST 5%": sumCol(salesRows, "GST 5%").toFixed(2),
             "Cash (₹)": sumCol(salesRows, "Cash (₹)").toFixed(2),
             "UPI (₹)": sumCol(salesRows, "UPI (₹)").toFixed(2),
-            "Card (₹)": sumCol(salesRows, "Card (₹)").toFixed(2),
           }
         : null;
 

@@ -28,6 +28,11 @@ export interface InventoryItem {
 
   productId?: string;
   warehouseId?: string;
+  productName?: string | null;
+  purchasePrice?: number | null;
+  sellingPrice?: number | null;
+  perBoxItem?: number | null;
+  taxPercent?: number | null;
 
   boxes: number;
   looseItems: number;
@@ -144,7 +149,11 @@ const inventorySlice = createSlice({
       )
       .addCase(
         updateInventory.fulfilled,
-        (state, action: PayloadAction<InventoryItem>) => {
+        (state, action: PayloadAction<InventoryItem & { removed?: boolean }>) => {
+          if (action.payload.removed) {
+            state.items = state.items.filter((x) => x._id !== action.payload._id);
+            return;
+          }
           const idx = state.items.findIndex(
             (x) => x._id === action.payload._id
           );

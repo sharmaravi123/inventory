@@ -41,6 +41,12 @@ interface OrderFormProps {
   billingProducts: BillingProductOption[];
   inventoryLoading: boolean;
   totals: Totals;
+  hideCardPayment?: boolean;
+  billDiscountType?: "NONE" | "PERCENT" | "CASH";
+  billDiscountValue?: number;
+  onBillDiscountTypeChange?: (value: "NONE" | "PERCENT" | "CASH") => void;
+  onBillDiscountValueChange?: (value: number) => void;
+  showBillDiscount?: boolean;
   onCustomerSelect: (id: string) => void;
   onSubmit: () => void;
   isSubmitting: boolean;
@@ -70,6 +76,12 @@ export default function OrderForm({
   billingProducts,
   inventoryLoading,
   totals,
+  hideCardPayment = false,
+  billDiscountType = "NONE",
+  billDiscountValue = 0,
+  onBillDiscountTypeChange,
+  onBillDiscountValueChange,
+  showBillDiscount = false,
   onCustomerSelect,
   onSubmit,
   isSubmitting,
@@ -827,7 +839,7 @@ export default function OrderForm({
               <h3 className="text-sm font-semibold text-slate-900">
                 Payment split
               </h3>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className={`grid gap-3 ${hideCardPayment ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
                 <div>
                   <label className="text-[11px] font-medium text-slate-700">
                     Cash
@@ -870,6 +882,7 @@ export default function OrderForm({
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
                   />
                 </div>
+                {!hideCardPayment && (
                 <div>
                   <label className="text-[11px] font-medium text-slate-700">
                     Card
@@ -891,6 +904,7 @@ export default function OrderForm({
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
                   />
                 </div>
+                )}
               </div>
               <div className="flex justify-between text-xs sm:text-sm text-slate-600 border-t border-slate-200 pt-2 mt-1">
                 <span>Total paid</span>
@@ -899,7 +913,7 @@ export default function OrderForm({
                   {(
                     (payment.cashAmount ?? 0) +
                     (payment.upiAmount ?? 0) +
-                    (payment.cardAmount ?? 0)
+                    (hideCardPayment ? 0 : (payment.cardAmount ?? 0))
                   ).toFixed(2)}
                 </span>
               </div>
@@ -918,6 +932,40 @@ export default function OrderForm({
                   <span>Sub total</span>
                   <span>₹{totals.totalBeforeTax.toFixed(2)}</span>
                 </div>
+                {showBillDiscount && onBillDiscountTypeChange && onBillDiscountValueChange && (
+                  <div className="space-y-1.5 pb-1">
+                    <label className="text-[11px] font-medium text-slate-700">
+                      Discount
+                    </label>
+                    <div className="grid grid-cols-[110px,1fr] gap-2">
+                      <select
+                        value={billDiscountType}
+                        onChange={(e) =>
+                          onBillDiscountTypeChange(
+                            e.target.value as "NONE" | "PERCENT" | "CASH"
+                          )
+                        }
+                        className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      >
+                        <option value="NONE">None</option>
+                        <option value="PERCENT">% Percent</option>
+                        <option value="CASH">₹ Cash</option>
+                      </select>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        disabled={billDiscountType === "NONE"}
+                        value={billDiscountValue || ""}
+                        onChange={(e) =>
+                          onBillDiscountValueChange(safeNum(e.target.value))
+                        }
+                        placeholder="0"
+                        className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400 disabled:bg-slate-100"
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-between text-slate-700">
                   <span>Discount</span>
                   <span className="text-emerald-600">

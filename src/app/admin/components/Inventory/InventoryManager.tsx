@@ -170,7 +170,9 @@ const AdminInventoryManager: React.FC = () => {
       const p = products.find(
         (x) => String(x._id ?? x.id) === pid
       );
-      return p?.name ?? pid ?? "—";
+      if (p?.name) return p.name;
+      if (inv.productName) return inv.productName;
+      return pid || "—";
     },
     [products, extractId]
   );
@@ -198,16 +200,22 @@ const AdminInventoryManager: React.FC = () => {
   );
 
   const getProductPrices = useCallback(
-    (productId?: string): { purchase?: number; selling?: number } => {
-      if (!productId) return {};
+    (inv: InventoryItem): { purchase?: number; selling?: number } => {
+      const pid = extractId(inv.productId ?? (inv as InventoryWithRefs).product) ?? "";
       const p = products.find(
-        (x) => String(x._id ?? x.id) === String(productId)
+        (x) => String(x._id ?? x.id) === pid
       );
-      if (!p) return {};
-      const { purchase, selling } = normalizeInventoryUnitPrices(p);
+      if (p) {
+        const { purchase, selling } = normalizeInventoryUnitPrices(p);
+        return { purchase, selling };
+      }
+      const purchase =
+        typeof inv.purchasePrice === "number" ? inv.purchasePrice : undefined;
+      const selling =
+        typeof inv.sellingPrice === "number" ? inv.sellingPrice : undefined;
       return { purchase, selling };
     },
-    [products]
+    [products, extractId]
   );
 
   const getProductPerBox = useCallback(
@@ -221,7 +229,11 @@ const AdminInventoryManager: React.FC = () => {
         (x) => String(x._id ?? x.id) === pid
       );
       const perBoxVal =
-        p && typeof p.perBoxItem === "number" ? p.perBoxItem : 1;
+        p && typeof p.perBoxItem === "number"
+          ? p.perBoxItem
+          : typeof inv.perBoxItem === "number"
+            ? inv.perBoxItem
+            : 1;
       return perBoxVal > 0 ? perBoxVal : 1;
     },
     [products, extractId]
@@ -237,8 +249,9 @@ const AdminInventoryManager: React.FC = () => {
       const p = products.find(
         (x) => String(x._id ?? x.id) === pid
       );
-      if (!p || typeof p.taxPercent !== "number") return null;
-      return p.taxPercent;
+      if (p && typeof p.taxPercent === "number") return p.taxPercent;
+      if (typeof inv.taxPercent === "number") return inv.taxPercent;
+      return null;
     },
     [products, extractId]
   );
@@ -573,9 +586,7 @@ const AdminInventoryManager: React.FC = () => {
               {currency.format(
 
                 filteredItems.reduce((sum, inv) => {
-                  const invWithRefs = inv as InventoryWithRefs;
-                  const pid = extractId(inv.productId ?? invWithRefs.product);
-                  const prices = getProductPrices(pid);
+                  const prices = getProductPrices(inv);
                   const totalItems = getInventoryQuantity(inv);
                   return sum + (prices.purchase ? totalItems * prices.purchase : 0);
                 }, 0)
@@ -602,9 +613,7 @@ const AdminInventoryManager: React.FC = () => {
             <p className="mt-1 text-2xl font-bold text-[var(--color-primary)]">
               {currency.format(
                 filteredItems.reduce((sum, inv) => {
-                  const invWithRefs = inv as InventoryWithRefs;
-                  const pid = extractId(inv.productId ?? invWithRefs.product);
-                  const prices = getProductPrices(pid);
+                  const prices = getProductPrices(inv);
                   const totalItems = getInventoryQuantity(inv);
                   return sum + (prices.selling ? totalItems * prices.selling : 0);
                 }, 0)
@@ -771,14 +780,7 @@ const AdminInventoryManager: React.FC = () => {
                       const whName = getWarehouseName(inv);
                       const keyId =
                         inv._id ?? String(Math.random());
-                      const pid =
-                        extractId(
-                          inv.productId ??
-                          (inv as unknown as {
-                            product?: unknown;
-                          }).product
-                        ) ?? undefined;
-                      const prices = getProductPrices(pid);
+                      const prices = getProductPrices(inv);
                       const perBox = getProductPerBox(inv);
                       const taxPercent =
                         getProductTaxPercent(inv);

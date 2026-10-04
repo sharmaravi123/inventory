@@ -3,6 +3,10 @@ import dbConnect from "@/lib/mongodb";
 import Stock from "@/models/Stock";
 import type { IStock } from "@/models/Stock";
 import Product, { IProduct } from "@/models/Product";
+import {
+  fillDeletedProductStockDetails,
+  removeEmptyStocksForDeletedProducts,
+} from "@/lib/orphanEmptyStock";
 
 function normalizeNumber(n: unknown, fallback = 0): number {
   const v = Number(n);
@@ -12,6 +16,8 @@ function normalizeNumber(n: unknown, fallback = 0): number {
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
+    await removeEmptyStocksForDeletedProducts();
+    await fillDeletedProductStockDetails();
 
     const url = new URL(req.url);
     const productId = url.searchParams.get("productId");

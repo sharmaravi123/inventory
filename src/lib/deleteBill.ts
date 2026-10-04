@@ -37,8 +37,20 @@ export async function deleteBillAndRestoreStock(
 
     if (addPieces <= 0) continue;
 
-    const stock = await Stock.findOne({ productId, warehouseId }).exec();
-    if (!stock) continue;
+    let stock = await Stock.findOne({ productId, warehouseId }).exec();
+    if (!stock) {
+      stock = new Stock({
+        productId,
+        warehouseId,
+        boxes: 0,
+        looseItems: 0,
+        totalItems: 0,
+        productName: line.productName,
+        sellingPrice: line.sellingPrice,
+        taxPercent: line.taxPercent,
+        perBoxItem: perBox,
+      });
+    }
 
     const current =
       Number(stock.boxes || 0) * perBox + Number(stock.looseItems || 0);

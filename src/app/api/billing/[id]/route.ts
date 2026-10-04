@@ -4,6 +4,7 @@ import { repositionBillInvoice } from "@/lib/salesInvoiceNumber";
 import BillModel from "@/models/Bill";
 import Stock from "@/models/Stock";
 import { deleteBillAndRestoreStock } from "@/lib/deleteBill";
+import { removeStockIfDeletedProductEmpty } from "@/lib/orphanEmptyStock";
 import { Types } from "mongoose";
 import { roundGrandTotal } from "@/lib/rounding";
 
@@ -173,6 +174,7 @@ export async function PUT(
         stock.looseItems = remain % perBox;
         stock.totalItems = stock.boxes * perBox + stock.looseItems;
         await stock.save();
+        await removeStockIfDeletedProductEmpty(stock._id);
         continue;
       }
 
@@ -191,6 +193,7 @@ export async function PUT(
       stock.looseItems = remain % perBox;
       stock.totalItems = stock.boxes * perBox + stock.looseItems;
       await stock.save();
+      await removeStockIfDeletedProductEmpty(stock._id);
     }
 
     /* ---------------------------------------------

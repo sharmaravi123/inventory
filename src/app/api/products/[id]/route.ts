@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import Product from "@/models/Product";
 import Stock from "@/models/Stock";
-import BillModel from "@/models/Bill";
 import "@/models/Category";
 
 type RouteCtx<T extends Record<string, string>> =
@@ -204,22 +203,35 @@ export async function DELETE(
   try {
     await dbConnect();
 
-    const [stockCount, billCount] = await Promise.all([
-      Stock.countDocuments({ productId: id }),
-      BillModel.countDocuments({ "items.product": id }),
-    ]);
-
-    if (stockCount > 0 || billCount > 0) {
-      const parts: string[] = [];
-      if (stockCount > 0) parts.push(`${stockCount} stock record(s)`);
-      if (billCount > 0) parts.push(`${billCount} bill(s)`);
-      return NextResponse.json(
+    const product = await Product.findById(id).lean();
+    if (product) {
+      await Stock.collection.updateMany(
         {
-          error: `Cannot delete product — linked to ${parts.join(" and ")}. Remove stock or keep the product.`,
+          productId: id,
+          $or: [
+            { totalItems: { $gt: 0 } },
+            { boxes: { $gt: 0 } },
+            { looseItems: { $gt: 0 } },
+          ],
         },
-        { status: 409 }
+        {
+          $set: {
+            productName: product.name,
+            purchasePrice: product.purchasePrice ?? null,
+            sellingPrice: product.sellingPrice ?? null,
+            perBoxItem: product.perBoxItem ?? null,
+            taxPercent: product.taxPercent ?? null,
+          },
+        }
       );
     }
+
+    await Stock.deleteMany({
+      productId: id,
+      totalItems: { $lte: 0 },
+      boxes: { $lte: 0 },
+      looseItems: { $lte: 0 },
+    });
 
     const deleted = await Product.findByIdAndDelete(id);
     if (!deleted) {

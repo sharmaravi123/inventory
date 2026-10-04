@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useDispatch } from "react-redux";
+import Swal from "sweetalert2";
 import { AppDispatch } from "@/store/store";
 import { deleteProduct } from "@/store/productSlice";
 import type { ProductType } from "@/store/productSlice";
@@ -57,6 +58,31 @@ export default function TableRow({
   const perBoxDisplay =
     perBoxItem !== undefined ? String(perBoxItem) : "—";
 
+  const handleDelete = () => {
+    Swal.fire({
+      title: "Are you sure?",
+      text: "This will delete the product",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "var(--color-primary)",
+      cancelButtonColor: "var(--color-error)",
+      confirmButtonText: "Yes, delete it!",
+    }).then(async (result) => {
+      if (!result.isConfirmed) return;
+
+      try {
+        await dispatch(deleteProduct(String(product.id))).unwrap();
+        await Swal.fire("Deleted!", "Product deleted.", "success");
+      } catch (err: unknown) {
+        const message =
+          typeof err === "string"
+            ? err
+            : (err as Error).message || "Delete failed";
+        await Swal.fire("Error", message, "error");
+      }
+    });
+  };
+
   return (
     <tr className="data-row">
       <td className="p-3 align-middle text-[var(--color-sidebar)]">
@@ -92,7 +118,7 @@ export default function TableRow({
             Edit
           </button>
           <button
-            onClick={() => dispatch(deleteProduct(String(product.id)))}
+            onClick={handleDelete}
             className="rounded-full border border-[var(--color-error)] px-3 py-1 text-xs font-medium text-[var(--color-error)] hover:bg-[var(--color-error)] hover:text-[var(--color-white)] transition"
           >
             Delete
