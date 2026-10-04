@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import Product from "@/models/Product";
 import Stock from "@/models/Stock";
 import BillModel from "@/models/Bill";
@@ -105,23 +106,52 @@ export async function fillDeletedProductStockDetails() {
   );
   if (!missing.length) return;
 
-  for (const stock of missing) {
-    const pid = String(stock.productId);
-    const bill = await BillModel.findOne({ "items.product": pid })
+  const missingIds = missing.map((stock) => String(stock.productId));
+  const productQueryIds = [
+    ...missingIds,
+    ...missingIds
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id)),
+  ];
+
+  const [bills, purchases] = await Promise.all([
+    BillModel.find({ "items.product": { $in: productQueryIds } })
       .sort({ billDate: -1 })
       .select("items")
-      .lean();
-    const purchase = await Purchase.findOne({ "items.productId": pid })
+      .lean(),
+    Purchase.find({ "items.productId": { $in: missingIds } })
       .sort({ purchaseDate: -1, createdAt: -1 })
       .select("items")
-      .lean();
+      .lean(),
+  ]);
 
-    const billItem = ((bill?.items ?? []) as HistoryItem[]).find(
-      (item) => String(item.product) === pid
-    );
-    const purchaseItem = ((purchase?.items ?? []) as HistoryItem[]).find(
-      (item) => String(item.productId) === pid
-    );
+  const latestBillItem = new Map<string, HistoryItem>();
+  for (const bill of bills) {
+    for (const item of (bill.items ?? []) as HistoryItem[]) {
+      const key = String(item.product ?? "");
+      if (key && !latestBillItem.has(key)) latestBillItem.set(key, item);
+    }
+  }
+
+  const latestPurchaseItem = new Map<string, HistoryItem>();
+  for (const purchase of purchases) {
+    for (const item of (purchase.items ?? []) as HistoryItem[]) {
+      const key = String(item.productId ?? "");
+      if (key && !latestPurchaseItem.has(key)) latestPurchaseItem.set(key, item);
+    }
+  }
+
+  const updates: {
+    updateOne: {
+      filter: { _id: unknown };
+      update: { $set: Record<string, unknown> };
+    };
+  }[] = [];
+
+  for (const stock of missing) {
+    const pid = String(stock.productId);
+    const billItem = latestBillItem.get(pid);
+    const purchaseItem = latestPurchaseItem.get(pid);
     const perBox =
       (typeof purchaseItem?.perBoxItem === "number" && purchaseItem.perBoxItem > 0
         ? purchaseItem.perBoxItem
@@ -133,28 +163,34 @@ export async function fillDeletedProductStockDetails() {
 
     if (!billItem?.productName && perBox == null && !purchaseItem) continue;
 
-    await Stock.collection.updateOne(
-      { _id: stock._id },
-      {
-        $set: {
-          productName: billItem?.productName ?? null,
-          purchasePrice:
-            typeof purchaseItem?.purchasePrice === "number"
-              ? purchaseItem.purchasePrice
-              : null,
-          sellingPrice:
-            typeof billItem?.sellingPrice === "number"
-              ? billItem.sellingPrice
-              : null,
-          perBoxItem: perBox,
-          taxPercent:
-            typeof purchaseItem?.taxPercent === "number"
-              ? purchaseItem.taxPercent
-              : typeof billItem?.taxPercent === "number"
-                ? billItem.taxPercent
+    updates.push({
+      updateOne: {
+        filter: { _id: stock._id },
+        update: {
+          $set: {
+            productName: billItem?.productName ?? null,
+            purchasePrice:
+              typeof purchaseItem?.purchasePrice === "number"
+                ? purchaseItem.purchasePrice
                 : null,
+            sellingPrice:
+              typeof billItem?.sellingPrice === "number"
+                ? billItem.sellingPrice
+                : null,
+            perBoxItem: perBox,
+            taxPercent:
+              typeof purchaseItem?.taxPercent === "number"
+                ? purchaseItem.taxPercent
+                : typeof billItem?.taxPercent === "number"
+                  ? billItem.taxPercent
+                  : null,
+          },
         },
-      }
-    );
+      },
+    });
+  }
+
+  if (updates.length) {
+    await Stock.collection.bulkWrite(updates);
   }
 }

@@ -11,8 +11,22 @@ import { formatDisplayDate } from "@/lib/dateFormat";
 
 type BillPreviewProps = {
   bill?: Bill;
+  bills?: Bill[];
   onClose: () => void;
   showBankDetails?: boolean;
+};
+
+type CompanyView = {
+  name: string;
+  addressLine1: string;
+  addressLine2: string;
+  phone: string;
+  gstin: string;
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  ifsc: string;
+  branch: string;
 };
 
 
@@ -86,16 +100,300 @@ function getFinancialYearLabel(dateValue: string | Date): string {
   return `${fyStartYear}-${fyEndYearShort}`;
 }
 
+function buildLines(bill: Bill): EnhancedLine[] {
+  const mapped = bill.items.map((l) => {
+    const totalPieces =
+      (l.quantityBoxes ?? 0) * (l.itemsPerBox ?? 1) +
+      (l.quantityLoose ?? 0);
+
+    const base = totalPieces * (l.sellingPrice ?? 0);
+
+    let discount = 0;
+    if (l.discountType === "PERCENT") {
+      discount = (base * (l.discountValue ?? 0)) / 100;
+    } else if (l.discountType === "CASH") {
+      discount = l.discountValue ?? 0;
+    }
+
+    discount = Math.min(discount, base);
+    const lineSubTotal = Math.max(0, base - discount);
+    const lineTax = (lineSubTotal * (l.taxPercent ?? 0)) / 100;
+
+    return {
+      ...l,
+      totalPieces,
+      grossAmount: base,
+      discountAmount: discount,
+      taxableAmount: lineSubTotal,
+      lineTotal: lineSubTotal + lineTax,
+    };
+  });
+  return mapped.sort((a, b) =>
+    (a.productName ?? "").localeCompare(b.productName ?? "", undefined, {
+      sensitivity: "base",
+    })
+  );
+}
+
+function BillsSummary({ bills }: { bills: Bill[] }) {
+  const info = bills[0]?.customerInfo;
+  const totalBill = bills.reduce((sum, bill) => sum + Number(bill.grandTotal ?? 0), 0);
+  const totalPaid = bills.reduce((sum, bill) => sum + Number(bill.amountCollected ?? 0), 0);
+  const totalDue = bills.reduce((sum, bill) => sum + Number(bill.balanceAmount ?? 0), 0);
+  const money = (value: number) => value.toFixed(2);
+
+  return (
+    <div className="print-bill-root print-bill-summary border border-black p-3">
+      <div className="border-b border-black pb-2">
+        <div className="font-bold uppercase">Bills Summary</div>
+        <div className="font-bold text-lg">{info?.shopName || info?.name || "Customer"}</div>
+        {info?.shopName && info?.name ? <div>{info.name}</div> : null}
+        <div>Mobile: {info?.phone || "-"}</div>
+        {info?.address ? <div>Address: {info.address}</div> : null}
+        <div>{bills.length} bills</div>
+      </div>
+      <table className="mt-2 w-full border-collapse border border-black">
+        <thead>
+          <tr>
+            {["S.N.", "Invoice", "Date", "Bill", "Paid", "Remaining"].map((heading) => (
+              <th key={heading} className="border border-black p-1 text-left">
+                {heading}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {bills.map((bill, index) => (
+            <tr key={bill._id || `${bill.invoiceNumber}-${index}`}>
+              <td className="border border-black p-1">{index + 1}</td>
+              <td className="border border-black p-1">{bill.invoiceNumber}</td>
+              <td className="border border-black p-1">{formatDisplayDate(bill.billDate)}</td>
+              <td className="border border-black p-1">{money(Number(bill.grandTotal ?? 0))}</td>
+              <td className="border border-black p-1">{money(Number(bill.amountCollected ?? 0))}</td>
+              <td className="border border-black p-1">{money(Number(bill.balanceAmount ?? 0))}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="font-bold">
+            <td className="border border-black p-1" colSpan={3}>
+              Total
+            </td>
+            <td className="border border-black p-1">{money(totalBill)}</td>
+            <td className="border border-black p-1">{money(totalPaid)}</td>
+            <td className="border border-black p-1">{money(totalDue)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+function InvoiceSheet({
+  bill,
+  company,
+  showBankDetails,
+  companyReady,
+  getHsnCode,
+}: {
+  bill: Bill;
+  company: CompanyView;
+  showBankDetails: boolean;
+  companyReady: boolean;
+  getHsnCode: (product: string | { _id?: string } | undefined) => string;
+}) {
+  const lines = buildLines(bill);
+  const discountTotal = lines.reduce((s, l) => s + l.discountAmount, 0);
+  const cgst = (bill.totalTax ?? 0) / 2;
+  const sgst = (bill.totalTax ?? 0) / 2;
+  const finalGrandTotal = Number(bill.grandTotal ?? 0);
+  const round2 = (n: number) =>
+    Math.round((n + Number.EPSILON) * 100) / 100;
+  const roundOffValue =
+    typeof bill.roundOff === "number"
+      ? bill.roundOff
+      : round2(finalGrandTotal - ((bill.totalBeforeTax ?? 0) + (bill.totalTax ?? 0)));
+  const fyLabel = getFinancialYearLabel(bill.billDate);
+  const bankDetailsMissing =
+    !company.accountHolder &&
+    !company.accountNumber &&
+    !company.ifsc &&
+    !company.bankName &&
+    !company.branch;
+
+  return (
+    <div
+      data-ready={companyReady ? "true" : "false"}
+      className="print-bill-root border border-black p-3"
+    >
+      <div className="border-b border-black pb-2">
+        <div className="flex justify-between">
+          <div>
+            <div className="flex">
+              <div className="font-bold uppercase">Tax Invoice</div>
+            </div>
+            <div className="font-bold text-lg">{company.name}</div>
+            <div style={{ whiteSpace: "pre-line" }}>{company.addressLine1}</div>
+            <div>{company.addressLine2}</div>
+            <div>GSTIN: {company.gstin}</div>
+            <div>Mobile: {company.phone || "-"}</div>
+          </div>
+          <div className="text-right">
+            <div>Invoice No: {bill.invoiceNumber}</div>
+            <div>Date: {formatDisplayDate(bill.billDate)}</div>
+            <div>FY: {fyLabel}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 border border-black">
+        <div className="border-r border-black p-2">
+          <b>BILL TO</b>
+          <div>{bill.customerInfo.shopName}</div>
+          <div>Address : {bill.customerInfo.address}</div>
+          <div>Mobile: {bill.customerInfo.phone || "-"}</div>
+          {bill.customerInfo.gstNumber && (
+            <div>GSTIN: {bill.customerInfo.gstNumber}</div>
+          )}
+        </div>
+        <div className="p-2">
+          <b>SHIP TO</b>
+          <div>{bill.customerInfo.shopName}</div>
+          <div>Address : {bill.customerInfo.address}</div>
+        </div>
+      </div>
+
+      <table className="mt-2 w-full border-collapse border border-black">
+        <thead>
+          <tr>
+            {[
+              "S.N.",
+              "ITEMS",
+              "HSN",
+              "BOX",
+              "PCS/BOX",
+              "TOTAL ITEM",
+              "DISC.",
+              "TAX %",
+              "TAXABLE",
+            ].map((h) => (
+              <th key={h} className="border border-black p-1 text-left">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l, i) => (
+            <tr key={i}>
+              <td className="border border-black p-1">{i + 1}</td>
+              <td className="border border-black p-1">{l.productName}</td>
+              <td className="border border-black p-1">{getHsnCode(l.product)}</td>
+              <td className="border border-black p-1">{l.quantityBoxes ?? 0}</td>
+              <td className="border border-black p-1">{l.itemsPerBox ?? 0}</td>
+              <td className="border border-black p-1">
+                {l.totalPieces}
+                {l.quantityLoose > 0 ? ` (${l.quantityLoose} loose)` : ""}
+              </td>
+              <td className="border border-black p-1">
+                {l.discountType === "PERCENT"
+                  ? `${(l.discountValue ?? 0).toFixed(2)}% (${l.discountAmount.toFixed(2)})`
+                  : l.discountType === "CASH"
+                    ? `Cash (${l.discountAmount.toFixed(2)})`
+                    : `0.00`}
+              </td>
+              <td className="border border-black p-1">{l.taxPercent?.toFixed(2)}%</td>
+              <td className="border border-black p-1">{l.taxableAmount?.toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="border border-black p-2">
+          <b>Total Amount (in words)</b>
+          <div>{numberToINRWords(finalGrandTotal)}</div>
+        </div>
+        <div className="border border-black p-2">
+          <div className="flex justify-between">
+            <span>Sub Total</span>
+            <span>{bill.totalBeforeTax?.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Discount</span>
+            <span>{discountTotal.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>CGST</span>
+            <span>{cgst.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>SGST</span>
+            <span>{sgst.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Round off</span>
+            <span>{roundOffValue.toFixed(2)}</span>
+          </div>
+          <div className="mt-1 flex justify-between border-t border-black pt-1 font-bold">
+            <span>Grand Total</span>
+            <span>{finalGrandTotal.toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+
+      {showBankDetails ? (
+        <div className="mt-2 grid grid-cols-2 border border-black">
+          <div className="border-r border-black p-2">
+            <b>Bank Details</b>
+            {bankDetailsMissing ? (
+              <div className="mt-1">404 Not Found</div>
+            ) : (
+              <>
+                <div>Name: {company.accountHolder || "-"}</div>
+                <div>A/C No: {company.accountNumber || "-"}</div>
+                <div>IFSC: {company.ifsc || "-"}</div>
+                <div>
+                  Bank: {company.bankName || "-"}
+                  {company.branch && `, ${company.branch}`}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="p-2">
+            <b>Terms & Conditions</b>
+            <div>1. Goods once sold will not be taken back.</div>
+            <div>2. Subject to local jurisdiction.</div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 border border-black p-2">
+          <b>Terms & Conditions</b>
+          <div>1. Goods once sold will not be taken back.</div>
+          <div>2. Subject to local jurisdiction.</div>
+        </div>
+      )}
+
+      <div className="mt-2 text-center">This is a computer generated invoice.</div>
+    </div>
+  );
+}
+
 /* ================== COMPONENT ================== */
 
 export default function BillPreview({
   bill,
+  bills,
   onClose,
   showBankDetails: showBankDetailsProp = true,
 }: BillPreviewProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const invoiceRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const invoiceBills = useMemo(() => {
+    if (bills && bills.length > 0) return bills;
+    return bill ? [bill] : [];
+  }, [bill, bills]);
   const [showBankDetails, setShowBankDetails] = useState(showBankDetailsProp);
   const companyProfile = useAppSelector(
     (state) => state.companyProfile.data
@@ -135,11 +433,11 @@ export default function BillPreview({
 
   /* 🔹 ESC KEY */
   useEffect(() => {
-    if (!bill) return;
+    if (invoiceBills.length === 0) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
-  }, [bill, onClose]);
+  }, [invoiceBills.length, onClose]);
 
   /* 🔹 HSN RESOLVER */
   const getHsnCode = (
@@ -155,80 +453,51 @@ export default function BillPreview({
     return found?.hsnCode ?? "-";
   };
 
-  /* 🔹 BILL LINES */
-  const lines: EnhancedLine[] = useMemo(() => {
-    if (!bill) return [];
+  if (invoiceBills.length === 0) return null;
 
-    const mapped = bill.items.map((l) => {
-      const totalPieces =
-        (l.quantityBoxes ?? 0) * (l.itemsPerBox ?? 1) +
-        (l.quantityLoose ?? 0);
-
-      const base = totalPieces * (l.sellingPrice ?? 0);
-
-      let discount = 0;
-      if (l.discountType === "PERCENT") {
-        discount = (base * (l.discountValue ?? 0)) / 100;
-      } else if (l.discountType === "CASH") {
-        discount = l.discountValue ?? 0;
-      }
-
-      discount = Math.min(discount, base);
-      const lineSubTotal = Math.max(0, base - discount);
-      const lineTax = (lineSubTotal * (l.taxPercent ?? 0)) / 100;
-
-      return {
-        ...l,
-        totalPieces,
-        grossAmount: base,
-        discountAmount: discount,
-        taxableAmount: lineSubTotal,
-        lineTotal: lineSubTotal + lineTax,
-      };
-    });
-    return mapped.sort((a, b) =>
-      (a.productName ?? "").localeCompare(b.productName ?? "", undefined, {
-        sensitivity: "base",
-      })
-    );
-  }, [bill]);
-
-  if (!bill) return null;
-
-  const discountTotal = lines.reduce((s, l) => s + l.discountAmount, 0);
-  const grossTotal = lines.reduce((s, l) => s + l.grossAmount, 0);
-  const discountPercentOverall =
-    grossTotal > 0 ? (discountTotal * 100) / grossTotal : 0;
-  const cgst = (bill.totalTax ?? 0) / 2;
-  const sgst = (bill.totalTax ?? 0) / 2;
-  const finalGrandTotal = Number(bill.grandTotal ?? 0);
-  const round2 = (n: number) =>
-    Math.round((n + Number.EPSILON) * 100) / 100;
-  const roundOffValue =
-    typeof bill.roundOff === "number"
-      ? bill.roundOff
-      : round2(finalGrandTotal - ((bill.totalBeforeTax ?? 0) + (bill.totalTax ?? 0)));
-  const fyLabel = getFinancialYearLabel(bill.billDate);
-  const bankDetailsMissing =
-    !company.accountHolder &&
-    !company.accountNumber &&
-    !company.ifsc &&
-    !company.bankName &&
-    !company.branch;
+  const pdfFileName =
+    invoiceBills.length === 1
+      ? `Invoice-${invoiceBills[0].invoiceNumber}.pdf`
+      : "Invoices.pdf";
 
   const handlePrint = () => window.print();
   const generatePDF = async () => {
-    if (!invoiceRef.current) return;
+    const host = previewRef.current;
+    if (!host) return;
+    const nodes = Array.from(host.querySelectorAll<HTMLElement>(".print-bill-root"));
+    if (nodes.length === 0) return;
     const [{ default: html2canvas }, { default: JsPdf }] = await Promise.all([
       import("html2canvas"),
       import("jspdf"),
     ]);
-    const canvas = await html2canvas(invoiceRef.current, { scale: 2, useCORS: true });
-    const img = canvas.toDataURL("image/png");
     const pdf = new JsPdf("p", "mm", "a4");
-    const w = pdf.internal.pageSize.getWidth();
-    const h = (canvas.height * w) / canvas.width;
-    pdf.addImage(img, "PNG", 0, 0, w, h);
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    for (let index = 0; index < nodes.length; index += 1) {
+      const canvas = await html2canvas(nodes[index], {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
+      const img = canvas.toDataURL("image/png");
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      if (nodes.length === 1) {
+        pdf.addImage(img, "PNG", 0, 0, pageWidth, imgHeight);
+        break;
+      }
+      let heightLeft = imgHeight;
+      let position = 0;
+      if (index > 0) pdf.addPage();
+      pdf.addImage(img, "PNG", 0, position, pageWidth, imgHeight);
+      heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(img, "PNG", 0, position, pageWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+    }
     return pdf;
   };
 
@@ -236,7 +505,7 @@ export default function BillPreview({
     const pdf = await generatePDF();
     if (!pdf) return;
 
-    const fileName = `Invoice-${bill.invoiceNumber}.pdf`;
+    const fileName = pdfFileName;
     pdf.save(fileName);
 
     const blob = pdf.output("blob");
@@ -258,7 +527,7 @@ export default function BillPreview({
     if (!pdf) return;
 
     const blob = pdf.output("blob");
-    const file = new File([blob], `Invoice-${bill.invoiceNumber}.pdf`, {
+    const file = new File([blob], pdfFileName, {
       type: "application/pdf",
     });
 
@@ -300,6 +569,15 @@ export default function BillPreview({
             width: 100%;
             page-break-inside: avoid;
           }
+          .print-bill-summary {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+          .print-bill-sheet + .print-bill-sheet {
+            break-before: page;
+            page-break-before: always;
+            margin-top: 0 !important;
+          }
         }
       `}</style>
 
@@ -337,192 +615,27 @@ export default function BillPreview({
         </div>
 
 
-        {/* INVOICE */}
-        <div
-          ref={invoiceRef}
-          data-ready={companyProfile ? "true" : "false"}
-          className="print-bill-root border border-black p-3"
-        >
-          {/* HEADER */}
-          <div className="border-b border-black pb-2">
-            <div className="flex justify-between">
-              <div>
-                <div className="flex">
-
-                  <div className="font-bold uppercase">Tax Invoice</div>
-                </div>
-
-                <div className="font-bold text-lg" >{company.name}</div>
-                <div style={{ whiteSpace: "pre-line" }}>{company.addressLine1}</div>
-                <div>{company.addressLine2}</div>
-                <div>GSTIN: {company.gstin}</div>
-                <div>Mobile: {company.phone || "-"}</div>
-              </div>
-              <div className="text-right">
-                <div>Invoice No: {bill.invoiceNumber}</div>
-                <div>
-                  Date: {formatDisplayDate(bill.billDate)}
-                </div>
-                <div>FY: {fyLabel}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* BILL TO */}
-          <div className="mt-2 grid grid-cols-2 border border-black">
-            <div className="border-r border-black p-2">
-              <b>BILL TO</b>
-              <div>{bill.customerInfo.shopName}</div>
-              <div>Address : {bill.customerInfo.address}</div>
-              <div>Mobile: {bill.customerInfo.phone || "-"}</div>
-              {bill.customerInfo.gstNumber && (
-                <div>GSTIN: {bill.customerInfo.gstNumber}</div>
-              )}
-            </div>
-            <div className="p-2">
-              <b>SHIP TO</b>
-              <div>{bill.customerInfo.shopName}</div>
-              <div>Address : {bill.customerInfo.address}</div>
-            </div>
-          </div>
-
-          {/* ITEMS */}
-          <table className="mt-2 w-full border-collapse border border-black">
-            <thead>
-              <tr>
-                {[
-                  "S.N.",
-                  "ITEMS",
-                  "HSN",
-                  "BOX",
-                  "PCS/BOX",
-                  "TOTAL ITEM",
-                  "DISC.",
-                  "TAX %",
-                  "TAXABLE",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="border border-black p-1 text-left"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((l, i) => (
-                <tr key={i}>
-                  <td className="border border-black p-1">{i + 1}</td>
-                  <td className="border border-black p-1">
-                    {l.productName}
-                  </td>
-                  <td className="border border-black p-1">
-                    {getHsnCode(l.product)}
-                  </td>
-
-                  <td className="border border-black p-1">
-                    {l.quantityBoxes ?? 0}
-                  </td>
-                  <td className="border border-black p-1">
-                    {l.itemsPerBox ?? 0}
-                  </td>
-                  <td className="border border-black p-1">
-                    {l.totalPieces}
-                    {l.quantityLoose > 0 ? ` (${l.quantityLoose} loose)` : ""}
-                  </td>
-                  <td className="border border-black p-1">
-                    {l.discountType === "PERCENT"
-                      ? `${(l.discountValue ?? 0).toFixed(2)}% (${l.discountAmount.toFixed(2)})`
-                      : l.discountType === "CASH"
-                        ? `Cash (${l.discountAmount.toFixed(2)})`
-                        : `0.00`}
-                  </td>
-                  <td className="border border-black p-1">
-                    {l.taxPercent?.toFixed(2)}%
-                  </td>
-                  <td className="border border-black p-1">
-                    {l.taxableAmount?.toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* TOTALS */}
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <div className="border border-black p-2">
-              <b>Total Amount (in words)</b>
-              <div>{numberToINRWords(finalGrandTotal)}</div>
-            </div>
-            <div className="border border-black p-2">
-              <div className="flex justify-between">
-                <span>Sub Total</span>
-                <span>{bill.totalBeforeTax?.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Discount</span>
-                <span>
-                  {discountTotal.toFixed(2)} 
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>CGST</span>
-                <span>{cgst.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>SGST</span>
-                <span>{sgst.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Round off</span>
-                <span>{roundOffValue.toFixed(2)}</span>
-              </div>
-              <div className="mt-1 flex justify-between border-t border-black pt-1 font-bold">
-                <span>Grand Total</span>
-                <span>{finalGrandTotal.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* BANK */}
-          {showBankDetails ? (
-            <div className="mt-2 grid grid-cols-2 border border-black">
-              <div className="border-r border-black p-2">
-                <b>Bank Details</b>
-                {bankDetailsMissing ? (
-                  <div className="mt-1">404 Not Found</div>
-                ) : (
-                  <>
-                    <div>Name: {company.accountHolder || "-"}</div>
-                    <div>A/C No: {company.accountNumber || "-"}</div>
-                    <div>IFSC: {company.ifsc || "-"}</div>
-                    <div>
-                      Bank: {company.bankName || "-"}
-                      {company.branch && `, ${company.branch}`}
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="p-2">
-                <b>Terms & Conditions</b>
-                <div>1. Goods once sold will not be taken back.</div>
-                <div>2. Subject to local jurisdiction.</div>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-2 border border-black p-2">
-              <b>Terms & Conditions</b>
-              <div>1. Goods once sold will not be taken back.</div>
-              <div>2. Subject to local jurisdiction.</div>
+        <div ref={previewRef}>
+          {invoiceBills.length > 1 && (
+            <div className="print-bill-sheet">
+              <BillsSummary bills={invoiceBills} />
             </div>
           )}
-
-          <div className="mt-2 text-center">
-            This is a computer generated invoice.
-          </div>
+          {invoiceBills.map((item, index) => (
+            <div
+              key={item._id || `${item.invoiceNumber}-${index}`}
+              className={index > 0 ? "print-bill-sheet mt-8" : "print-bill-sheet"}
+            >
+              <InvoiceSheet
+                bill={item}
+                company={company}
+                showBankDetails={showBankDetails}
+                companyReady={Boolean(companyProfile)}
+                getHsnCode={getHsnCode}
+              />
+            </div>
+          ))}
         </div>
-        {/* ============== END INVOICE ============== */}
       </div>
     </>
   );

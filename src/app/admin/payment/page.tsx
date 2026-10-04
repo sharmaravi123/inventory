@@ -390,6 +390,19 @@ export default function PaymentsDashboardPage() {
       return map.get(canonical)!;
     };
 
+    const customerByCanonical = new Map<string, (typeof allCustomers)[number]>();
+    const customerByAlias = new Map<string, (typeof allCustomers)[number]>();
+    for (const customer of allCustomers) {
+      const canonicalKey = getCustomerCanonicalKey(customer);
+      if (canonicalKey && !customerByCanonical.has(canonicalKey)) {
+        customerByCanonical.set(canonicalKey, customer);
+      }
+      const aliasKey = aliases.get(customer._id) || customer._id;
+      if (aliasKey && !customerByAlias.has(aliasKey)) {
+        customerByAlias.set(aliasKey, customer);
+      }
+    }
+
     for (const cust of allCustomers) {
       const id = normalizeCustomerText(cust._id);
       if (!id) continue;
@@ -398,8 +411,8 @@ export default function PaymentsDashboardPage() {
       seenCanonical.add(canonical);
 
       const primary =
-        allCustomers.find((c) => getCustomerCanonicalKey(c) === canonical) ||
-        allCustomers.find((c) => (aliases.get(c._id) || c._id) === canonical) ||
+        customerByCanonical.get(canonical) ||
+        customerByAlias.get(canonical) ||
         cust;
 
       ensureEntry(canonical, {
@@ -973,8 +986,8 @@ export default function PaymentsDashboardPage() {
 
           {/* Mobile cards */}
           <div className="block divide-y divide-slate-100 md:hidden">
-            {customersAggregated.map((c) => (
-              <div key={c.customerId} className="px-4 py-3">
+            {customersAggregated.map((c, index) => (
+              <div key={`${c.customerId}-${index}`} className="px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">
@@ -1045,9 +1058,9 @@ export default function PaymentsDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {customersAggregated.map((c) => (
+                {customersAggregated.map((c, index) => (
                   <tr
-                    key={c.customerId}
+                    key={`${c.customerId}-${index}`}
                     className="hover:bg-slate-50/70 transition-colors"
                   >
                     <td className="py-3 pl-6 pr-2">

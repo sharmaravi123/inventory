@@ -52,6 +52,8 @@ export default async function dbConnect(): Promise<typeof mongoose> {
     const opts: mongoose.ConnectOptions = {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
+      maxPoolSize: 10,
+      family: 4,
     };
 
     cached.promise = mongoose

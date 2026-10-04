@@ -13,11 +13,31 @@ function normalizeNumber(n: unknown, fallback = 0): number {
   return Number.isFinite(v) ? v : fallback;
 }
 
+let stockMaintenance: Promise<void> | null = null;
+let stockMaintenanceAt = 0;
+const STOCK_MAINTENANCE_MS = 60_000;
+
+function maintainStocks() {
+  const now = Date.now();
+  if (now - stockMaintenanceAt < STOCK_MAINTENANCE_MS) {
+    return Promise.resolve();
+  }
+  if (!stockMaintenance) {
+    stockMaintenance = (async () => {
+      await removeEmptyStocksForDeletedProducts();
+      await fillDeletedProductStockDetails();
+      stockMaintenanceAt = Date.now();
+    })().finally(() => {
+      stockMaintenance = null;
+    });
+  }
+  return stockMaintenance;
+}
+
 export async function GET(req: NextRequest) {
   try {
     await dbConnect();
-    await removeEmptyStocksForDeletedProducts();
-    await fillDeletedProductStockDetails();
+    await maintainStocks();
 
     const url = new URL(req.url);
     const productId = url.searchParams.get("productId");

@@ -1,10 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { formatDisplayDate } from "@/lib/dateFormat";
-import BillPreview from "@/app/admin/components/billing/BillPreview";
-import type { Bill } from "@/store/billingApi";
 
 type PeriodType = "all" | "thisMonth" | "lastMonth" | "custom";
 
@@ -59,10 +57,6 @@ export default function CustomerDetailsPage() {
   const [data, setData] = useState<LedgerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState("");
-  const [renderBill, setRenderBill] = useState<Bill | null>(null);
-  const previewHostRef = useRef<HTMLDivElement>(null);
 
   const loadLedger = useCallback(async () => {
     if (!customerKey) return;
@@ -103,113 +97,15 @@ export default function CustomerDetailsPage() {
     );
   }, [data]);
 
-  const fetchBill = useCallback(async (billId: string) => {
-    const res = await fetch(`/api/billing/${encodeURIComponent(billId)}`, {
-      cache: "no-store",
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json?.error || "Failed to load bill");
-    return (json.bill ?? json) as Bill;
-  }, []);
-
-  const waitForInvoice = useCallback(async (invoiceNumber: string) => {
-    const started = Date.now();
-    while (Date.now() - started < 10000) {
-      const node = previewHostRef.current?.querySelector(
-        ".print-bill-root"
-      ) as HTMLElement | null;
-      const ready = node?.getAttribute("data-ready") === "true";
-      const shown = !invoiceNumber || node?.innerText.includes(invoiceNumber);
-      if (node && shown && (ready || Date.now() - started > 2500)) {
-        await new Promise((resolve) => setTimeout(resolve, 350));
-        return node;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    throw new Error("Bill preview did not render");
-  }, []);
-
-  const captureInvoice = useCallback(
-    async (bill: Bill) => {
-      setRenderBill(bill);
-      const node = await waitForInvoice(bill.invoiceNumber || "");
-      const { default: html2canvas } = await import("html2canvas");
-      return html2canvas(node, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-      });
-    },
-    [waitForInvoice]
-  );
-
-  const addCanvasToPdf = (
-    pdf: import("jspdf").jsPDF,
-    canvas: HTMLCanvasElement,
-    startNewPage: boolean
-  ) => {
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgData = canvas.toDataURL("image/png");
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    if (startNewPage) pdf.addPage();
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-    }
+  const openBillPreview = (billId: string) => {
+    router.push(`/print/bill/${encodeURIComponent(billId)}`);
   };
 
-  const handleDownloadBill = useCallback(
-    async (billId: string) => {
-      setDownloadingId(billId);
-      setDownloadError("");
-      try {
-        const bill = await fetchBill(billId);
-        const canvas = await captureInvoice(bill);
-        const { default: JsPdf } = await import("jspdf");
-        const pdf = new JsPdf("p", "mm", "a4");
-        addCanvasToPdf(pdf, canvas, false);
-        pdf.save(`Invoice-${bill.invoiceNumber || "bill"}.pdf`);
-      } catch (e) {
-        setDownloadError(e instanceof Error ? e.message : "Failed to download bill");
-      } finally {
-        setRenderBill(null);
-        setDownloadingId(null);
-      }
-    },
-    [captureInvoice, fetchBill]
-  );
-
-  const handleDownloadAllBills = useCallback(async () => {
+  const openAllBillsPreview = () => {
     if (!data?.bills.length) return;
-    setDownloadingId("all");
-    setDownloadError("");
-    try {
-      const { default: JsPdf } = await import("jspdf");
-      const pdf = new JsPdf("p", "mm", "a4");
-      for (let index = 0; index < data.bills.length; index += 1) {
-        const bill = await fetchBill(data.bills[index].id);
-        const canvas = await captureInvoice(bill);
-        addCanvasToPdf(pdf, canvas, index > 0);
-      }
-      const safeName = customerTitle.replace(/[^\w\-]+/g, "-");
-      pdf.save(`${safeName || "customer"}-bills.pdf`);
-    } catch (e) {
-      setDownloadError(e instanceof Error ? e.message : "Failed to download bills");
-    } finally {
-      setRenderBill(null);
-      setDownloadingId(null);
-    }
-  }, [captureInvoice, customerTitle, data?.bills, fetchBill]);
+    const ids = data.bills.map((bill) => bill.id).join(",");
+    router.push(`/print/bills?ids=${encodeURIComponent(ids)}`);
+  };
 
   if (loading) {
     return (
@@ -249,15 +145,14 @@ export default function CustomerDetailsPage() {
               <h1 className="mt-1 text-2xl font-bold text-slate-900">{customerTitle}</h1>
               <p className="mt-1 text-sm text-slate-500">{data.customer.phone || "-"}</p>
               {data.customer.address && <p className="text-sm text-slate-500">{data.customer.address}</p>}
-              {downloadError && <p className="mt-2 text-sm text-rose-600">{downloadError}</p>}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => void handleDownloadAllBills()}
-                disabled={downloadingId !== null || data.bills.length === 0}
+                onClick={openAllBillsPreview}
+                disabled={data.bills.length === 0}
                 className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-emerald-300"
               >
-                {downloadingId === "all" ? "Downloading..." : "Download all bills"}
+                Download all bills
               </button>
               <button
                 onClick={() => router.push("/admin/payment")}
@@ -397,11 +292,10 @@ export default function CustomerDetailsPage() {
                     <td className="px-2 py-3 text-center text-xs text-slate-600">{bill.status}</td>
                     <td className="py-3 pl-2 pr-4 text-center">
                       <button
-                        onClick={() => void handleDownloadBill(bill.id)}
-                        disabled={downloadingId !== null}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-blue-300"
+                        onClick={() => openBillPreview(bill.id)}
+                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white"
                       >
-                        {downloadingId === bill.id ? "Downloading..." : "Download PDF"}
+                        Download PDF
                       </button>
                     </td>
                   </tr>
@@ -417,22 +311,6 @@ export default function CustomerDetailsPage() {
             </table>
           </div>
         </div>
-      </div>
-      <div
-        ref={previewHostRef}
-        aria-hidden
-        style={{
-          position: "fixed",
-          left: "-12000px",
-          top: 0,
-          width: "1024px",
-          background: "#ffffff",
-          zIndex: -1,
-        }}
-      >
-        {renderBill && (
-          <BillPreview bill={renderBill} onClose={() => {}} showBankDetails={false} />
-        )}
       </div>
     </div>
   );

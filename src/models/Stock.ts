@@ -40,12 +40,13 @@ const StockSchema = new Schema<IStock>(
 // 1 stock per product + warehouse
 StockSchema.index({ productId: 1, warehouseId: 1 }, { unique: true });
 
-if (process.env.NODE_ENV === "development") {
-  try {
-    delete mongoose.models.Stock;
-  } catch {
-    // ignore stale model cleanup
-  }
+const cachedStockModel = mongoose.models.Stock;
+if (
+  process.env.NODE_ENV === "development" &&
+  cachedStockModel &&
+  !cachedStockModel.schema.path("productName")
+) {
+  delete mongoose.models.Stock;
 }
 
 const Stock: Model<IStock> =
