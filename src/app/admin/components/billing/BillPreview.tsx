@@ -204,6 +204,9 @@ function InvoiceSheet({
 }) {
   const lines = buildLines(bill);
   const discountTotal = lines.reduce((s, l) => s + l.discountAmount, 0);
+  const boxesTotal = lines.reduce((s, l) => s + (l.quantityBoxes ?? 0), 0);
+  const piecesTotal = lines.reduce((s, l) => s + l.totalPieces, 0);
+  const taxableTotal = lines.reduce((s, l) => s + l.taxableAmount, 0);
   const cgst = (bill.totalTax ?? 0) / 2;
   const sgst = (bill.totalTax ?? 0) / 2;
   const finalGrandTotal = Number(bill.grandTotal ?? 0);
@@ -271,8 +274,7 @@ function InvoiceSheet({
               "ITEMS",
               "HSN",
               "BOX",
-              "PCS/BOX",
-              "TOTAL ITEM",
+              "TOTAL ITEM / PCS",
               "DISC.",
               "TAX %",
               "TAXABLE",
@@ -290,7 +292,6 @@ function InvoiceSheet({
               <td className="border border-black p-1">{l.productName}</td>
               <td className="border border-black p-1">{getHsnCode(l.product)}</td>
               <td className="border border-black p-1">{l.quantityBoxes ?? 0}</td>
-              <td className="border border-black p-1">{l.itemsPerBox ?? 0}</td>
               <td className="border border-black p-1">
                 {l.totalPieces}
                 {l.quantityLoose > 0 ? ` (${l.quantityLoose} loose)` : ""}
@@ -307,6 +308,18 @@ function InvoiceSheet({
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr className="font-bold">
+            <td className="border border-black p-1" />
+            <td className="border border-black p-1" />
+            <td className="border border-black p-1">Total</td>
+            <td className="border border-black p-1">{boxesTotal}</td>
+            <td className="border border-black p-1">{piecesTotal}</td>
+            <td className="border border-black p-1">{discountTotal.toFixed(2)}</td>
+            <td className="border border-black p-1" />
+            <td className="border border-black p-1">{taxableTotal.toFixed(2)}</td>
+          </tr>
+        </tfoot>
       </table>
 
       <div className="mt-2 grid grid-cols-2 gap-2">

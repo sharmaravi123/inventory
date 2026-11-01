@@ -206,6 +206,8 @@ export default function OrdersPage() {
 
       const cashAmt = toNum(bill.payment?.cashAmount);
       const upiAmt = toNum(bill.payment?.upiAmount);
+      const money = (n: number) =>
+        Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
       return {
         Date: formatDisplayDate(bill.billDate),
@@ -214,25 +216,31 @@ export default function OrdersPage() {
         "Voucher No.": bill.invoiceNumber || "",
         "Voucher Ref. No.": "",
         "GSTIN/UIN": customerGstin,
-        "Gross Total": grossTotal.toFixed(2),
+        "Gross Total": money(grossTotal),
         "Tax Rate": uniqueRates.join(", "),
-        Sales: salesAmount.toFixed(2),
-        "CGST OUTPUT @ 2.5% SALES": cgst.toFixed(2),
-        "SGST OUTPUT @ 2.5% SALES": sgst.toFixed(2),
-        Round: roundValue.toFixed(2),
-        "GST 5%": (cgst + sgst).toFixed(2),
-        "Cash (₹)": cashAmt.toFixed(2),
-        "UPI (₹)": upiAmt.toFixed(2),
+        Sales: money(salesAmount),
+        "CGST OUTPUT @ 2.5% SALES": money(cgst),
+        "SGST OUTPUT @ 2.5% SALES": money(sgst),
+        Round: money(roundValue),
+        "GST 5%": money(cgst + sgst),
+        "Cash (₹)": money(cashAmt),
+        "UPI (₹)": money(upiAmt),
       };
     });
 
     const parseAmt = (v: unknown) => {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
       const n = parseFloat(String(v ?? "0").replace(/,/g, ""));
       return Number.isFinite(n) ? n : 0;
     };
 
-    const sumCol = (rows: Record<string, string>[], key: string) =>
-      rows.reduce((a, r) => a + parseAmt(r[key]), 0);
+    const money = (n: number) =>
+      Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+    const sumCol = (
+      rows: Array<Record<string, string | number>>,
+      key: string
+    ) => rows.reduce((a, r) => a + parseAmt(r[key]), 0);
 
     const footerSales =
       salesRows.length > 0
@@ -243,21 +251,19 @@ export default function OrdersPage() {
             "Voucher No.": "",
             "Voucher Ref. No.": "",
             "GSTIN/UIN": "TOTAL",
-            "Gross Total": sumCol(salesRows, "Gross Total").toFixed(2),
+            "Gross Total": money(sumCol(salesRows, "Gross Total")),
             "Tax Rate": "",
-            Sales: sumCol(salesRows, "Sales").toFixed(2),
-            "CGST OUTPUT @ 2.5% SALES": sumCol(
-              salesRows,
-              "CGST OUTPUT @ 2.5% SALES"
-            ).toFixed(2),
-            "SGST OUTPUT @ 2.5% SALES": sumCol(
-              salesRows,
-              "SGST OUTPUT @ 2.5% SALES"
-            ).toFixed(2),
-            Round: sumCol(salesRows, "Round").toFixed(2),
-            "GST 5%": sumCol(salesRows, "GST 5%").toFixed(2),
-            "Cash (₹)": sumCol(salesRows, "Cash (₹)").toFixed(2),
-            "UPI (₹)": sumCol(salesRows, "UPI (₹)").toFixed(2),
+            Sales: money(sumCol(salesRows, "Sales")),
+            "CGST OUTPUT @ 2.5% SALES": money(
+              sumCol(salesRows, "CGST OUTPUT @ 2.5% SALES")
+            ),
+            "SGST OUTPUT @ 2.5% SALES": money(
+              sumCol(salesRows, "SGST OUTPUT @ 2.5% SALES")
+            ),
+            Round: money(sumCol(salesRows, "Round")),
+            "GST 5%": money(sumCol(salesRows, "GST 5%")),
+            "Cash (₹)": money(sumCol(salesRows, "Cash (₹)")),
+            "UPI (₹)": money(sumCol(salesRows, "UPI (₹)")),
           }
         : null;
 
